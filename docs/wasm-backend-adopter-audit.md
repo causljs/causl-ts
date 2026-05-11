@@ -22,6 +22,88 @@ implements the same `BackendEngine` interface (#681, **merged**).
 > materialise the day the Rust port lands. Read the hazards as
 > _future-load-bearing_, not as Phase-1 bug surface.
 
+> **Status update (v0.9.0) — post-0.9.0 panel-review wave.** A wave of
+> sub-issues derived from the panel review of epic #1133 has landed
+> _parity gates and dev-time instrumentation_ for several hazards in
+> the H1–H10 table below. Crucially, none of these changes alter the
+> contract surface — they pin the existing TS-engine behaviour into
+> the property-test tier so the future Rust port is gated against
+> regression. Adopters do **not** need to change application code; the
+> notes here are migration-prose so you can locate the new gates and
+> opt-in flags when reading the codebase.
+>
+> Parity-gate wave (newly shipped):
+>
+> - **#1154 — H3 parity gate.** A new property test in
+>   `packages/core/test/properties/cross-backend-determinism.property.test.ts`
+>   (plus a unit-level companion at
+>   `packages/core/test/h3-subscribe-inside-compute.test.ts`)
+>   pins the H3 contract: calling `graph.subscribe(...)` inside a
+>   `compute` closure trips `CommitInProgressError` on both the JS
+>   engine and the Phase-1 WASM wrapper. The gate stands for the
+>   future Rust port — if a Rust commit pipeline ever fails to fire
+>   the re-entrancy gate on mid-compute `subscribe`, this property
+>   test goes red.
+> - **#1155 — H1 dev warning (opt-in).** `createCausl(...)` accepts a
+>   new `enableH1HazardWarning: true` option. When set,
+>   `graph.read(node)` instruments the returned value with a dev-only
+>   `WeakRef` watch and emits a one-shot `console.warn` if the same
+>   reference is observed across a commit boundary. The warning is
+>   **off by default** to keep the production hot-path crossing-free
+>   and to avoid noise for adopters whose memoisation is keyed on
+>   `commit.time` / `EngineTelemetry.nodeVersion(node)` (the
+>   recommended migration target — see H1 below). Adopters
+>   considering a future WASM-backed engine should enable the flag in
+>   their development environment to surface H1-shaped code paths now,
+>   while the Phase-1 wrapper's dormant reference semantics still let
+>   the dormant case look benign.
+> - **#1156 — `EngineTelemetry.nodeVersion` semantic-invariance gate.**
+>   A new property test at
+>   `packages/core/test/properties/node-version.property.test.ts`
+>   pins the contract that `EngineTelemetry.nodeVersion(node)` is a
+>   strictly-monotonic-per-node counter whose increments correspond
+>   1:1 with commits that change the node's value. This is the
+>   recommended H1 mitigation primitive — memoise on
+>   `nodeVersion(node)` instead of reference identity — and the
+>   gate ensures the primitive's semantics hold across backends.
+> - **#1157 — H6 subscriber-order parity gate.** A new property test
+>   at `packages/core/test/properties/subscriber-order.property.test.ts`
+>   sweeps N=100 subscriptions across a multi-write commit and asserts
+>   that Phase G dispatch fires them in registration order on both
+>   backends. This is the gate that catches a Rust `HashMap`
+>   regression the day the real Rust port lands (see H6 below for the
+>   `IndexMap` recommendation).
+> - **#1157 — H9 `memory.grow` scaffolding (deferred to Rust port).**
+>   A new scaffold test at `packages/react/test/h9-memory-grow.test.ts`
+>   carries `it.skipIf(!realRustBackend)` on every case. The file
+>   stands as the gate definition; assertions activate when epic
+>   #1133's Rust port enables the zero-copy typed-array path (see H7
+>   for the contract). Adopters who hold a typed-array view across a
+>   `subscribeCommits` fire today are safe under the Phase-1 wrapper
+>   (which never hands one out) but should track this test file as
+>   the canary that goes live on the Rust port.
+>
+> Current-code defect PRs (newly merged, same session):
+>
+> - **#1161** — `SPEC.md` §17.6 amendment documenting the 213 KB
+>   serde bridge gap (#1150). Pure SPEC prose; no contract change.
+> - **#1162** — `tools/engine-rs-core` `JsonValue::Object`
+>   representation bench harness (#1152). Decides the open
+>   question raised in H6's current-state note (BTreeMap vs IndexMap
+>   for the changed-nodes set).
+> - **#1163** — property tests now route through the tier resolver
+>   instead of hardcoded `numRuns` (#1153). The H3 / H6 / nodeVersion
+>   gates above all benefit — they automatically run at the
+>   high-trial count on CI's nightly tier without further wiring.
+> - **#1164** — `tools/engine-rs-core` generational `NodeId` disposal
+>   (#1151). Pre-requisite for the Rust port's `dispose` semantics
+>   matching the JS engine's tombstone model; lands the structural
+>   change ahead of the commit-pipeline port.
+>
+> None of the above changes the H1–H10 table below. The hazards are
+> still _future-load-bearing_ under the Phase-1 wrapper; the new gates
+> just pin the contract so the Rust port has a fixture to clear.
+
 This document gated #681 historically; both #695 and #681 are now
 closed. The carve in #681 exposes every "adopter-visible Y" symbol
 below on `BackendEngine`; symbols marked "Adopter-visible? N" stayed

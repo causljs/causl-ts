@@ -1,0 +1,130 @@
+name: four-way-classifier
+
+# Issue #1070 / SPEC §16.5.1 / EPIC-7 — 4-way differential classifier
+# nightly gate.
+#
+# PR #1059 (closes #685) deferred the Apalache 4-way classifier; this
+# workflow lands it per "no TODO outside the issue tracker" discipline.
+# The classifier walks the EPIC-7 corpus and the canonical-seed
+# registry across four implementations:
+#
+#   1. TS engine (`commitInternal` from `packages/core/src/graph.ts`)
+#   2. WASM serde bridge (`tools/engine-rs-bridge-serde`)
+#   3. WASM gc-builtins bridge (`tools/engine-rs-bridge-gc` with
+#      `js-string-builtins`)
+#   4. Rust enumerator (`tools/enumerator` bounded BFS, the existing
+#      `apalache-diff` half).
+#
+# Disagreement is classified by which subset of implementations
+# agrees — see `tools/enumerator/diff/src/four_way.rs` for the seven
+# arms. Rows excused by the `[[exceptions]]` table in
+# `tools/apalache-diff/mapping.toml` (e.g. `cycle_two_deriveds` per
+# the architectural BFS-vs-IR-parse axis) do not strict-fail.
+#
+# Trigger:
+#
+#   - PR: every PR that touches the 4-way classifier or its inputs
+#     runs the unit + integration tests AND the end-to-end CLI
+#     invocation with `--four-way` (the disagreement gate is on).
+#     PRs that don't touch any of those paths are unaffected — the
+#     workflow paths-filter keeps the gate local to the relevant
+#     surface.
+#
+#   - Nightly: cron `15 7 * * *` (07:15 UTC, ten minutes after the
+#     #574 apalache-diff job) so the per-corpus 2-way and 4-way
+#     reports are uploaded in adjacent runs. The 4-way report is
+#     archived as an artifact so reviewers can read the per-row
+#     verdict subset without re-running.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/enumerator/diff/**'
+      - 'tools/enumerator/corpus/**'
+      - 'tools/engine-rs-core/**'
+      - 'tools/engine-rs-bridge-serde/**'
+      - 'tools/engine-rs-bridge-gc/**'
+      - 'tools/apalache-diff/**'
+      - 'packages/core/src/graph.ts'
+      - 'packages/core/src/ir.ts'
+      - 'packages/core/wasm/**'
+      - 'packages/core/test/properties/replay-determinism.test.ts'
+      - '.github/workflows/four-way-classifier.yml'
+  schedule:
+    # Daily at 07:15 UTC, ten minutes after the apalache-diff job.
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: four-way-classifier-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: 4-way classifier — corpus + canonical seeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @causl/core (required by the JS-driven legs)
+        # The four-way-runner.mjs script imports
+        # `packages/core/dist/index.js` and `packages/core/dist/wasm.js`
+        # by absolute path. Without this build step the JS legs of the
+        # classifier surface as `Skipped` and the report carries an
+        # empty 4-way section.
+        run: pnpm --filter @causl/core run build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/enumerator/diff/target
+          key: ${{ runner.os }}-cargo-four-way-${{ hashFiles('tools/enumerator/diff/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-four-way-
+
+      - name: cargo test — unit + integration (covers all four legs)
+        working-directory: tools/enumerator/diff
+        run: cargo test --release
+
+      - name: Generate 4-way classifier report
+        # The strict gate fires only on UNEXCUSED disagreements (see
+        # `mapping.toml` `[[exceptions]]` table). The Apalache binary
+        # is intentionally NOT installed on the CI runner — the 2-way
+        # half degrades to `BinaryUnavailable` and contributes
+        # `unknown` rows that the strict gate ignores. The 4-way half
+        # is fully exercised because the JS-side @causl/core was
+        # built in an earlier step.
+        working-directory: tools/enumerator/diff
+        run: |
+          mkdir -p ../../../docs
+          cargo run --release -- \
+            --mapping ../../apalache-diff/mapping.toml \
+            --report ../../../docs/four-way-classifier-report.md \
+            --four-way --strict
+
+      - name: Upload 4-way classifier report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-way-classifier-report
+          path: docs/four-way-classifier-report.md
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,8 @@
+{
+  "$schema": "Per-fixture expected-drift contract — see test/fixtures.before.test.ts.",
+  "catalogueVersion": "0.1",
+  "schema": 2,
+  "expectedRuleIds": ["M-01"],
+  "minCriticalFindings": 1,
+  "expectClean": false
+}

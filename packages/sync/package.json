@@ -1,0 +1,53 @@
+{
+  "name": "@causl/sync",
+  "version": "0.0.0",
+  "description": "Async resource and conflict bindings for Causl — resource(key, loader), staleness guards, conflict registry.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./resource": {
+      "types": "./dist/resource-entry.d.ts",
+      "import": "./dist/resource-entry.js"
+    },
+    "./conflict": {
+      "types": "./dist/conflict-entry.d.ts",
+      "import": "./dist/conflict-entry.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts src/resource-entry.ts src/conflict-entry.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "test": "vitest",
+    "test:run": "pnpm test:types && vitest run",
+    "test:types": "pnpm build && tsd",
+    "test:perf-invariant": "vitest run perf-resource-recompute",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' 'test-d/**/*.ts'"
+  },
+  "tsd": {
+    "directory": "test-d"
+  },
+  "dependencies": {
+    "@causl/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@causl/core-testing-internal": "workspace:*",
+    "@causl/sync-testing-internal": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "fast-check": "^3.23.2",
+    "tsd": "^0.32.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

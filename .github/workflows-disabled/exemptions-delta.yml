@@ -1,0 +1,105 @@
+name: PR — causl-exemptions delta (#572 / GAP-A8-3)
+
+# SPEC §16A.5 — third escape valve. A PR that mutates causl-exemptions.md
+# adds (or extends) an active exemption and MUST be reviewed by a
+# CODEOWNERS-listed reviewer for that surface. This workflow enforces
+# the gate at the PR level.
+#
+# Loose-check limitation (intentional): a perfect implementation would
+# parse .github/CODEOWNERS, resolve every team to its members, and walk
+# the PR's review state. We instead check that at least one entry from
+# the CODEOWNERS file appears in the PR's `requested_reviewers` /
+# `requested_teams` list — this is sufficient for the v1 mechanization
+# and surfaces a clear failure message when the gate isn't met. Callers
+# who need stricter routing should still rely on GitHub's native
+# CODEOWNERS protection on the protected-branch settings.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, review_requested, ready_for_review]
+    paths:
+      - 'causl-exemptions.md'
+
+jobs:
+  delta:
+    name: causl-exemptions CODEOWNERS gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Detect exemptions-file delta
+        id: delta
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- causl-exemptions.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip — exemptions file unchanged
+        if: steps.delta.outputs.changed == 'false'
+        run: echo "causl-exemptions.md unchanged on this PR; gate skipped."
+
+      - name: Verify CODEOWNERS reviewer is on the PR
+        if: steps.delta.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const path = '.github/CODEOWNERS'
+            if (!fs.existsSync(path)) {
+              core.setFailed(
+                'causl-exemptions.md was modified but .github/CODEOWNERS does not exist. ' +
+                'Falling back to a maintainer comment is unsupported in v1 of this gate; ' +
+                'add a CODEOWNERS file or revert the exemptions delta.'
+              )
+              return
+            }
+            // Parse CODEOWNERS — extract every `@handle` and `@org/team`.
+            const text = fs.readFileSync(path, 'utf8')
+            const owners = new Set()
+            for (const line of text.split('\n')) {
+              const stripped = line.split('#')[0].trim()
+              if (!stripped) continue
+              for (const tok of stripped.split(/\s+/).slice(1)) {
+                if (tok.startsWith('@')) owners.add(tok.slice(1).toLowerCase())
+              }
+            }
+            if (owners.size === 0) {
+              core.setFailed('CODEOWNERS file has no `@handle` entries; gate cannot resolve reviewers.')
+              return
+            }
+            const pr = context.payload.pull_request
+            const requestedUsers = (pr.requested_reviewers || []).map(u => u.login.toLowerCase())
+            const requestedTeams = (pr.requested_teams || []).map(t =>
+              `${(context.repo.owner || '').toLowerCase()}/${t.slug.toLowerCase()}`
+            )
+            // Approved reviewers count, too — fetch the reviews list.
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              { owner: context.repo.owner, repo: context.repo.repo, pull_number: pr.number }
+            )
+            const reviewers = reviews
+              .filter(r => r.state === 'APPROVED')
+              .map(r => r.user.login.toLowerCase())
+            const candidates = new Set([...requestedUsers, ...requestedTeams, ...reviewers])
+            const matched = [...candidates].filter(c => owners.has(c))
+            if (matched.length === 0) {
+              core.setFailed(
+                'causl-exemptions.md was modified but no CODEOWNERS-listed reviewer was ' +
+                'requested or has approved this PR. SPEC §16A.5 requires a CODEOWNERS gate ' +
+                `on every exemption delta. Owners are: ${[...owners].join(', ')}.`
+              )
+              return
+            }
+            core.info(`CODEOWNERS gate satisfied — matched: ${matched.join(', ')}`)

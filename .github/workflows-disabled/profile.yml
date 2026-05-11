@@ -1,0 +1,65 @@
+name: profile (on-demand CPU profile)
+
+# Profile-on-demand workflow stub (#809 deliverable 17). Manually
+# triggered run that captures a CPU profile for a single
+# (library × scenario × scale) cell via deliverable 3's
+# `bench:profile:cpu` script and uploads the resulting profile
+# artefacts under packages/bench/report/profiles/cpu/**.
+#
+# Currently in workflows-disabled/ alongside every other workflow
+# while GitHub Actions billing is being resolved (#725). Move back
+# to .github/workflows/ when CI is restored.
+
+on:
+  workflow_dispatch:
+    inputs:
+      library:
+        description: 'Library to profile'
+        type: choice
+        required: true
+        default: causl
+        options:
+          - causl
+          - jotai
+          - redux
+          - mobx
+          - all
+      scenario:
+        description: 'Scenario name'
+        type: string
+        required: true
+        default: linear-chain
+      scale:
+        description: 'Scale (n)'
+        type: number
+        required: true
+        default: 1000
+
+jobs:
+  profile:
+    name: capture on-demand CPU profile (#809)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Capture CPU profile
+        run: |
+          pnpm bench:profile:cpu \
+            ${{ inputs.library }} \
+            ${{ inputs.scenario }} \
+            ${{ inputs.scale }}
+
+      - name: Upload CPU profile artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-cpu-${{ inputs.library }}-${{ inputs.scenario }}-${{ inputs.scale }}-${{ github.run_id }}
+          path: packages/bench/report/profiles/cpu/**
+          retention-days: 30

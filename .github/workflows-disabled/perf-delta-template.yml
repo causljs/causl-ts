@@ -1,0 +1,90 @@
+name: PR — perf-delta rule (#867)
+
+# Phase 1 / P1.4: every engine PR must attach a structured Perf delta
+# artifact (hypothesis id, catalogue row before/after, microbench
+# median + Δ% + CoV, threshold). Today perf evidence is prose in the
+# PR body; #854 had it but future engine PRs may not. Martin
+# discipline: structured field, every engine PR, no exceptions.
+#
+# Trigger: PR that adds or modifies any file under
+# `packages/{core,react,sync}/src/**`. The PR body MUST include a
+# `## Perf delta` heading followed by non-empty content other than
+# `_None_` / `_None — no engine touch_`. Editing the PR body re-runs
+# the check. Disabled per #725 billing freeze; ready for re-enable.
+# See docs/contributing-perf.md.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check:
+    name: P1.4 perf-delta rule
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Evaluate rule
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Step 1: detect engine touch under
+          # packages/{core,react,sync}/src/**.
+          changed_engine_files=$(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+              -- 'packages/core/src/**' \
+                 'packages/react/src/**' \
+                 'packages/sync/src/**' \
+              || true
+          )
+          if [[ -z "$changed_engine_files" ]]; then
+            echo "No packages/{core,react,sync}/src/** changes — rule does not apply."
+            exit 0
+          fi
+
+          echo "Detected engine touch:"
+          echo "$changed_engine_files"
+          echo "Validating PR body..."
+
+          # Step 2: parse PR body for `## Perf delta` section.
+          body="$PR_BODY"
+          if ! grep -qE '^## Perf delta' <<<"$body"; then
+            echo "::error::PR touches packages/{core,react,sync}/src/** but the body has no `## Perf delta` section."
+            echo "See docs/contributing-perf.md for how to fill it in (#854 is the worked example)."
+            exit 1
+          fi
+
+          # Extract content under `## Perf delta` up to the next `## ` heading.
+          content=$(awk '
+            /^## Perf delta[[:space:]]*$/ { capture=1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' <<<"$body" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+          # Empty or just `_None_` / `_None — no engine touch_` (with
+          # optional whitespace) is a lie for an engine-touching PR.
+          stripped=$(tr -d '[:space:]' <<<"$content")
+          if [[ -z "$stripped" ]]; then
+            echo "::error::PR touches the engine but `## Perf delta` is empty."
+            echo "See docs/contributing-perf.md."
+            exit 1
+          fi
+          if [[ "$stripped" == "_None_" ]] \
+              || [[ "$stripped" == _None*noenginetouch_ ]] \
+              || [[ "$stripped" == "_None—noenginetouch_" ]]; then
+            echo "::error::PR touches packages/{core,react,sync}/src/** but `## Perf delta` is `_None_` / `_None — no engine touch_`."
+            echo "Document the hypothesis id, catalogue row before/after, microbench median delta, and threshold beaten."
+            echo "See docs/contributing-perf.md (PR #854 is the worked example)."
+            exit 1
+          fi
+
+          echo "Perf delta section is populated."

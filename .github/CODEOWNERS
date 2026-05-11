@@ -1,0 +1,32 @@
+# EPIC-13 / TASK 13.4 — CODEOWNERS extension.
+#
+# Routes review on audit-issue-adjacent changes to the design-discipline
+# reviewers. Per docs/commitment-audit.md the quarterly audit issue is
+# the audit ledger; the per-row predicate scripts and the audit doc
+# itself are the witnesses, and changes there should be reviewed
+# alongside the §17 commitment they back.
+#
+# CODEOWNERS uses pattern matching like .gitignore. The last matching
+# pattern takes precedence. The maintainer team is the catch-all.
+
+# Default owners — every file is reviewed by the core maintainer set.
+*                               @spdrman
+
+# Audit machinery — the design-discipline ledger and its predicates.
+docs/commitment-audit.md        @spdrman
+docs/race-class-audit.md        @spdrman
+tools/audit/                    @spdrman
+.github/workflows/quarterly-audit.yml  @spdrman
+
+# Spec — every change touches the §17 commitments and must clear the
+# same review bar as the audit ledger.
+SPEC.md                         @spdrman
+SPEC.async.md                   @spdrman
+docs/epics/                     @spdrman
+
+# Wire-format authority — schema-3 bumps require lockstep TS / Rust review.
+packages/core/src/ir.ts         @spdrman
+packages/core/src/schema.ts     @spdrman
+tools/checker/src/ir.rs         @spdrman
+tools/checker/Cargo.toml        @spdrman
+.github/workflows/release-checker.yml  @spdrman

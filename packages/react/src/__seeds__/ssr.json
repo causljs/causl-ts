@@ -1,0 +1,11 @@
+{
+  "$schema": "./ssr.schema.json",
+  "description": "Regression seed file for the SSR property suite. Each entry is a counterexample shrunk by fast-check and pinned here so the failure is reproducible across CI runs (SPEC §15.2). Property tests in ssr.test.tsx walk this list at the start of every run before kicking off the random fuzz, so a known-failing seed reproduces the original failure deterministically.",
+  "seeds": [
+    {
+      "label": "ssr-baseline-deterministic",
+      "seed": 1,
+      "comment": "Deterministic seed pinned at 1 to verify the load mechanism is wired. Replace or extend with shrunk counterexamples as they appear in CI."
+    }
+  ]
+}

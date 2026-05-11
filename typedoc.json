@@ -1,0 +1,32 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/core",
+    "packages/react",
+    "packages/formula",
+    "packages/sync",
+    "packages/devtools",
+    "packages/devtools-bridge",
+    "packages/persistence",
+    "packages/checker",
+    "packages/bench",
+    "packages/migration-check",
+    "packages/hypothesis"
+  ],
+  "out": "causl-org/documentation/api",
+  "name": "Causl API Reference",
+  "readme": "none",
+  "includeVersion": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "skipErrorChecking": true,
+  "githubPages": false,
+  "navigationLinks": {
+    "Home": "../../",
+    "Documentation": "../",
+    "GitHub": "https://github.com/iasbuilt/causl"
+  },
+  "customCss": "causl-org/causl-typedoc.css"
+}

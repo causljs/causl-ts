@@ -473,6 +473,50 @@ function makeFreezeIfDev(flags: CauslFlags): <T>(value: T) => T {
   }
   return <T>(value: T): T => Object.freeze(value)
 }
+
+/**
+ * Best-effort detection of "are we running in a development build?".
+ *
+ * @remarks
+ * Used at `createCausl` construction-time to derive the default value
+ * for `options.enableH1HazardWarning` (#1155 — the H1 hazard warning
+ * is dev-only). The order-of-checks is deliberate:
+ *
+ *   1. **`globalThis.__DEV__`** if defined as a boolean. This is the
+ *      idiomatic React-Native / bundler-replaced flag — Metro, Vite,
+ *      esbuild, Rollup, and Webpack all support a build-time
+ *      `__DEV__` replacement, and adopters who bundle Causl with a
+ *      replacement will see the constant resolve cleanly in prod
+ *      bundles (`false` → no warning, no WeakRef churn).
+ *   2. **`process.env.NODE_ENV !== 'production'`** as a Node-side
+ *      fallback. The classic `'production'` sentinel is the
+ *      lowest-common-denominator dev/prod gate for SSR + tooling.
+ *   3. **`false`** if neither signal is present. Conservative: a
+ *      runtime without `__DEV__` AND without `process.env` is most
+ *      likely an embedded / browser-prod context, and emitting a
+ *      console warning there would be a surprise.
+ *
+ * Each branch is wrapped to defend against the same hostile-Proxy
+ * vectors `./flags.ts` defends against (Proxies that throw on
+ * property access). Construction-time only — the engine captures
+ * the resolved boolean once and never re-checks the environment.
+ */
+function isDevEnvironment(): boolean {
+  try {
+    const g = globalThis as { __DEV__?: unknown }
+    if (typeof g.__DEV__ === 'boolean') return g.__DEV__
+  } catch {
+    // Defensive: a Proxy on globalThis could throw on access.
+  }
+  try {
+    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    const nodeEnv = proc?.env?.NODE_ENV
+    if (typeof nodeEnv === 'string') return nodeEnv !== 'production'
+  } catch {
+    // Defensive: a Proxy on process.env could throw on access.
+  }
+  return false
+}
 /**
  * Default cap for the disposed-node tombstone map.
  *
@@ -897,6 +941,54 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // helper covers; outer Commit / Explanation objects stay frozen
   // unconditionally at the public-surface boundary.
   const freezeIfDev = makeFreezeIfDev(flags)
+  // #1155 — H1 hazard warning (SPEC §15.1). Per
+  // `docs/wasm-backend-adopter-audit.md`, the load-bearing adopter
+  // hazard surfaced by the Markbåge/Miller panel review of #1133 is
+  // holding a `graph.read(node)` return value across a commit
+  // boundary: reference-identity is not guaranteed, so a cached
+  // reference can silently desynchronise from the live cell. The
+  // dev-only WeakRef instrumentation here catches the hazard at
+  // runtime with a `console.warn`. The default is the
+  // {@link isDevEnvironment} verdict; adopters can override either
+  // direction via `createCausl({ enableH1HazardWarning })`. The
+  // warning never throws — it is informational only, preserving
+  // backward compatibility with adopters who deliberately cache
+  // `read()` values (PR #1129 amended SPEC §15.1 to make the
+  // non-guarantee explicit; this is the runtime safety net).
+  const enableH1HazardWarning =
+    options.enableH1HazardWarning ?? isDevEnvironment()
+  /**
+   * #1155 — H1 hazard tracking ring. Each entry records a WeakRef
+   * to a value returned by {@link read} together with the GraphTime
+   * at which the value was observed and the offending nodeId.
+   *
+   * @remarks
+   * Engine-closure scoped: allocated once at construction, grown by
+   * `read()` on every qualifying call (non-null object/function;
+   * primitive returns are not WeakRef-trackable and are skipped).
+   * Drained at the end of {@link commitInternal}'s success arm
+   * after `now += 1`: any entry whose `capturedAt < now` AND whose
+   * WeakRef still has a live referent represents an adopter holding
+   * the read return across a commit boundary, and earns a single
+   * `console.warn`. Dead refs (deref() returns undefined) are
+   * pruned in the same walk so the list does not grow unbounded
+   * over the engine's lifetime. The list is also pruned-and-checked
+   * incrementally on the cap boundary to bound worst-case walk
+   * cost; see {@link H1_HAZARD_TRACK_CAP}.
+   *
+   * The whole structure is `null` when `enableH1HazardWarning` is
+   * false (production default), so the `read()` hot path pays
+   * exactly one nullable check in the prod build — no WeakRef
+   * allocation, no Array push, no extra closure capture. The
+   * commit-boundary walk is short-circuited on the same null check.
+   */
+  interface H1HazardRecord {
+    readonly ref: WeakRef<object>
+    readonly nodeId: NodeId
+    readonly capturedAt: GraphTime
+  }
+  const h1HazardTrack: H1HazardRecord[] | null =
+    enableH1HazardWarning ? [] : null
   // Validate and bind the graph name (schema-3 graphId source).
   // Application-supplied wins; absence falls back to UUID v4. The
   // regex pattern is exported as {@link GRAPH_ID_REGEX} so the
@@ -2760,7 +2852,106 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * @returns The current value of `node`.
    */
   function read<T>(node: Node<T>): T {
-    return readEntry(node)
+    const value = readEntry(node)
+    // #1155 — H1 hazard instrumentation. When the dev-only warning
+    // is armed (default in dev; opt-in in prod), record a WeakRef
+    // to every non-null object/function returned to user code so
+    // the commit-boundary walk can detect survivors carried across
+    // a `now` tick. Three guards apply:
+    //
+    //   1. `h1HazardTrack === null` → instrumentation disabled
+    //      (production default). Single null check, no work.
+    //   2. `activeReadTracker !== null` → we are inside a tracking
+    //      projection (subscribeReads). Those reads are engine-
+    //      internal and re-run on every commit by construction, so
+    //      they never represent an adopter-cached reference.
+    //   3. Value must be a non-null object or function for WeakRef
+    //      to accept it. Primitives, `null`, and `undefined` cannot
+    //      desynchronise from a backing cell because they ARE the
+    //      cell value — H1 only bites when the engine's
+    //      structurally-cloned object reference identity changes.
+    if (
+      h1HazardTrack !== null &&
+      activeReadTracker === null &&
+      value !== null &&
+      (typeof value === 'object' || typeof value === 'function')
+    ) {
+      h1HazardTrack.push({
+        ref: new WeakRef(value as object),
+        nodeId: node.id,
+        capturedAt: now,
+      })
+      // Bound worst-case walk cost by pruning aggressively when the
+      // tracker grows past a soft cap. The prune is in-place
+      // copy-survivors; dead refs (already-GC'd values) fall out.
+      if (h1HazardTrack.length > H1_HAZARD_TRACK_CAP) {
+        pruneH1HazardTrack()
+      }
+    }
+    return value
+  }
+
+  /**
+   * #1155 — Soft cap on the H1 hazard tracking ring. Past this
+   * length, `read()` triggers an in-place prune to drop dead refs
+   * before appending more entries. Sized to absorb common burst-
+   * read patterns (e.g. a viewport-render fan-out of ~1000 reads)
+   * without growing unbounded between commits.
+   */
+  const H1_HAZARD_TRACK_CAP = 4096
+
+  /**
+   * #1155 — In-place prune of {@link h1HazardTrack}. Drops every
+   * record whose WeakRef no longer has a live referent and rewrites
+   * the array to compact the survivors. O(N) one-time cost amortised
+   * across the cap; never grows the engine's retention beyond the
+   * cap plus one commit's burst.
+   */
+  function pruneH1HazardTrack(): void {
+    if (h1HazardTrack === null) return
+    let write = 0
+    for (let read = 0; read < h1HazardTrack.length; read++) {
+      const rec = h1HazardTrack[read]!
+      if (rec.ref.deref() !== undefined) {
+        h1HazardTrack[write++] = rec
+      }
+    }
+    h1HazardTrack.length = write
+  }
+
+  /**
+   * #1155 — Commit-boundary H1 hazard check. Walks
+   * {@link h1HazardTrack}, emits one `console.warn` per survivor
+   * whose `capturedAt < now` (recorded before the just-completed
+   * commit's `now += 1`), and prunes dead refs in the same pass.
+   * No-ops when the tracker is disabled. Safe to call from the
+   * commit success arm only — the rollback path restores `now =
+   * beforeNow`, which would re-arm prior-epoch entries as
+   * "still-current" and produce no warnings.
+   */
+  function checkH1HazardOnCommit(): void {
+    if (h1HazardTrack === null || h1HazardTrack.length === 0) return
+    let write = 0
+    for (let read = 0; read < h1HazardTrack.length; read++) {
+      const rec = h1HazardTrack[read]!
+      const referent = rec.ref.deref()
+      if (referent === undefined) continue
+      if (rec.capturedAt < now) {
+        // Survivor across a commit boundary — H1 hazard fired.
+        // Single console.warn per offending nodeId-per-commit;
+        // never throws.
+        console.warn(
+          `[causl] H1 hazard: graph.read(node '${rec.nodeId}') return value held across commit — reference identity not guaranteed (SPEC §15.1)`,
+        )
+        // Do NOT carry the record forward: the warning has been
+        // delivered, and keeping the record would re-warn on every
+        // subsequent commit even though the adopter has been told
+        // exactly once. Drop the entry by skipping the write.
+        continue
+      }
+      h1HazardTrack[write++] = rec
+    }
+    h1HazardTrack.length = write
   }
 
   /**
@@ -4086,6 +4277,21 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       if (commitObservers.size > 0) {
         phaseH_dispatchCommitObservers(c, now)
       }
+
+      // #1155 — H1 hazard warning (SPEC §15.1). Walks the WeakRef
+      // tracker populated by `read()` and emits one
+      // `console.warn` per survivor whose `capturedAt < now`.
+      // No-op when the tracker is disabled (production default
+      // or explicit `enableH1HazardWarning: false`). Runs after
+      // Phase H so the warning order is observable-stable:
+      // subscribers fire, then dev diagnostics, then `commit`
+      // returns. Placed inside the success arm (not the finally)
+      // because the rollback path restores `now = beforeNow`,
+      // which would silently re-arm prior-epoch reads as
+      // "still-current" and produce no warnings on a throw —
+      // the desired behaviour: H1 hazards are scoped to commits
+      // that actually advanced the clock.
+      if (h1HazardTrack !== null) checkH1HazardOnCommit()
 
       return c
     } catch (err) {

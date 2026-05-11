@@ -767,6 +767,43 @@ export interface CreateCauslOptions {
    * snapshot once and never re-reads `process.env` over its lifetime.
    */
   readonly adaptThresholds?: Partial<import('./auto-adapt.js').AdaptThresholds>
+
+  /**
+   * Enable the dev-only H1 hazard warning (#1155).
+   *
+   * Per `docs/wasm-backend-adopter-audit.md` H1 and SPEC §15.1 (PR #1129),
+   * the engine does NOT guarantee reference-identity stability for values
+   * returned from {@link Graph.read}: a commit may produce a structurally
+   * equivalent but distinct object, and adopters who cache a `read()`
+   * return across a commit boundary will silently desynchronise from the
+   * graph's current value. The symptom is subtle — no error fires; the
+   * cached reference simply stops tracking the live state.
+   *
+   * When enabled, every non-null object/function returned by `read()`
+   * outside a tracking projection is recorded as a {@link WeakRef} along
+   * with the read-time GraphTime. After each commit advances `now`, the
+   * engine walks live WeakRefs and emits one `console.warn` per survivor
+   * whose recorded GraphTime predates the post-commit clock — naming the
+   * offending node id and pointing at SPEC §15.1. The warning never
+   * throws; the contract is informational only.
+   *
+   * @remarks
+   * Default is **true in development** and **false in production**.
+   * Development is detected via `globalThis.__DEV__` (if defined as a
+   * boolean) or, as a fallback, `process.env.NODE_ENV !== 'production'`.
+   * Pass `false` explicitly to suppress the check in dev (rare; preferred
+   * when running benchmarks where WeakRef bookkeeping would skew the
+   * measurement). Pass `true` explicitly in production only when
+   * diagnosing a live H1 incident — the WeakRef churn has measurable
+   * (but small) commit-boundary cost.
+   *
+   * Bookkeeping cost: one `WeakRef` allocation per qualifying `read()`
+   * call (primitives, `null`, and reads during a tracking projection
+   * window are skipped); one O(N) walk per commit over the survivor
+   * list with dead-ref pruning. Empirically <1% on `linear-chain ×
+   * 1000` traces in dev mode.
+   */
+  readonly enableH1HazardWarning?: boolean
 }
 
 // Re-export the flag interface so consumers can pull `CauslFlags`

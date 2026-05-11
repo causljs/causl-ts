@@ -1,0 +1,18 @@
+{
+  "name": "@causl-fixture/webpack5-app",
+  "private": true,
+  "version": "0.0.0",
+  "description": "webpack 5 bundler-interop fixture for @causl/core + @causl/core/wasm (#689).",
+  "type": "module",
+  "scripts": {
+    "build": "webpack --config webpack.config.cjs",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@causl/core": "file:../../../packages/core"
+  },
+  "devDependencies": {
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4"
+  }
+}

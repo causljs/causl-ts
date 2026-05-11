@@ -1,0 +1,176 @@
+# ---- OS / filesystem noise ----
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Resource fork / metadata sidecars copied onto non-HFS+ filesystems
+._*
+# Custom folder icons (the real filename is "Icon" + a literal CR; the
+# `?` matches the trailing carriage return without us having to write it)
+Icon?
+# Files that might appear at the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+# Directories potentially created on a remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+# Editor backup files
+*~
+# FUSE temp files (created when a process still holds a handle to a deleted file)
+.fuse_hidden*
+# KDE Dolphin per-directory metadata
+.directory
+# XDG trash on any partition
+.Trash-*
+# NFS "silly rename" placeholder when a still-open file is unlinked
+.nfs*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Local scratch ----
+tmp/
+
+# ---- Python (used for tools/bench/run-bench.py + test_run_bench.py) ----
+__pycache__/
+*.pyc
+
+# ---- Rust ----
+# Cargo build output (per-crate; covers root + workspace members)
+target/
+**/target/
+# Backup files emitted by rustfmt
+*.rs.bk
+# Cargo.lock is checked in for binaries and excluded for libraries.
+# StackRat will likely ship a binary alongside libraries; keep it tracked
+# at the workspace root and add overrides under member crates if any
+# member is a pure lib that prefers an unlocked dependency graph.
+
+# ---- Node / TypeScript / React ----
+node_modules/
+**/node_modules/
+.pnpm-store/
+.yarn/cache
+.yarn/install-state.gz
+.yarn/build-state.yml
+.yarn/unplugged
+.yarn/.yarn-state.yml
+
+# Build output
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+storybook-static/
+
+# Vite / Parcel / Turbo / SWC caches
+.vite/
+.parcel-cache/
+.turbo/
+.swc/
+
+# VitePress (docs-site)
+docs-site/.vitepress/cache/
+docs-site/.vitepress/dist/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env files (never check in)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ---- AI tooling: anything dropped under a .<tool>/ directory or .<tool>* file ----
+# Aider — pair-programming CLI
+.aider*
+
+# Anthropic Claude Code — CLI/agent + worktrees
+.claude/
+
+# Cline — VS Code agent (and Roo Code fork)
+.cline/
+.clinerules
+.roo/
+.roocode/
+
+# Codeium / Windsurf — completion + IDE
+.codeium/
+.windsurf/
+.windsurfrules
+
+# OpenAI Codex CLI
+.codex/
+
+# Continue — open-source agent
+.continue/
+
+# GitHub Copilot — instructions & local state
+.copilot/
+.copilot-instructions.md
+
+# Cursor — AI editor
+.cursor/
+.cursorrules
+.cursorignore
+
+# Google Gemini CLI
+.gemini/
+
+# JetBrains Junie
+.junie/
+
+# Qodo (formerly CodiumAI)
+.qodo/
+
+# Playwright runtime artifacts (#226 — formula e2e harness)
+**/test-results/
+**/playwright-report/
+**/.playwright/
+
+# `@causl/react` e2e fixture bundle (#765). The `viewport-1000.js`
+# bundle is generated from `viewport-1000.tsx` by the e2e globalSetup;
+# checking it in would create a binary-diff artefact PRs trip over for
+# every TSX edit.
+packages/react/e2e/fixtures/viewport-1000.js
+packages/react/e2e/fixtures/viewport-1000.js.map
+
+# Per-platform `stackrat-check` binaries staged into the
+# @stackrat/checker-<target> packages by `release-checker.yml` or
+# the install-roundtrip test (#390). The artefacts land at publish
+# time; the in-tree `bin/.gitkeep` is the only file that should be
+# checked in.
+packages/checker-*/bin/stackrat-check
+packages/checker-*/bin/stackrat-check.exe
+# `npm pack` outputs in the same dir during the integration test.
+packages/checker-*/*.tgz

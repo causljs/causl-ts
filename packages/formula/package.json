@@ -1,0 +1,40 @@
+{
+  "name": "@causl/formula",
+  "version": "0.1.0",
+  "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "demo": "pnpm --filter @causl/core --filter @causl/devtools --filter @causl/formula run build && node demo/server.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "dependencies": {
+    "@causl/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "fast-check": "^3.23.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

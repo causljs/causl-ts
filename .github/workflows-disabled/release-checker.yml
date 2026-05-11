@@ -1,0 +1,320 @@
+name: release-checker
+
+# Triggers:
+#   - push tag matching `checker-v*` for the actual release path
+#   - workflow_dispatch so I can run a dry-run from the Actions tab
+#     without minting a real tag (the publish step is gated on the
+#     event type — see the `publish-npm` job).
+on:
+  push:
+    tags:
+      - 'checker-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Skip npm publish + GitHub Release upload (build + checksum + upload artefacts only)'
+        required: false
+        default: 'true'
+        type: string
+
+# Per-job permissions are tightened where I can; the release-creating
+# job needs `contents: write` to publish a Release.
+permissions:
+  contents: read
+
+jobs:
+  # Step 5 from issue #390: assert Cargo.toml version, the npm wrapper
+  # version, and the IR schema version (CAUSL_MODEL_SCHEMA from
+  # @causl/core) move together. Failing here aborts the matrix
+  # before any binaries are produced.
+  version-lockstep:
+    name: assert version lockstep (Cargo + npm + IR schema)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read versions and assert match
+        id: read
+        shell: bash
+        run: |
+          set -euo pipefail
+          CARGO_VERSION=$(grep '^version' tools/checker/Cargo.toml | head -1 | sed -E 's/version *= *"([^"]+)".*/\1/')
+          NPM_VERSION=$(node -p "require('./packages/checker/package.json').version")
+          # CAUSL_MODEL_SCHEMA is a numeric IR-schema version; it
+          # bumps on breaking IR shape changes, not every release. The
+          # asserted-against value lives in the wrapper's Cargo.toml as
+          # a `[package.metadata]` key so any future bump touches one
+          # place. The fallback grep keeps this honest if the metadata
+          # key is missing.
+          SCHEMA_FROM_CORE=$(grep -E 'CAUSL_MODEL_SCHEMA *= *' packages/core/src/ir.ts | sed -E 's/.*= *([0-9]+).*/\1/')
+          SCHEMA_PINNED=$(grep -E 'causl_model_schema *= *' tools/checker/Cargo.toml | sed -E 's/.*= *"?([0-9]+)"?.*/\1/' || true)
+          echo "Cargo: $CARGO_VERSION  npm: $NPM_VERSION  schema(core): $SCHEMA_FROM_CORE  schema(pinned): ${SCHEMA_PINNED:-unset}"
+          if [ "$CARGO_VERSION" != "$NPM_VERSION" ]; then
+            echo "::error::Cargo.toml version ($CARGO_VERSION) does not match @causl/checker package.json version ($NPM_VERSION)"
+            exit 1
+          fi
+          if [ -n "${SCHEMA_PINNED:-}" ] && [ "$SCHEMA_FROM_CORE" != "$SCHEMA_PINNED" ]; then
+            echo "::error::CAUSL_MODEL_SCHEMA in @causl/core ($SCHEMA_FROM_CORE) does not match causl_model_schema pin in tools/checker/Cargo.toml ($SCHEMA_PINNED)"
+            exit 1
+          fi
+          echo "version=$NPM_VERSION" >> "$GITHUB_OUTPUT"
+
+  # Cross-compile causl-check for the five supported targets. Five
+  # legs land on three runner OSes; Linux ARM uses `cross` because
+  # ubuntu-latest has no native arm64 runner in our tier.
+  build:
+    name: build ${{ matrix.target }}
+    needs: [version-lockstep]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform_pkg: checker-linux-x64
+            artefact: causl-check
+            use_cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform_pkg: checker-linux-arm64
+            artefact: causl-check
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            platform_pkg: checker-darwin-x64
+            artefact: causl-check
+            use_cross: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            platform_pkg: checker-darwin-arm64
+            artefact: causl-check
+            use_cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            platform_pkg: checker-win32-x64
+            artefact: causl-check.exe
+            use_cross: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/checker
+          key: ${{ matrix.target }}
+
+      - name: Install cross (Linux ARM only)
+        if: matrix.use_cross == true
+        run: cargo install cross --locked
+
+      - name: Build native
+        if: matrix.use_cross == false
+        working-directory: tools/checker
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build with cross
+        if: matrix.use_cross == true
+        working-directory: tools/checker
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Compute SHA256 (Unix)
+        if: runner.os != 'Windows'
+        working-directory: tools/checker/target/${{ matrix.target }}/release
+        run: |
+          shasum -a 256 ${{ matrix.artefact }} > ${{ matrix.artefact }}.sha256
+          cat ${{ matrix.artefact }}.sha256
+
+      - name: Compute SHA256 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: tools/checker/target/${{ matrix.target }}/release
+        run: |
+          $h = Get-FileHash -Algorithm SHA256 ${{ matrix.artefact }}
+          "$($h.Hash.ToLower())  ${{ matrix.artefact }}" | Out-File -Encoding ASCII ${{ matrix.artefact }}.sha256
+          Get-Content ${{ matrix.artefact }}.sha256
+
+      # Stage the binary into the matching per-platform package's bin/
+      # so `pnpm publish` from packages/checker-<target>/ has the
+      # artefact available.
+      - name: Stage binary into per-platform package
+        shell: bash
+        run: |
+          mkdir -p packages/${{ matrix.platform_pkg }}/bin
+          cp tools/checker/target/${{ matrix.target }}/release/${{ matrix.artefact }} \
+             packages/${{ matrix.platform_pkg }}/bin/${{ matrix.artefact }}
+          chmod +x packages/${{ matrix.platform_pkg }}/bin/${{ matrix.artefact }} || true
+
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: causl-check-${{ matrix.target }}
+          path: |
+            packages/${{ matrix.platform_pkg }}/bin/${{ matrix.artefact }}
+            tools/checker/target/${{ matrix.target }}/release/${{ matrix.artefact }}.sha256
+          if-no-files-found: error
+
+  # Upload all five binaries + checksums to a GitHub Release. Only runs
+  # on a real tag push — workflow_dispatch dry-runs stop after `build`.
+  github-release:
+    name: github release
+    needs: [version-lockstep, build]
+    if: startsWith(github.ref, 'refs/tags/checker-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artefacts
+
+      - name: List staged artefacts
+        run: ls -R release-artefacts
+
+      - name: Create Release with binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: causl-check ${{ needs.version-lockstep.outputs.version }}
+          body: |
+            causl-check ${{ needs.version-lockstep.outputs.version }} — prebuilt binaries.
+
+            See https://github.com/iasbuilt/causl/blob/main/packages/checker/README.md for install instructions.
+          files: |
+            release-artefacts/**/causl-check
+            release-artefacts/**/causl-check.exe
+            release-artefacts/**/*.sha256
+
+  # Publish the five per-platform packages to npm. Each runs after its
+  # matching `build` leg and reuses the staged binary from artefacts.
+  # Only runs on a real tag push.
+  publish-npm:
+    name: publish ${{ matrix.platform_pkg }}
+    needs: [version-lockstep, build]
+    if: startsWith(github.ref, 'refs/tags/checker-v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform_pkg: checker-linux-x64
+            artefact: causl-check
+          - target: aarch64-unknown-linux-gnu
+            platform_pkg: checker-linux-arm64
+            artefact: causl-check
+          - target: x86_64-apple-darwin
+            platform_pkg: checker-darwin-x64
+            artefact: causl-check
+          - target: aarch64-apple-darwin
+            platform_pkg: checker-darwin-arm64
+            artefact: causl-check
+          - target: x86_64-pc-windows-msvc
+            platform_pkg: checker-win32-x64
+            artefact: causl-check.exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download binary artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: causl-check-${{ matrix.target }}
+          path: release-artefacts/${{ matrix.target }}
+
+      - name: Stage binary into package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packages/${{ matrix.platform_pkg }}/bin
+          # The artefact upload preserved the relative path under
+          # packages/<pkg>/bin/, so the file lands at the same nested
+          # depth on download. Locate it and copy onto the publish path.
+          SRC=$(find release-artefacts/${{ matrix.target }} -type f -name '${{ matrix.artefact }}' | head -1)
+          test -n "$SRC"
+          cp "$SRC" packages/${{ matrix.platform_pkg }}/bin/${{ matrix.artefact }}
+          chmod +x packages/${{ matrix.platform_pkg }}/bin/${{ matrix.artefact }} || true
+          ls -la packages/${{ matrix.platform_pkg }}/bin/
+
+      - name: Pin per-platform package version to release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version-lockstep.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const p = 'packages/${{ matrix.platform_pkg }}/package.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            j.version = process.env.VERSION;
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          " VERSION="$VERSION"
+          cat packages/${{ matrix.platform_pkg }}/package.json
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/${{ matrix.platform_pkg }}
+          pnpm publish --no-git-checks --access public
+
+  # Publish the wrapper after every per-platform package landed, so
+  # adopters never see an `optionalDependencies` reference that npm
+  # cannot resolve.
+  publish-wrapper:
+    name: publish @causl/checker
+    needs: [version-lockstep, publish-npm]
+    if: startsWith(github.ref, 'refs/tags/checker-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @causl/checker build
+
+      # Pin the wrapper's optionalDependencies to the just-published
+      # version so consumers get the matching binary, not a 0.0.0
+      # placeholder. The version itself is bumped via changesets prior
+      # to the tag push; this step only rewrites the optionalDeps.
+      - name: Pin optionalDependencies to release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version-lockstep.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const p = 'packages/checker/package.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            for (const k of Object.keys(j.optionalDependencies || {})) {
+              j.optionalDependencies[k] = process.env.VERSION;
+            }
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          " VERSION="$VERSION"
+          cat packages/checker/package.json
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/checker
+          pnpm publish --no-git-checks --access public

@@ -1,0 +1,137 @@
+name: perf-snapshot (nightly profiling)
+
+# Nightly profiling job (#709). Spawns a fresh Node process per
+# (library × scenario × scale) cell, captures all six artifact
+# types — V8 sampler, 0x flame, --heap-prof, --trace-ic,
+# --trace-deopt, --trace-gc-verbose — and uploads them as a
+# build artifact for inspection from the live dashboard (#707).
+#
+# 0x flame graphs (#762) are captured ONLY for the headline cells
+# (scrolling-viewport, batch-commit, equality-cutoff at scale
+# 10000, across all 4 libraries — 12 flame graphs total) and
+# uploaded under a separate `perf-snapshot-flames-<run_id>`
+# artifact slot. Full-sweep flame graphs would exceed the
+# nightly artifact budget; see step comment for details.
+#
+# Currently in workflows-disabled/ alongside every other workflow
+# while GitHub Actions billing is being resolved (#725). Move back
+# to .github/workflows/ when CI is restored.
+
+on:
+  schedule:
+    # 02:00 UTC daily.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  perf-snapshot:
+    name: capture per-cell profile artifacts (#709)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter './packages/*' run build
+
+      - name: Capture profile artifacts (sampler + flame + heap + deopt + gc)
+        env:
+          # Headline cells per #710 / #717 / #718. Restrict the
+          # nightly sweep to the canonical 7 at scales 100/1k/10k —
+          # full sweep would exceed the 90-minute job budget.
+          CAUSL_BENCH_MAX_SCALE: '10000'
+        run: |
+          mkdir -p profiles
+          for lib in causl jotai redux mobx; do
+            for scn in linear-chain diamond dynamic-dep-flip scrolling-viewport async-race batch-commit equality-cutoff; do
+              for n in 100 1000 10000; do
+                cell="${lib}-${scn}-${n}"
+                outdir="profiles/${cell}"
+                mkdir -p "$outdir"
+                echo "::group::Capture ${cell}"
+                # Sampler (V8 --prof) → prof.txt
+                LIB=$lib SCN=$scn N=$n pnpm --filter @causl/bench profile:sampler || true
+                if compgen -G "packages/bench/isolate-*-v8.log" > /dev/null; then
+                  node --prof-process packages/bench/isolate-*-v8.log > "$outdir/prof.txt" 2>/dev/null || true
+                  rm -f packages/bench/isolate-*-v8.log
+                fi
+                # Heap profile
+                LIB=$lib SCN=$scn N=$n pnpm --filter @causl/bench profile:heap || true
+                mv -f packages/bench/Heap.*.heapprofile "$outdir/" 2>/dev/null || true
+                # Deopt trace (--trace-ic was removed in V8 13.x / Node 25;
+                # use the sampler's prof.txt [Bottom up] section for IC info instead)
+                LIB=$lib SCN=$scn N=$n pnpm --filter @causl/bench profile:deopt > "$outdir/deopt.log" 2>&1 || true
+                # GC trace
+                LIB=$lib SCN=$scn N=$n pnpm --filter @causl/bench profile:gc > "$outdir/gc.log" 2>&1 || true
+                echo "::endgroup::"
+              done
+            done
+          done
+
+      - name: Capture 0x flame graphs (headline cells only, #762)
+        # Flame graphs are captured ONLY for the headline cells —
+        # scrolling-viewport, batch-commit, equality-cutoff at scale
+        # 10000 — across all 4 libraries (causl, jotai, redux, mobx).
+        # That is 4 libs × 3 scenarios × 1 scale = 12 flame graphs.
+        # Full-sweep flame graphs (all 7 scenarios × 3 scales × 4 libs
+        # = 84 cells) was deferred in #736 because `npx --yes 0x@5`
+        # carries a ~30 MB asset overhead per cell, which would blow
+        # past the artifact-budget at full sweep. Per #762 the
+        # restricted headline-cell capture stays well under the
+        # 200 MB nightly target:
+        #   12 flames × ≤2 MB compressed = ≤24 MB
+        # (96 MB ceiling reserved for headroom should 0x assets grow).
+        # Each flamegraph.html is gzipped in place so the artifact
+        # uploader stores the compressed form.
+        run: |
+          mkdir -p flames
+          for lib in causl jotai redux mobx; do
+            for scn in scrolling-viewport batch-commit equality-cutoff; do
+              n=10000
+              cell="${lib}-${scn}-${n}"
+              outdir="flames/${cell}"
+              mkdir -p "$outdir"
+              echo "::group::Flame ${cell}"
+              # `0x --quiet` suppresses the per-run progress banner
+              # 0x writes its output to .0x/<pid>.0x/ — we move only
+              # the rendered flamegraph.html into the artifact dir.
+              LIB=$lib SCN=$scn N=$n pnpm --filter @causl/bench profile:flame -- --quiet || true
+              flame_html=$(find packages/bench/.0x -type f -name 'flamegraph.html' 2>/dev/null | head -n1)
+              if [ -n "$flame_html" ] && [ -f "$flame_html" ]; then
+                gzip -9 -c "$flame_html" > "$outdir/flamegraph.html.gz"
+                # Enforce per-flame ≤2 MB compressed budget; warn if breached.
+                size=$(stat -c '%s' "$outdir/flamegraph.html.gz" 2>/dev/null || stat -f '%z' "$outdir/flamegraph.html.gz")
+                if [ "$size" -gt 2097152 ]; then
+                  echo "::warning::flame ${cell} is ${size} bytes (>2 MB compressed budget)"
+                fi
+              else
+                echo "::warning::no flamegraph.html produced for ${cell}"
+              fi
+              # Always reset the 0x scratch dir so the next cell starts clean.
+              rm -rf packages/bench/.0x
+              echo "::endgroup::"
+            done
+          done
+
+      - name: Upload profile artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-snapshot-${{ github.run_id }}
+          path: profiles/
+          retention-days: 30
+
+      - name: Upload flame graph artifacts (#762)
+        # Distinct artifact slot from prof.txt/heapprofile so the
+        # dashboard (#707) can deep-link to flame graphs separately
+        # and so the size budgets can be tracked independently.
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-snapshot-flames-${{ github.run_id }}
+          path: flames/
+          retention-days: 30

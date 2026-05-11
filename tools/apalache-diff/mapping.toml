@@ -1,0 +1,268 @@
+# =============================================================================
+# Apalache differential runner — scenario mapping
+# =============================================================================
+#
+# Per SPEC §16.5 / §16.5.1 / §16.7 and EPIC-7 (apalache differential corpus):
+# every TLA+ corpus model under `tools/enumerator/corpus/apalache/<name>.tla`
+# is paired with a Rust enumerator scenario under
+# `tools/enumerator/corpus/rust/<name>.scenario.rs`. The Apalache differential
+# runner (currently a skeleton at `tools/enumerator/diff/src/main.rs`) consumes
+# this file as the join schema: one `[[scenarios]]` row per (TLA+ model, Rust
+# scenario, named property) triple. The runner invokes apalache-mc on the
+# .tla side, runs the enumerator on the .rs side, joins by `name`, and asserts
+# verdicts match (or are listed under `[[exceptions]]` with a tracking issue).
+#
+# Path resolution: paths are relative to the workspace root
+# (`tools/enumerator/...`) so the file is portable between local invocations
+# and the Tier-3 nightly CI job.
+#
+# Status: SEED. The 10 entries below are the EPIC-7 corpus floor; growing
+# the corpus is itself an EPIC, not a patch (per the EPIC-7 doctrine that
+# ten is the budget a single reviewer can re-read in one sitting). To add
+# a new scenario, drop a `<name>.tla` under `corpus/apalache/`, a
+# `<name>.scenario.rs` under `corpus/rust/`, and an `[[scenarios]]` row
+# here — in the same PR, with a §9.1 row reference.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Schema
+# -----------------------------------------------------------------------------
+#
+# [[scenarios]]
+# name              — stable identifier, matches both file basenames.
+# tla_path          — path to the Apalache .tla model.
+# rust_path         — path to the paired Rust scenario.
+# invariant         — the TLA+ INVARIANT or PROPERTY clause name (the symbol
+#                     apalache-mc is asked to check; --inv=<invariant>).
+# expected_apalache — verdict apalache-mc should emit on the model + invariant
+#                     ("held" | "violated"). The runner asserts the actual
+#                     verdict matches.
+# expected_rust     — verdict the Rust enumerator/static linter should emit on
+#                     the paired scenario ("clean" | "violated"). The runner
+#                     asserts the actual verdict matches; it is informational
+#                     for the rare cases where the two sides legitimately
+#                     diverge (see `[[exceptions]]`).
+# rust_violation    — when expected_rust = "violated", the
+#                     causl_check::ViolationKind variant the linter emits.
+#                     Empty when expected_rust = "clean".
+# spec_section      — "SPEC.md §<n>" or "SPEC.async.md §<n>" — the prose row
+#                     this scenario encodes (per EPIC-7 / TASK 7.1 doctrine:
+#                     reviewers compare the encoding to the prose, not to
+#                     the paired file).
+# notes             — free-form one-liner; reviewer aid, not parsed.
+# -----------------------------------------------------------------------------
+
+# Scenario 1 — single input, single commit.
+# Trivial baseline; both sides verdict clean.
+[[scenarios]]
+name              = "single_input_commit"
+tla_path          = "tools/enumerator/corpus/apalache/single_input_commit.tla"
+rust_path         = "tools/enumerator/corpus/rust/single_input_commit.scenario.rs"
+invariant         = "Monotonic"
+expected_apalache = "held"
+expected_rust     = "clean"
+rust_violation    = ""
+spec_section      = "SPEC.md §3 Theorem 4"
+notes             = "Baseline — exercises the runner on a clean trace."
+
+# Scenario 2 — two derived nodes with mutual deps.
+# The dep graph is a 2-cycle; Apalache refutes Acyclic on the start state,
+# the static linter fires `Cycle`.
+[[scenarios]]
+name              = "cycle_two_deriveds"
+tla_path          = "tools/enumerator/corpus/apalache/cycle_two_deriveds.tla"
+rust_path         = "tools/enumerator/corpus/rust/cycle_two_deriveds.scenario.rs"
+invariant         = "Acyclic"
+expected_apalache = "violated"
+expected_rust     = "violated"
+rust_violation    = "Cycle"
+spec_section      = "SPEC.md §9.1"
+notes             = "deps[a]={b}, deps[b]={a}; both oracles fire on the initial state."
+
+# Scenario 3 — minimal glitch-propagation.
+# DIVERGES BY DESIGN. The TLA+ model encodes the §3 Theorem-2 invariant
+# `sum = a + b` which holds under the Commit action (the action sets sum'
+# from va+vb atomically). The Rust scenario encodes the inconsistent-
+# `changedNodes` shape that the static linter's GlitchPropagation pass
+# fires on — a structural-IR property that has no clean TLA+ encoding.
+# This is a `(held, violated)` pair; the runner must allow it. See the
+# `[[exceptions]]` row at the bottom of the file.
+[[scenarios]]
+name              = "glitch_propagation_minimal"
+tla_path          = "tools/enumerator/corpus/apalache/glitch_propagation_minimal.tla"
+rust_path         = "tools/enumerator/corpus/rust/glitch_propagation_minimal.scenario.rs"
+invariant         = "GlitchFree"
+expected_apalache = "held"
+expected_rust     = "violated"
+rust_violation    = "GlitchPropagation"
+spec_section      = "SPEC.md §3 Theorem 2"
+notes             = "Encoding-asymmetric — see [[exceptions]] entry."
+
+# Scenario 4 — dispose then read.
+# Apalache refutes UseAfterDisposeFree via a Dispose-then-Read interleaving;
+# the static linter fires `UseAfterDispose`.
+[[scenarios]]
+name              = "dispose_then_read"
+tla_path          = "tools/enumerator/corpus/apalache/dispose_then_read.tla"
+rust_path         = "tools/enumerator/corpus/rust/dispose_then_read.scenario.rs"
+invariant         = "UseAfterDisposeFree"
+expected_apalache = "violated"
+expected_rust     = "violated"
+rust_violation    = "UseAfterDispose"
+spec_section      = "SPEC.md §9.1 row 11"
+notes             = "Disposed at t=d, read at t>d."
+
+# Scenario 5 — cross-graph read with no IRBridge.
+# Apalache refutes AllCrossGraphReadsBridged when the Bridges constant is
+# the empty set; the static linter fires `CrossGraphRead`.
+[[scenarios]]
+name              = "cross_graph_read_uncovered"
+tla_path          = "tools/enumerator/corpus/apalache/cross_graph_read_uncovered.tla"
+rust_path         = "tools/enumerator/corpus/rust/cross_graph_read_uncovered.scenario.rs"
+invariant         = "AllCrossGraphReadsBridged"
+expected_apalache = "violated"
+expected_rust     = "violated"
+rust_violation    = "CrossGraphRead"
+spec_section      = "SPEC.md §9.1"
+notes             = "Apalache run requires `Bridges = {}` and `Nodes = {greeting, userId}`."
+
+# Scenario 6 — subscribe callback fires a commit.
+# Apalache refutes NoCascadingCommit via EnterCallback then Commit; the static
+# linter fires `CommitFromSubscribe`.
+[[scenarios]]
+name              = "subscribe_callback_cascade"
+tla_path          = "tools/enumerator/corpus/apalache/subscribe_callback_cascade.tla"
+rust_path         = "tools/enumerator/corpus/rust/subscribe_callback_cascade.scenario.rs"
+invariant         = "NoCascadingCommit"
+expected_apalache = "violated"
+expected_rust     = "violated"
+rust_violation    = "CommitFromSubscribe"
+spec_section      = "SPEC.md §9.1 row 1"
+notes             = "Cascading-commit anti-pattern."
+
+# Scenario 7 — non-monotonic commit.
+# Apalache refutes Monotonic by appending a t' < t commit; the static linter
+# fires `NonMonotonicCommit`.
+[[scenarios]]
+name              = "monotonic_commit_violation"
+tla_path          = "tools/enumerator/corpus/apalache/monotonic_commit_violation.tla"
+rust_path         = "tools/enumerator/corpus/rust/monotonic_commit_violation.scenario.rs"
+invariant         = "Monotonic"
+expected_apalache = "violated"
+expected_rust     = "violated"
+rust_violation    = "NonMonotonicCommit"
+spec_section      = "SPEC.md §3 Theorem 4"
+notes             = "GraphTime monotonicity refutation."
+
+# Scenario 8 — replay divergence (impure compute).
+# DIVERGES BY DESIGN. The Apalache model's `Deterministic` invariant holds
+# on the closed-form model (impurity is not encodable in TLA+ without
+# external state). The Rust IR cannot statically detect impure compute
+# bodies (Date.now / Math.random); the runtime `ReplayDivergenceOracle`
+# is the witness. Both sides verdict clean here, *but* the join key is
+# preserved so the eventual runtime oracle has a corpus row to attach to.
+[[scenarios]]
+name              = "replay_divergence"
+tla_path          = "tools/enumerator/corpus/apalache/replay_divergence.tla"
+rust_path         = "tools/enumerator/corpus/rust/replay_divergence.scenario.rs"
+invariant         = "Deterministic"
+expected_apalache = "held"
+expected_rust     = "clean"
+rust_violation    = ""
+spec_section      = "SPEC.md §16.4"
+notes             = "Static-undetectable; runtime oracle lands post-EPIC-3 m2."
+
+# Scenario 9 — legacy-allow bridge during a migration window.
+# Apalache holds LegacyAllowSuppresses when bridgePolicy = legacy-allow;
+# the static linter does NOT fire CrossGraphRead under that policy. Both
+# sides verdict clean.
+[[scenarios]]
+name              = "legacy_allow_bridge"
+tla_path          = "tools/enumerator/corpus/apalache/legacy_allow_bridge.tla"
+rust_path         = "tools/enumerator/corpus/rust/legacy_allow_bridge.scenario.rs"
+invariant         = "LegacyAllowSuppresses"
+expected_apalache = "held"
+expected_rust     = "clean"
+rust_violation    = ""
+spec_section      = "SPEC.md §9.1"
+notes             = "Suppression-policy positive arm."
+
+# Scenario 10 — subscribe under a process-exit scope.
+# Apalache holds ProcessExitScopeSuppresses; the static linter does NOT
+# fire SubscribeWithoutDispose under scopeKind = process-exit. Both sides
+# verdict clean.
+[[scenarios]]
+name              = "process_exit_scope_subscribe"
+tla_path          = "tools/enumerator/corpus/apalache/process_exit_scope_subscribe.tla"
+rust_path         = "tools/enumerator/corpus/rust/process_exit_scope_subscribe.scenario.rs"
+invariant         = "ProcessExitScopeSuppresses"
+expected_apalache = "held"
+expected_rust     = "clean"
+rust_violation    = ""
+spec_section      = "SPEC.async.md §16A.2.1"
+notes             = "Subscribe-leak suppression for process-exit-bound scopes."
+
+# =============================================================================
+# Named exceptions (per EPIC-7: every divergence is a learning event;
+# named exceptions document divergences that are correct on both sides).
+# =============================================================================
+#
+# Schema:
+# [[exceptions]]
+# scenario       — `name` of an [[scenarios]] row.
+# kind           — "encoding-asymmetric" | "apalache-bug" | "enumerator-bug"
+#                  | "four-way-architectural" (#1070: the JS-driven legs
+#                  parse a static IR while the Rust enumerator runs a
+#                  bounded BFS — a row that has the enumerator-detectable
+#                  race embedded in its IR will surface a structural
+#                  `rust-differs-from-js` arm of `FourWayAgreement` that
+#                  is correct on both sides).
+# reason         — non-empty prose explaining why the divergence is correct.
+# tracking_issue — non-empty URL or `#NNN` reference; permanent-excuse
+#                  exceptions are caught at review.
+# -----------------------------------------------------------------------------
+
+[[exceptions]]
+scenario       = "glitch_propagation_minimal"
+kind           = "encoding-asymmetric"
+reason         = """
+The TLA+ side encodes §3 Theorem 2's value-equality invariant directly
+(sum = a + b at every state) and the Commit action preserves it by
+construction — Apalache verdicts `held`. The Rust side encodes the
+structural-IR variant: the linter's GlitchPropagation pass detects an
+inconsistent `changedNodes` set (sum changed, but neither dep changed),
+which has no faithful TLA+ encoding because TLA+ does not model the
+`changedNodes` artifact. The two oracles witness the same race-class
+from complementary angles. The differential runner must accept this
+specific (held, violated) pair on this specific scenario.
+"""
+tracking_issue = "iasbuilt/causl#574"
+
+# 4-way classifier (#1070) architectural exception for cycle_two_deriveds.
+# The TS engine / WASM serde / WASM gc bridges all accept the corpus IR
+# as a structurally-valid CauslModel (the cycle lives in derived bodies,
+# which parseCauslModel does not walk). The Rust enumerator's BFS
+# (Bound::tier1() with the v1 CycleOracle) reaches a `ReachableCycle`
+# race-class verdict. The two sides witness the same row from
+# complementary angles: parse-time structural checks vs run-time BFS
+# race-class detection. The 4-way classifier surfaces this as
+# `FourWayAgreement::RustDiffersFromJs` and the strict gate
+# (`--strict --four-way`) excuses it via this row.
+[[exceptions]]
+scenario       = "cycle_two_deriveds"
+kind           = "four-way-architectural"
+reason         = """
+The JS-driven legs (TS engine + serde-WASM bridge + gc-WASM bridge)
+all classify this row's CauslModel as structurally `held` — the
+cycle is encoded in the derived bodies and `parseCauslModel` does
+not evaluate them. The Rust enumerator runs a bounded BFS that
+hits a `ReachableCycle` race-class verdict at Bound::tier1().
+This is the architectural axis the 4-way classifier is supposed to
+expose (`rust-differs-from-js`), not a regression. Lifting the
+exception requires either lifting BFS-style race detection into
+the IR validator (cheap to defer) or excluding the cycle scenario
+from the 4-way corpus (not what #685's canonical-scenarios doctrine
+recommends).
+"""
+tracking_issue = "iasbuilt/causl#1070"

@@ -1,0 +1,5 @@
+# Root .gitignore already ignores `node_modules/` and `dist/`. We
+# add `package-lock.json` here because the fixtures install with
+# `npm install --no-save` in CI (no lockfile commit needed); local
+# runs that omit `--no-save` shouldn't pollute the repo.
+package-lock.json

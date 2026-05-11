@@ -1,0 +1,10 @@
+{
+  "_": "tinybench baseline. Captured on first nightly run; subsequent runs diff against this.",
+  "_threshold_pct": 20,
+  "results": {
+    "createCausl() — empty graph": null,
+    "100-node fan-in: bump-root commit": null,
+    "1000-node chain: bump head": null,
+    "subscribe + 100 commits": null
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "name": "@causl/core",
+  "version": "0.0.0",
+  "description": "Semantic core for Causl — transactional state for tangled dependency graphs.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.ts",
+      "import": "./dist/wasm.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm/README.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:perf-invariant": "vitest run test/perf-recompute.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' 'wasm/**/*.ts'",
+    "bench": "tsx bench/recompute.bench.ts"
+  },
+  "peerDependencies": {
+    "fast-check": "^3.20.0"
+  },
+  "peerDependenciesMeta": {
+    "fast-check": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@causl/core-testing-internal": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "fast-check": "^3.23.2",
+    "tinybench": "^6.0.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

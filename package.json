@@ -1,0 +1,159 @@
+{
+  "name": "causl-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Transactional state for tangled dependency graphs.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' run build",
+    "test": "pnpm -r --filter './packages/*' run test",
+    "test:run": "pnpm -r --workspace-concurrency=1 --reporter=append-only --aggregate-output --filter './packages/*' run test:run",
+    "lint": "pnpm -r --filter './packages/*' run lint",
+    "typecheck": "pnpm -r --filter './packages/*' run typecheck",
+    "validate": "pnpm typecheck && pnpm build && pnpm test:run",
+    "size": "size-limit",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "demo:spreadsheet": "pnpm --filter @causl/formula run demo",
+    "audit:commitments": "node --import tsx tools/audit/run-all.ts",
+    "audit:test": "node --import tsx --test tools/audit/__tests__/*.test.ts",
+    "wasm:build": "node tools/wasm-build/build.mjs",
+    "wasm:build:check": "node tools/wasm-build/build.mjs --check",
+    "typecheck:test-d": "pnpm -r --filter './packages/*' --if-present run test:types",
+    "docs:api": "typedoc",
+    "prepare": "husky"
+  },
+  "//size-limit": "Per SPEC.md §14.2 the bundle budget is the 15-30 KB band, with 18 KB as the working target on @causl/core (full import). The ceilings below are CI-gate caps — a PR that crosses one fails `size — bundle-size gate` and must include the §14.2.1 written team consensus or the size-limit bump is rejected. The 4.5 KB / 6 KB / 3 KB ceilings the previous spec defended were retired in PR #458 once the team accepted that the small-bundle promise was costing more in adopter glue (per closed PRs #266, #395, #420, #383, #455, #390, #454) than it was earning in elegance.",
+  "//size-limit-wasm": "The per-bridge wasm-pkg artefact cells (serde-json/gc-builtins/gc-classic) were activated by Sub-E (#1063) closeout per the corrected #689 budgets. Each cell asserts the raw .wasm artefact ceiling; the Brotli q11 ceiling is enforced post-compress at `pnpm wasm:build` upload time and is documented in `packages/core/wasm-pkg/README.md`. Per #1103 the per-bridge artefact tree was split into `<bridge>-bundler/` (consumed by the @causl/core/wasm loader + bundler-interop fixtures) and `<bridge>-nodejs/` (consumed by Node test runners such as the bridge-roundtrip property suite). wasm-pack emits byte-identical `.wasm` from both targets, so the size-limit cells gate the `-bundler` variant only — a per-target row pair would duplicate the cap with no extra signal. The 8-byte WASM-preamble stubs committed under both `<bridge>-bundler/` and `<bridge>-nodejs/` let the cells gate today; `pnpm wasm:build` replaces them with real artefacts and the caps bite from that point on. If #692's `js-sys`-drop path lands, `gc-builtins` ratchets to ≤70 KB raw / ≤28 KB Brotli — file a follow-up issue for the ratchet. NOTE (#1150): the `@causl/core wasm bridge — serde-json (raw)` cell sits at 230 KB to absorb the current 213 KB serde artefact, which exceeds the SPEC §17.6 commitment-14 ceiling of 200 KB raw by 13 KB (Brotli 66 KB remains under the 80 KB target). The gap is documented as Option C divergence in §17.6's current-state paragraph; the cell tightens back to ≤200 KB when the Rust engine port (epic #1133) lands and wasm-opt is invoked directly per PR #1112's design discussion — see #1150 for the resolution path.",
+  "size-limit": [
+    {
+      "path": "packages/core/dist/index.js",
+      "name": "@causl/core (full import)",
+      "limit": "20 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/core/dist/index.js",
+      "import": "{ createCausl }",
+      "name": "@causl/core (createCausl-only)",
+      "limit": "15 KB"
+    },
+    {
+      "path": "packages/core/dist/wasm.js",
+      "name": "@causl/core/wasm (Phase-1 loader + WasmBackend wrapper)",
+      "limit": "12 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/core/wasm-pkg/serde-bundler/engine_rs_bg.wasm",
+      "name": "@causl/core wasm bridge — serde-json (raw)",
+      "limit": "230 KB",
+      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+    },
+    {
+      "path": "packages/core/wasm-pkg/gc-builtins-bundler/engine_rs_bg.wasm",
+      "name": "@causl/core wasm bridge — gc-builtins (raw)",
+      "limit": "260 KB",
+      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+    },
+    {
+      "path": "packages/core/wasm-pkg/gc-classic-bundler/engine_rs_bg.wasm",
+      "name": "@causl/core wasm bridge — gc-classic (raw)",
+      "limit": "260 KB",
+      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+    },
+    {
+      "path": "packages/react/dist/index.js",
+      "name": "@causl/react",
+      "limit": "8 KB",
+      "ignore": ["react", "@causl/core"]
+    },
+    {
+      "path": "packages/devtools-bridge/dist/index.js",
+      "name": "@causl/devtools-bridge (connectDevtools-only, absent-extension path)",
+      "import": "{ connectDevtools }",
+      "limit": "5 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/sync/dist/index.js",
+      "name": "@causl/sync (full import)",
+      "limit": "12 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/sync/dist/resource-entry.js",
+      "name": "@causl/sync/resource (resource-only)",
+      "limit": "8 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/sync/dist/conflict-entry.js",
+      "name": "@causl/sync/conflict (conflict-only)",
+      "limit": "8 KB",
+      "ignore": ["@causl/core"]
+    },
+    {
+      "path": "packages/bench/fixtures/jotai-full.ts",
+      "name": "jotai (full import)",
+      "limit": "20 KB"
+    },
+    {
+      "path": "packages/bench/fixtures/jotai-min.ts",
+      "name": "jotai (atom-only)",
+      "limit": "20 KB"
+    },
+    {
+      "path": "packages/bench/fixtures/redux-toolkit-full.ts",
+      "name": "@reduxjs/toolkit (full import)",
+      "limit": "60 KB"
+    },
+    {
+      "path": "packages/bench/fixtures/redux-toolkit-min.ts",
+      "name": "@reduxjs/toolkit (configureStore-only)",
+      "limit": "60 KB"
+    },
+    {
+      "path": "packages/bench/fixtures/mobx-full.ts",
+      "name": "mobx (full import)",
+      "limit": "30 KB"
+    },
+    {
+      "path": "packages/bench/fixtures/mobx-min.ts",
+      "name": "mobx (observable+computed)",
+      "limit": "30 KB"
+    }
+  ],
+  "devDependencies": {
+    "0x": "^6.0.0",
+    "@changesets/cli": "^2.27.0",
+    "@eslint/js": "^9.39.4",
+    "@size-limit/file": "^12.1.0",
+    "@size-limit/preset-small-lib": "^12.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "globals": "^17.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "size-limit": "^12.1.0",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.27.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.1"
+  },
+  "lint-staged": {
+    "packages/*/src/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "packages/*/test/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ]
+  },
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,254 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  ts:
+    name: TypeScript — typecheck + build + test (react ${{ matrix.react }})
+    runs-on: ubuntu-latest
+    # React peer-dep matrix (#261). We support React 18.3+ and 19.x on
+    # the `@causl/react` adapter (declared via peerDependencies). The
+    # workspace lockfile pins one concrete React version (18.3.1) for
+    # day-to-day dev; CI fans out across both major lines so we catch
+    # peer-dep regressions before publish rather than when consumers
+    # upgrade.
+    #
+    # Both legs run the full TypeScript pipeline (typecheck + build +
+    # test + lint). Only the React-touching legs need the override, but
+    # the orthogonal cost is small and keeping the legs symmetric makes
+    # the matrix readable on the PR check list.
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [24.x]
+        react: ['18.3.1', '19.0.0']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # When the matrix leg targets a React version other than the one
+      # pinned in the lockfile (18.3.1), re-resolve the React peer in
+      # the `@causl/react` package against the matrix value before
+      # running the rest of the pipeline. Using `--no-frozen-lockfile`
+      # only on the override step keeps the baseline install honouring
+      # the lockfile while still letting the matrix exercise an
+      # alternate React major.
+      #
+      # `@types/react` and `@types/react-dom` track the runtime version
+      # because React 19 removed the global `JSX` namespace from its
+      # types — typecheck + adapter source must see types matching the
+      # runtime under test, not the lockfile baseline.
+      - name: Override React to ${{ matrix.react }} (peer-dep matrix leg)
+        if: matrix.react != '18.3.1'
+        run: |
+          pnpm --filter @causl/react add -D \
+            react@${{ matrix.react }} \
+            react-dom@${{ matrix.react }} \
+            @types/react@${{ matrix.react }} \
+            @types/react-dom@${{ matrix.react }}
+
+      - name: Type check
+        run: pnpm -r --filter './packages/*' run typecheck
+
+      - name: Run build
+        run: pnpm -r --filter './packages/*' run build
+
+      # Named step so the §14 recompute-count invariant surfaces as its
+      # own line in the PR check list. Without this break-out, a §14
+      # regression would land in the generic `Run tests` step alongside
+      # dozens of unrelated specs and lose the PR-author signal the
+      # gate exists for. See #247.
+      - name: perf-invariant — SPEC §14 gate
+        run: pnpm --filter @causl/core run test:perf-invariant
+
+      # Sibling React-side gate for SPEC §14 bullet 2 ("a component
+      # subscribed to one node re-renders only when that node's value
+      # changes") — see #382. Curated subset of subscription-shape
+      # specs (useCausl / useCauslShallow / useSyncExternalStore
+      # / strictMode / family-grid) so the step name maps 1:1 to the
+      # invariant on the PR check list rather than disappearing into
+      # the generic `Run tests` step.
+      #
+      # Env wires the heap-delta leg of family-grid (#389):
+      #   - CAUSL_HEAP_GATE=1 flips the test's CI-honesty branch on,
+      #     so a future toolchain regression that drops `--expose-gc`
+      #     fails loud rather than silently skipping.
+      #   - NODE_OPTIONS=--expose-gc actually exposes `globalThis.gc`
+      #     in the vitest worker (tinypool inherits NODE_OPTIONS into
+      #     workers — same working assumption as the bench harness in
+      #     packages/bench/src/run.ts:73-85).
+      # Scoped to this step rather than job-wide because --expose-gc
+      # adds GC pressure across all specs and the honest gate only
+      # needs it here.
+      - name: perf-invariant — SPEC §14 React subscription gate
+        env:
+          CAUSL_HEAP_GATE: '1'
+          NODE_OPTIONS: '--expose-gc'
+        run: pnpm --filter @causl/react run test:perf-invariant
+
+      - name: Run tests
+        run: pnpm -r --filter './packages/*' run test:run
+
+      - name: Lint (#291 — discriminated-union switch-exhaustiveness gate)
+        run: pnpm -r --filter './packages/*' run lint
+
+      # PR-level commitment-audit gate (#565). The quarterly cron is
+      # the canonical ledger run, but waiting 90 days to catch a
+      # regression of a MECHANICAL audit predicate is unacceptable.
+      # `audit:test` exercises the audit scripts themselves (regex
+      # extractors, cwd-resilience). `audit:commitments` invokes
+      # every check-commitment-*.ts and fails the job on any FAIL.
+      - name: Commitment-audit unit tests (#565)
+        run: pnpm run audit:test
+      - name: Commitment-audit predicates (#565)
+        run: pnpm run audit:commitments
+
+      # Compile-time exhaustiveness gate (#581). Every package that
+      # carries a `test-d/` directory ships a `test:types` script
+      # that runs `tsd` against its `*.test-d.ts` files. The
+      # workspace-level `typecheck:test-d` runs every such script
+      # via pnpm's --if-present filter, so adding a new package
+      # without test-d does not need a workflow change. A future
+      # widening that breaks an `expectError` directive trips at
+      # PR time rather than at the next adapter integration.
+      - name: Compile-time exhaustiveness — test-d gate (#581)
+        run: pnpm run typecheck:test-d
+
+  size:
+    name: size — bundle-size gate (#147 / #245 / SPEC §14 commitment)
+    runs-on: ubuntu-latest
+    # Permissions for the size-limit-action's PR-comment behaviour.
+    # The action posts a single delta-vs-base comment on every PR; it
+    # needs `pull-requests: write` to do so. Read access on contents is
+    # implicit but called out explicitly for least-surprise on review.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      # `andresz1/size-limit-action@v1` runs `pnpm install` + the build
+      # script + `pnpm run size` for both the PR head and the merge
+      # base, then diffs the output. Setting `package_manager: pnpm`
+      # keeps the lockfile honoured. The default `build_script: build`
+      # matches the root `build` script in package.json.
+      #
+      # Replaces the previous `pnpm size` step in the `ts` job —
+      # blocking enforcement is identical (the action exits non-zero on
+      # overage) and we additionally get the per-PR delta comment that
+      # was the missing half of #195's review acceptance.
+      - name: Bundle-size diff + budgets
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          package_manager: pnpm
+
+  rust:
+    name: Rust — fmt + clippy + build + test (causl-check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/checker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/checker
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: cargo build --release
+        run: cargo build --release
+      - name: cargo test
+        run: cargo test --all-targets
+
+  formula-e2e:
+    name: formula — 60fps dropped-frame gate (#226 / SPEC §14 perceptual perf)
+    needs: [ts]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [24.x]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build everything the harness imports — the e2e fixture loads
+      # `@causl/core`'s built ESM directly via a static file server,
+      # so `dist/` must exist before the test runs.
+      - name: Build packages
+        run: pnpm -r --filter './packages/*' run build
+
+      - name: Install Chromium (with system deps)
+        run: pnpm --filter @causl/formula exec playwright install --with-deps chromium
+
+      - name: Run dropped-frame gate
+        run: pnpm --filter @causl/formula run test:e2e
+
+  checker-gate:
+    name: causl-check — required green check on demos
+    needs: [ts, rust]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [24.x]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/checker
+
+      - run: pnpm install --frozen-lockfile
+      - run: cargo build --release --manifest-path tools/checker/Cargo.toml
+
+      - name: Run causl-check against the spreadsheet + async demos
+        env:
+          CAUSL_CHECK_BINARY: ${{ github.workspace }}/tools/checker/target/release/causl-check
+        # The demos export their model snapshots as JSON via the same
+        # vitest invocations that run in `ts`. The integration tests in
+        # @causl/checker re-spin the demos and feed the IR through
+        # the binary. Time budget: <60s per SPEC §16.6.
+        timeout-minutes: 5
+        run: pnpm --filter @causl/checker test:run

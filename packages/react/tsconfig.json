@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "types": []
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "test-d/**/*",
+    "../core/src/**/*",
+    "../core/testing/src/**/*",
+    "../core/wasm/**/*",
+    "../sync/src/**/*"
+  ]
+}

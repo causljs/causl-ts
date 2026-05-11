@@ -81,6 +81,7 @@
 
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { tieredPropertyTrials } from '@causl/core-testing-internal'
 
 import { createCausl } from '../../src/index.js'
 import type { BackendEngine } from '../../wasm/index.js'
@@ -98,9 +99,12 @@ import {
 } from './seed.js'
 import {
   CANONICAL_SEEDS,
+  IDS,
+  type Id,
   type World,
   commandArbitrary,
   expectByteEqualIR,
+  ir,
   makeWorlds,
 } from './replay-determinism.test.js'
 
@@ -1404,5 +1408,386 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
         else process.env['CAUSL_FUZZ_TIER'] = prev
       }
     })
+  })
+
+  // ---------------------------------------------------------------
+  // H3 subscribe-inside-compute parity gate (closes #1154).
+  //
+  // The Markbåge/Miller adopter-audit hazard #H3 catalogues
+  // subscribe-during-derived-compute as the third of eight adopter-
+  // visible behaviours the WASM port must match byte-for-byte. The
+  // existing `commandArbitrary()` alphabet emits inputs, deriveds,
+  // commits, and cycle attempts — but no derived whose compute body
+  // calls `subscribe(...)`. That gap means a Rust port that
+  // mis-handles subscribe-during-compute (corrupts the dep-set
+  // capture, mis-orders Phase G against Phase D recompute, or drops
+  // a transient registration on the wrong tick) could ship green
+  // through the cross-backend determinism gate.
+  //
+  // This arm closes the gap. It builds an H3-specific command
+  // alphabet whose `AddDerivedThatSubscribesCommand` registers a
+  // derived whose compute closure performs a one-shot subscribe to
+  // another node (guarded by an outer-closure latch so recompute
+  // never re-subscribes), and asserts byte-equal IR after every
+  // command across the TS engine and the WASM-side `BackendEngine`.
+  //
+  // The "current TS engine routes subscribe-during-compute through
+  // `pendingTransientDrops` (Phase H dispose)" framing in #1154's
+  // brief is exercised by the `{ transient: true }` arm — the
+  // subscribe-from-compute registration auto-disposes after its
+  // first Phase G fire via the same drain `commitInternal`'s
+  // `finally` arm runs for every transient subscription.
+  //
+  // Trial budget: `tieredPropertyTrials` from `@causl/core/testing`
+  // (issue #1163 wire-up) so the H3 arm respects `CAUSL_FUZZ_TIER`
+  // the same way the rest of the suite does. Default tier is 1000
+  // trials per the SPEC §15.2 floor; PR-lane raises to 5k, nightly
+  // to 100k.
+  // ---------------------------------------------------------------
+  describe('H3 subscribe-inside-compute parity (closes #1154)', () => {
+    /**
+     * H3-arm command: add a derived node whose compute body subscribes
+     * to an existing input node. The subscribe call is guarded by an
+     * outer-closure latch so the registration happens once at derived-
+     * registration time only — recompute never re-subscribes.
+     *
+     * Observed fires are NOT recorded into the `World` (the IR byte-
+     * equality oracle compares `exportModel()` output, which carries
+     * the subscription registration as an `IRSubscribe` row; the
+     * observer's side-effect channel lives outside the IR). The
+     * registration itself is the load-bearing artefact the gate pins:
+     * a Rust port that drops the registration, mis-routes it through
+     * the wrong bucket, or stamps it with a divergent `subscribedAt`
+     * surfaces in `IRSubscribe` byte-comparison.
+     */
+    class AddDerivedThatSubscribesCommand implements fc.Command<World, World> {
+      constructor(
+        private readonly derivedId: Id,
+        private readonly readId: Id,
+        private readonly subscribeId: Id,
+        private readonly transient: boolean,
+      ) {}
+
+      check(world: World): boolean {
+        // Need a fresh id for the derived node and two existing nodes
+        // (one to read from, one to subscribe to). The read/subscribe
+        // targets may be the same node (the registration just lands on
+        // a node the compute also reads) but the derived id must be
+        // fresh.
+        if (world.inputs.has(this.derivedId)) return false
+        if (world.deriveds.has(this.derivedId)) return false
+        if (!worldHasNode(world, this.readId)) return false
+        if (!worldHasNode(world, this.subscribeId)) return false
+        return true
+      }
+
+      run(left: World, right: World): void {
+        const leftReadHandle = worldLookup(left, this.readId)
+        const rightReadHandle = worldLookup(right, this.readId)
+        const leftSubHandle = worldLookup(left, this.subscribeId)
+        const rightSubHandle = worldLookup(right, this.subscribeId)
+
+        // Outer-closure latch — flips on first compute invocation so
+        // subsequent recomputes (triggered by changes to `readId`'s
+        // value) do not re-subscribe and re-pollute the IR. Two
+        // independent latches because the left/right deriveds are
+        // independent registrations.
+        let subscribedLeft = false
+        let subscribedRight = false
+        const opts = this.transient ? { transient: true } : undefined
+
+        const leftDerived = left.graph.derived<number>(`d:${this.derivedId}`, (get) => {
+          const v = get(leftReadHandle)
+          if (!subscribedLeft) {
+            subscribedLeft = true
+            // Observer body is intentionally a no-op: the byte-equal
+            // oracle compares IR (`exportModel()`), not side-effects.
+            // A side-effecting observer would change nothing
+            // observable in the IR projection but would introduce
+            // host-call ordering that is irrelevant to H3's contract.
+            left.graph.subscribe(
+              leftSubHandle,
+              () => {
+                /* no-op */
+              },
+              opts,
+            )
+          }
+          return v
+        })
+        const rightDerived = right.graph.derived<number>(`d:${this.derivedId}`, (get) => {
+          const v = get(rightReadHandle)
+          if (!subscribedRight) {
+            subscribedRight = true
+            right.graph.subscribe(
+              rightSubHandle,
+              () => {
+                /* no-op */
+              },
+              opts,
+            )
+          }
+          return v
+        })
+        left.deriveds.set(this.derivedId, leftDerived)
+        right.deriveds.set(this.derivedId, rightDerived)
+
+        // Inline parity assertion — fc.commands' shrinking machinery
+        // bisects on this so a divergence surfaces on the smallest
+        // failing prefix.
+        expectByteEqualIR(
+          left,
+          right,
+          `after AddDerivedThatSubscribes(${this.derivedId} reads ${this.readId} subscribes ${this.subscribeId} transient=${this.transient})`,
+        )
+      }
+
+      toString(): string {
+        return `AddDerivedThatSubscribes(${this.derivedId} reads ${this.readId} subscribes ${this.subscribeId} transient=${this.transient})`
+      }
+    }
+
+    /**
+     * Build the H3-augmented commands arbitrary. The two re-encoded
+     * standard arms (add-input, commit-set) come from the existing
+     * `commandArbitrary()` generator alphabet; the existing generator
+     * does not expose per-arm constructors, so the arms are inlined
+     * here to avoid widening the refactor surface in
+     * `replay-determinism.test.ts`.
+     *
+     * The third arm is the H3-specific
+     * `AddDerivedThatSubscribesCommand`. Generated traces interleave
+     * all three so subscribe-during-compute registrations are mixed
+     * with the normal commit stream, and fc.commands' shrinking
+     * machinery delivers a minimal failing prefix on divergence.
+     */
+    function h3Commands(opts: { readonly maxCommands?: number } = {}) {
+      return fc.commands(
+        [
+          // Standard set-commit arm — drives the existing input
+          // alphabet so subscribe-from-compute registrations can fire.
+          fc
+            .tuple(fc.constantFrom(...IDS), fc.integer({ min: -100, max: 100 }))
+            .map(([id, v]) => ({
+              check(w: World) {
+                return w.inputs.has(id)
+              },
+              run(left: World, right: World) {
+                const lh = left.inputs.get(id)!
+                const rh = right.inputs.get(id)!
+                left.graph.commit(`set:${id}`, (tx) => tx.set(lh, v))
+                right.graph.commit(`set:${id}`, (tx) => tx.set(rh, v))
+                expectByteEqualIR(left, right, `after CommitSet(${id}, ${v})`)
+              },
+              toString() {
+                return `CommitSet(${id}, ${v})`
+              },
+            })) as fc.Arbitrary<fc.Command<World, World>>,
+          // Standard input-add arm.
+          fc
+            .tuple(fc.constantFrom(...IDS), fc.integer({ min: -100, max: 100 }))
+            .map(([id, v]) => ({
+              check(w: World) {
+                return !w.inputs.has(id) && !w.deriveds.has(id)
+              },
+              run(left: World, right: World) {
+                const a = left.graph.input(`in:${id}`, v)
+                const b = right.graph.input(`in:${id}`, v)
+                left.inputs.set(id, a)
+                right.inputs.set(id, b)
+              },
+              toString() {
+                return `AddInput(${id}, ${v})`
+              },
+            })) as fc.Arbitrary<fc.Command<World, World>>,
+          // H3-specific arm: derived that subscribes inside compute.
+          // Two sub-arms — one plain, one transient — interleaved so
+          // generated traces exercise both the `pendingTransientDrops`
+          // Phase H drain (transient=true) and the standard retain-
+          // across-commits subscribe (transient=false).
+          fc
+            .tuple(
+              fc.constantFrom(...IDS),
+              fc.constantFrom(...IDS),
+              fc.constantFrom(...IDS),
+              fc.boolean(),
+            )
+            .map(
+              ([dId, readId, subId, transient]) =>
+                new AddDerivedThatSubscribesCommand(dId, readId, subId, transient),
+            ),
+        ],
+        { maxCommands: opts.maxCommands ?? 30 },
+      )
+    }
+
+    /**
+     * H3-arm self-check — runs against two TS engines today. When the
+     * Rust port lands (epic #1133) the TS-vs-WASM cross-backend
+     * `it()` below auto-activates the moment `loadWasmBackend()`
+     * returns a real `BackendEngine`. Today the self-check is the
+     * load-bearing gate: it pins the subscribe-during-compute
+     * contract against the in-package TS engine so a regression in
+     * the engine itself (the registration path, the Phase G dispatch,
+     * the Phase H drain) surfaces as a determinism failure.
+     */
+    it('subscribe-inside-compute traces replay byte-equal across two TS engines (TS-only self-check)', () => {
+      fc.assert(
+        fc.property(h3Commands(), (cmds) => {
+          fc.modelRun(() => {
+            const { left, right } = makeWorlds()
+            return { model: left, real: right }
+          }, cmds)
+        }),
+        tieredPropertyTrials('cross-backend.h3-subscribe-inside-compute'),
+      )
+    })
+
+    /**
+     * H3-arm cross-backend parity — fires the same generated traces
+     * against the TS engine and the WASM backend. Skips with a
+     * structured banner when the backend is unavailable (the Phase 1
+     * loader cache still throws `WasmBackendUnavailableError` until
+     * the Rust-driven engine lands), so the gate is dormant-by-
+     * design rather than silently disabled.
+     */
+    it('subscribe-inside-compute traces replay byte-equal across TS and WASM', async () => {
+      // Cargo-fuzz tier defers the corpus-driven exercise to the Rust
+      // fuzz harness — skip with the same structured banner the rest
+      // of the suite uses.
+      if (fuzzTier.skip) {
+        console.log(
+          `[cross-backend-determinism] H3 arm tier='${fuzzTier.tier}' — TS property skipped; ` +
+            `cargo-fuzz workflow drives the corpus-based gate.`,
+        )
+        return
+      }
+      const probe = await probeWasm()
+      if (probe.kind === 'unavailable') {
+        logWasmSkip(probe.reason)
+        return
+      }
+
+      // Trial counter so each shrinking trial draws a fresh
+      // graphName / engine pair. Mirrors the pattern the standard
+      // cross-backend property uses above.
+      let trial = 0
+      const graphNameBase = 'cross-backend-h3'
+      const arb = h3Commands(
+        fuzzTier.maxCommands !== undefined ? { maxCommands: fuzzTier.maxCommands } : {},
+      )
+      fc.assert(
+        fc.property(arb, (cmds) => {
+          const graphName = `${graphNameBase}-${trial++}`
+          fc.modelRun(() => {
+            const js = makeJsCrossBackendWorld(graphName)
+            const wasmBackendInstance = __createWasmBackendSyncForTests(graphName)
+            const wasm = makeWasmCrossBackendWorld(
+              wasmBackendInstance,
+              'wasm-serde',
+              graphName,
+            )
+            return { model: js as World, real: wasm as World }
+          }, cmds)
+        }),
+        // Routes through the tier resolver so PR-lane and nightly
+        // budgets actually take effect (issue #1153 wire-up).
+        tieredPropertyTrials('cross-backend.h3-subscribe-inside-compute.wasm'),
+      )
+    }, /* test timeout accommodates the 100k nightly budget */ 600_000)
+
+    /**
+     * Sanity-check fixture — a hand-rolled subscribe-from-compute
+     * trace that replays byte-equal across two TS engines. Acts as
+     * the "harness wiring works" probe so a fast-check generator
+     * regression doesn't silently disable the gate.
+     */
+    it('fixture: subscribe-from-compute then commit-set replays byte-equal across two TS engines', () => {
+      const { left, right } = makeWorlds()
+      // Setup: two inputs.
+      const cmds: ReadonlyArray<fc.Command<World, World>> = [
+        addInputCmd('a', 0),
+        addInputCmd('b', 100),
+        new AddDerivedThatSubscribesCommand('c', 'a', 'b', false),
+        commitSetCmd('a', 5),
+        commitSetCmd('b', 200),
+        new AddDerivedThatSubscribesCommand('d', 'a', 'b', true),
+        commitSetCmd('b', 300),
+        commitSetCmd('a', 7),
+      ]
+      for (const cmd of cmds) {
+        if (cmd.check(left) && cmd.check(right)) cmd.run(left, right)
+        expectByteEqualIR(left, right, `after ${cmd.toString()}`)
+      }
+      // Final sanity: both engines produced identical IR after the
+      // full trace.
+      expect(ir(left.graph)).toBe(ir(right.graph))
+    })
+
+    /**
+     * Helper for the fixture — minimal inline command that adds an
+     * input on both worlds. Kept local to the H3 arm so the change
+     * surface stays narrow.
+     */
+    function addInputCmd(id: Id, initial: number): fc.Command<World, World> {
+      return {
+        check(w: World) {
+          return !w.inputs.has(id) && !w.deriveds.has(id)
+        },
+        run(left: World, right: World) {
+          left.inputs.set(id, left.graph.input(`in:${id}`, initial))
+          right.inputs.set(id, right.graph.input(`in:${id}`, initial))
+        },
+        toString() {
+          return `AddInput(${id}, ${initial})`
+        },
+      }
+    }
+
+    /**
+     * Helper for the fixture — minimal inline command that runs a
+     * set-commit on both worlds. Mirrors the inline arms in
+     * `h3Commands()` so the fixture path and the generated path
+     * share a behavioural surface.
+     */
+    function commitSetCmd(id: Id, v: number): fc.Command<World, World> {
+      return {
+        check(w: World) {
+          return w.inputs.has(id)
+        },
+        run(left: World, right: World) {
+          const lh = left.inputs.get(id)!
+          const rh = right.inputs.get(id)!
+          left.graph.commit(`set:${id}`, (tx) => tx.set(lh, v))
+          right.graph.commit(`set:${id}`, (tx) => tx.set(rh, v))
+          expectByteEqualIR(left, right, `after CommitSet(${id}, ${v})`)
+        },
+        toString() {
+          return `CommitSet(${id}, ${v})`
+        },
+      }
+    }
+
+    /**
+     * Pure helper — does a world have a node (input or derived) at
+     * this id? Mirrors the local `hasNode` in
+     * `replay-determinism.test.ts`; copied because the function is
+     * not exported.
+     */
+    function worldHasNode(w: World, id: Id): boolean {
+      return w.inputs.has(id) || w.deriveds.has(id)
+    }
+
+    /**
+     * Pure helper — resolve a `Node<number>` handle for the given id.
+     * Mirrors the local `lookup` in `replay-determinism.test.ts`.
+     */
+    function worldLookup(w: World, id: Id): import('../../src/index.js').Node<number> {
+      const n = w.inputs.get(id) ?? w.deriveds.get(id)
+      if (n === undefined) {
+        throw new Error(`H3 arm: no node registered at id '${id}'`)
+      }
+      return n
+    }
   })
 })

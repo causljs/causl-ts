@@ -430,6 +430,91 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
   })
 
   // ---------------------------------------------------------------
+  // H6 — subscriber-fire ordering byte-identical across backends
+  // (#1157). SPEC §15 guarantees per-node subscribers fire in
+  // subscription order. The TS engine satisfies this with insertion-
+  // ordered iteration over the per-node `Set<SubscriptionEntry>`
+  // bucket; the Rust port (epic #1133) must match byte-for-byte.
+  //
+  // The within-backend property in `subscriber-order.property.test.ts`
+  // pins the contract on the TS engine. This cell extends it across
+  // the (JS, WASM) backend pair: a synthetic subscribe/unsubscribe
+  // trace is replayed against both engines, the per-commit fire-order
+  // is recorded for each, and the two traces must be string-equal.
+  //
+  // Today the WASM backend wraps the same TS engine the JS side uses
+  // (Phase 1 — see `WasmBackend.__graph()`), so this assertion fires
+  // green by construction; that is the correct dormant-arm behaviour.
+  // The gate auto-activates the moment `loadWasmBackend()` returns a
+  // real Rust-driven `BackendEngine` whose subscribe/dispatch path
+  // diverges from the TS engine — at which point a `HashSet`-keyed
+  // subscription store would surface as a permuted trace here and
+  // shrink to the minimal failing op-sequence.
+  // ---------------------------------------------------------------
+  describe('H6 subscriber-fire ordering parity (#1157)', () => {
+    it('per-node fire-order trace is byte-identical across TS and WASM (dormant green today)', async () => {
+      const graphName = 'cross-backend-h6-subscriber-order'
+      let wasmBackend: BackendEngine
+      try {
+        wasmBackend = await loadWasmBackendWithPinnedName(graphName)
+      } catch (err) {
+        if (err instanceof WasmBackendUnavailableError) {
+          logWasmSkip(err.message)
+          return
+        }
+        throw err
+      }
+      if (!__isPhase1WasmBackendForTests(wasmBackend)) {
+        throw new Error('Phase-1 invariant broken: backend is not a WasmBackend')
+      }
+
+      // Hand-fixed trace mirroring the H6 oracle in
+      // `subscriber-order.property.test.ts`: register N=10
+      // subscribers, drop ordinal 3 and ordinal 7. The surviving
+      // ordinals fire in registration order on a value-changing
+      // commit; the two backends must produce a string-equal trace.
+      const jsGraph = createCausl({ name: graphName })
+      const wgGraph = wasmBackend.__graph()
+      const a = jsGraph.input('a', 0)
+      const wa = wgGraph.input('a', 0)
+
+      const jsTrace: number[] = []
+      const wTrace: number[] = []
+      const jsUnsubs: Array<() => void> = []
+      const wUnsubs: Array<() => void> = []
+      for (let o = 0; o < 10; o++) {
+        const ordinal = o
+        jsUnsubs.push(jsGraph.subscribe(a, () => jsTrace.push(ordinal)))
+        wUnsubs.push(wgGraph.subscribe(wa, () => wTrace.push(ordinal)))
+      }
+      // Drop ordinal 3, then ordinal 7. Initial-fire notifications
+      // already landed during the subscribe() calls above; clear
+      // both traces so the per-commit assertion measures only the
+      // commit-driven fire trace.
+      jsUnsubs[3]?.()
+      wUnsubs[3]?.()
+      jsUnsubs[7]?.()
+      wUnsubs[7]?.()
+      jsTrace.length = 0
+      wTrace.length = 0
+
+      jsGraph.commit('h6-fire', (tx) => tx.set(a, 1))
+      wgGraph.commit('h6-fire', (tx) => tx.set(wa, 1))
+
+      // Byte-equal channel: stringify so the failure message is a
+      // single string-diff just like the IR oracle elsewhere in
+      // this suite.
+      expect(JSON.stringify(jsTrace)).toBe(JSON.stringify(wTrace))
+      // Sanity: both must equal the §15 oracle (surviving ordinals
+      // in subscribe order). A Rust port that satisfied "they
+      // diverge by the same shape on both sides" but violated the
+      // §15 contract would slip past pure parity; the absolute
+      // oracle catches that.
+      expect(jsTrace).toEqual([0, 1, 2, 4, 5, 6, 8, 9])
+    })
+  })
+
+  // ---------------------------------------------------------------
   // Generated-trace parity. Same fc.commands arbitrary the
   // within-backend replay-determinism property uses, but the model
   // run pairs TS with WASM instead of TS with TS. fc.commands'

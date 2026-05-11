@@ -1,6 +1,33 @@
 /**
  * @packageDocumentation
  *
+ * **#1159 — re-calibration is deferred.** The threshold anchors below
+ * (`nodeCount: 50_000`, `medianCommitMsThreshold: 1.0` ms,
+ * `commitCount: 500`, `totalSubscribers: 1_000`,
+ * `maxChainDepth: 500`, `rollingCommitWindow: 100`) were derived
+ * against the Phase-1 TS-wrapper measurement where WasmBackend ≈
+ * TS-backend perf at all sizes and the boundary round-trip was
+ * effectively free (264 ns/op warm per #1006 / PR #1035). When the
+ * real Rust backend ships, the boundary tax shifts (Eich/Horwat panel
+ * projection per #1006: ~6 µs/op real-Rust vs. ~1.9–3.0 µs/op
+ * Phase-1 stub), the per-commit savings shape changes, and the
+ * trigger band needs re-derivation from measured data. **Trigger
+ * condition for re-calibration: #1147 (Rust port Phase A — port
+ * Phase A/B/C/C.5 into `engine-rs-core`) ships.** Until then, the
+ * thresholds in {@link DEFAULT_THRESHOLDS} are intentionally
+ * untouched — they are correct for the Phase-1 wrapper measurement,
+ * and changing them ahead of real-Rust data would re-introduce the
+ * "panel projection vs. measurement" gap the #1015 V8-inlining lesson
+ * flagged. The scaffold for the post-Rust validation bench lives in
+ * `packages/bench/test/auto-adapt-recalibration.test.ts` (all skipped
+ * via `it.skipIf(!realRustBackend)` today; activates when #1147 lands).
+ *
+ * @see #1159 — this deferral.
+ * @see #1147 — Rust port Phase A (Phase A/B/C/C.5 → engine-rs-core);
+ *   the trigger that unblocks re-calibration.
+ * @see #1145 — auto-adapt validation sweep against the real Rust
+ *   backend (sibling work item under epic #1133).
+ *
  * Pure auto-adapt decision function for the WASM-engine epic (#680).
  *
  * @remarks

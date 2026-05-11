@@ -1,0 +1,77 @@
+name: apalache-diff
+
+# Issue #574 / SPEC §16.7 / GAP-A7-26 — Apalache differential runner CI gate.
+#
+# Two responsibilities:
+#
+#   1. Run the mapping-table validation tests on every PR that touches
+#      the differential runner, the mapping file, or the corpus. These
+#      tests pin that every (tla_path, invariant) tuple in mapping.toml
+#      resolves to a real TLA+ definition — closing the silent-pass hole
+#      that opens up when `apalache-mc` is unavailable in the runner.
+#
+#   2. Build and execute the apalache-diff binary on a daily schedule
+#      and upload `docs/apalache-diff-report.md` as a CI artifact, so
+#      reviewers can inspect the per-scenario verdict table without
+#      a local apalache-mc install. The runner handles
+#      `ApalacheVerdict::BinaryUnavailable` gracefully (per
+#      lib.rs::run_apalache); the report is therefore meaningful even
+#      without the JAR installed in the runner.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/enumerator/diff/**'
+      - 'tools/apalache-diff/**'
+      - 'tools/enumerator/corpus/apalache/**'
+  schedule:
+    # Daily at 07:00 UTC.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  mapping-and-report:
+    name: apalache differential — mapping + report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/enumerator/diff/target
+          key: ${{ runner.os }}-cargo-apalache-diff-${{ hashFiles('tools/enumerator/diff/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-apalache-diff-
+
+      - name: Mapping-table validation tests
+        run: cargo test --test mapping_invariants_resolve --manifest-path tools/enumerator/diff/Cargo.toml
+
+      - name: Generate apalache-diff report
+        # `apalache-mc` is not installed on the runner; the diff
+        # binary handles `BinaryUnavailable` gracefully and still
+        # emits the per-scenario verdict table to the report path.
+        # `--strict` will exit non-zero only on a verified disagreement
+        # (none_agree); the `BinaryUnavailable` branch produces an
+        # `unknown` row which `--strict` does not fail on. We mark
+        # this step continue-on-error so a future tightening of the
+        # gate doesn't silently break artifact upload.
+        continue-on-error: true
+        run: |
+          mkdir -p docs
+          cargo run -p apalache-diff --manifest-path tools/enumerator/diff/Cargo.toml --release -- \
+            --strict --report docs/apalache-diff-report.md
+
+      - name: Upload apalache-diff report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apalache-diff-report
+          path: docs/apalache-diff-report.md
+          if-no-files-found: warn

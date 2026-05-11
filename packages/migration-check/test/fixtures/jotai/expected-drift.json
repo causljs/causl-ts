@@ -1,0 +1,8 @@
+{
+  "$schema": "Per-fixture expected-drift contract — see test/fixtures.before.test.ts. Asserts the rule IDs the scanner must surface on the before/ tree, the catalogue version, and the report schema. Timestamp and absolute-path fields are masked at compare time.",
+  "catalogueVersion": "0.1",
+  "schema": 2,
+  "expectedRuleIds": ["J-01", "J-02", "J-05", "J-06"],
+  "minCriticalFindings": 1,
+  "expectClean": false
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@causl/devtools-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal: bridges Causl commits to the Redux DevTools Extension protocol. SPEC §13 defers 'devtools as a shippable product'; this package realises §11 inspection primitives end-to-end and is held private until either a downstream UI earns its place or §13 is amended.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "test": "vitest",
+    "test:run": "pnpm test:types && vitest run",
+    "test:types": "pnpm build && tsd",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "tsd": {
+    "directory": "test-d",
+    "compilerOptions": {
+      "strict": true,
+      "exactOptionalPropertyTypes": true,
+      "moduleResolution": "bundler",
+      "module": "esnext",
+      "target": "es2022"
+    }
+  },
+  "dependencies": { "@causl/core": "workspace:*" },
+  "devDependencies": {
+    "@causl/core-testing-internal": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "fast-check": "^3.23.2",
+    "tsd": "^0.33.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

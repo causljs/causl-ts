@@ -1,0 +1,95 @@
+name: PR — naming-change rule (#287)
+
+# §17.6 commits us to surfacing every public-API rename or addition in
+# the PR description so reviewers — and the changelog generator — never
+# have to reverse-engineer it from the diff. This workflow enforces it
+# as a hard CI gate. See CONTRIBUTING.md#naming-change-rule.
+#
+# Trigger: PR titled `feat:` or `feat(<scope>):` that adds or modifies
+# an exported binding under `packages/*/src/index.ts`. The PR body
+# MUST include a `## Naming change` heading followed by non-empty
+# content other than `_None_`. Editing the PR body re-runs the check.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check:
+    name: §17.6 naming-change rule
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Evaluate rule
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          echo "PR title: $PR_TITLE"
+
+          # Rule applies only to feat: / feat(scope): titles.
+          if [[ ! "$PR_TITLE" =~ ^feat(\(.*\))?: ]]; then
+            echo "Title is not feat — rule does not apply."
+            exit 0
+          fi
+
+          # Detect any added/modified line in packages/*/src/index.ts
+          # that looks like an exported binding.
+          changed_index_files=$(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'packages/*/src/index.ts' || true
+          )
+          if [[ -z "$changed_index_files" ]]; then
+            echo "No packages/*/src/index.ts changes — rule does not apply."
+            exit 0
+          fi
+
+          public_diff=$(
+            git diff "$BASE_SHA" "$HEAD_SHA" -- 'packages/*/src/index.ts' \
+              | grep -E '^\+[^+]' \
+              | grep -E '^\+[[:space:]]*export[[:space:]]+' \
+              || true
+          )
+          if [[ -z "$public_diff" ]]; then
+            echo "No new/changed export lines under packages/*/src/index.ts — rule does not apply."
+            exit 0
+          fi
+
+          echo "Detected public-surface change. Validating PR body..."
+
+          # Body must contain `## Naming change` followed by non-empty
+          # content other than `_None_`.
+          body="$PR_BODY"
+          if ! grep -qE '^## Naming change' <<<"$body"; then
+            echo "::error::PR title is feat:* and modifies a public binding, but the body has no `## Naming change` section."
+            echo "See CONTRIBUTING.md#naming-change-rule."
+            exit 1
+          fi
+
+          # Extract content under `## Naming change` up to the next `## ` heading.
+          content=$(awk '
+            /^## Naming change[[:space:]]*$/ { capture=1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' <<<"$body" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+          # Empty or just `_None_` (with optional whitespace) is a lie
+          # for a feat: PR that touched the public surface.
+          stripped=$(tr -d '[:space:]' <<<"$content")
+          if [[ -z "$stripped" || "$stripped" == "_None_" ]]; then
+            echo "::error::PR added/modified a public binding under packages/*/src/index.ts but `## Naming change` is empty or `_None_`."
+            echo "Document every added/renamed/removed export there."
+            echo "See CONTRIBUTING.md#naming-change-rule."
+            exit 1
+          fi
+
+          echo "Naming change section is populated."

@@ -1,0 +1,56 @@
+name: PR — race-class-anchor rule (#523)
+
+# EPIC-12 / TASK 12.6 / SPEC §17 commitment 5: every PR that touches
+# the §9.1 row sources (docs/race-class-audit.md, SPEC.md, SPEC.async.md)
+# must fill the "## Race-class impact" section with a detection layer
+# from { STATIC | PROPERTY | MODEL | RUNTIME-ONLY } and a witness.
+# The lint at tools/lint/race-class-anchor-check.ts enforces.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check:
+    name: §17 commitment 5 race-class anchor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Compute changed files
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tr '\n' ',' | sed 's/,$//')
+          echo "files=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Write PR body to file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.md
+
+      - name: Run race-class-anchor lint
+        run: |
+          pnpm --filter @causl/core exec tsx \
+            "${{ github.workspace }}/tools/lint/race-class-anchor-check.ts" \
+            --body-file /tmp/pr-body.md \
+            --changed-files '${{ steps.changed.outputs.files }}'

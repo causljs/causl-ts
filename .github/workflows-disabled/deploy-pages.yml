@@ -1,0 +1,128 @@
+# Cloudflare Pages deploy for the Causl doc site.
+#
+# Two run modes:
+#   - push to main → production deploy.
+#   - pull_request → preview deploy + PR comment with the preview URL.
+#
+# Mirrors the size-limit-action shape we already use in ci.yml: a
+# single bot comment on every PR, updated in place rather than
+# threading.
+#
+# IMPORTANT — secrets required (NOT yet configured in the repo).
+# The project owner must set up the following GitHub Actions secrets
+# before this workflow can deploy. Until they exist, the build runs
+# (catches site regressions), the deploy step is skipped, and the
+# workflow exits 0 — so the doc site rails do not block PRs while
+# the operator-side Cloudflare account/secret setup is gated on user
+# approval per the project's standing rule about modifying shared
+# systems.
+#
+#   CLOUDFLARE_API_TOKEN     — Cloudflare API token with the
+#                              `Cloudflare Pages: Edit` permission.
+#   CLOUDFLARE_ACCOUNT_ID    — the Cloudflare account ID hosting the
+#                              Pages project.
+#   CLOUDFLARE_PROJECT_NAME  — the Pages project name (matches
+#                              `name` in docs-site/wrangler.toml,
+#                              currently `causl-docs`).
+#
+# Once those secrets are present, no further wiring is needed: the
+# Cloudflare account creation is the only out-of-repo operator step.
+name: deploy-pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel an in-flight deploy when a newer commit lands on the same
+# ref. Production (`main`) and per-PR previews each get their own
+# concurrency group so a PR push does not pre-empt a production
+# deploy in progress.
+concurrency:
+  group: deploy-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
+
+jobs:
+  build-and-deploy:
+    name: build + deploy (${{ github.event_name == 'pull_request' && 'preview' || 'production' }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build site
+        run: pnpm --filter @causl/docs-site run build
+
+      # Skip the deploy steps when secrets are missing — the rails are
+      # in place but the operator-side Cloudflare account/secret setup
+      # is gated on user approval. Without secrets, the build still
+      # runs (catches site regressions) but the deploy is a no-op and
+      # the workflow exits 0.
+      - name: Check Cloudflare secrets
+        id: cf-secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT_NAME: ${{ secrets.CLOUDFLARE_PROJECT_NAME }}
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" && -n "$CLOUDFLARE_PROJECT_NAME" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloudflare Pages secrets not configured — build verified, deploy skipped. Set CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_PROJECT_NAME to enable."
+          fi
+
+      # Production deploy. `branch: main` tells wrangler to publish to
+      # the production environment of the Cloudflare Pages project.
+      - name: Deploy to Cloudflare Pages (production)
+        if: github.event_name == 'push' && steps.cf-secrets.outputs.configured == 'true'
+        id: cf-pages-prod
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy docs-site/.vitepress/dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME }} --branch=main
+
+      # Preview deploy for pull_request events. The branch parameter
+      # uses the PR head ref so each PR gets a stable preview URL of
+      # the form
+      #   https://<sanitised-branch>.<project>.pages.dev
+      # which Cloudflare also returns in the action's outputs as
+      # `deployment-url`.
+      - name: Deploy to Cloudflare Pages (PR preview)
+        if: github.event_name == 'pull_request' && steps.cf-secrets.outputs.configured == 'true'
+        id: cf-pages-preview
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy docs-site/.vitepress/dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME }} --branch=${{ github.head_ref }}
+
+      # Post (or update) a single PR comment with the preview URL.
+      # Mirrors the size-limit-action UX: one bot comment, kept up to
+      # date in place across pushes to the same PR.
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request' && steps.cf-secrets.outputs.configured == 'true' && steps.cf-pages-preview.outputs.deployment-url != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: causl-docs-preview
+          message: |
+            Doc-site preview: ${{ steps.cf-pages-preview.outputs.deployment-url }}
+
+            - Playground: ${{ steps.cf-pages-preview.outputs.deployment-url }}/playground/
+            - Spreadsheet: ${{ steps.cf-pages-preview.outputs.deployment-url }}/spreadsheet/
+            - Docs: ${{ steps.cf-pages-preview.outputs.deployment-url }}/docs/spec

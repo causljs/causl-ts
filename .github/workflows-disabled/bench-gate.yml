@@ -1,0 +1,73 @@
+name: bench-gate
+
+# Bench-regression gate (#706a). Runs the nightly bench profile,
+# compares against the checked-in regression baseline, posts the
+# diff table to the PR, and (on ready-for-review PRs) fails when a
+# cell regresses beyond its per-cell threshold or its CoV grew
+# meaningfully against the baseline.
+#
+# The gate is deliberately scoped to PRs that touch perf-critical
+# packages — bench, core, react, sync. Touching docs or unrelated
+# packages doesn't trigger the bench (running n=50 across the full
+# matrix takes 5–8 minutes).
+
+on:
+  pull_request:
+    paths:
+      - 'packages/bench/**'
+      - 'packages/core/**'
+      - 'packages/react/**'
+      - 'packages/sync/**'
+      - '.github/workflows/bench-gate.yml'
+  workflow_dispatch:
+
+jobs:
+  bench-gate:
+    name: bench-regression gate (#706a, CoV-only MVP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build affected packages
+        run: pnpm -r --filter './packages/*' run build
+
+      - name: Run nightly bench profile (n=50)
+        env:
+          BENCH_PROFILE: nightly
+        run: pnpm --filter @causl/bench run bench:report
+
+      - name: Run regression gate against checked-in baseline
+        id: gate
+        continue-on-error: ${{ github.event.pull_request.draft == true }}
+        run: |
+          pnpm --filter @causl/bench run bench:gate \
+            packages/bench/fixtures/regression-baseline.json \
+            packages/bench/report/benchmark_results.json \
+            | tee gate-report.md
+
+      - name: Generate cell-by-cell diff table for PR description
+        if: always()
+        run: |
+          pnpm --filter @causl/bench run bench:diff \
+            packages/bench/fixtures/regression-baseline.json \
+            packages/bench/report/benchmark_results.json \
+            > diff-table.md
+
+      - name: Upload bench artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-gate-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            packages/bench/report/benchmark_results.json
+            packages/bench/report/benchmark_history.json
+            gate-report.md
+            diff-table.md
+          retention-days: 30

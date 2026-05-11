@@ -1,0 +1,90 @@
+name: quarterly-audit
+
+# EPIC-13 — DESIGN-DISCIPLINE commitment audit. Opens a quarterly
+# audit issue listing every commitment, its current mechanization
+# tier, and any pending upgrades. Runs every audit script in
+# `tools/audit/` and renders the results into the issue body.
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of January, April, July, October.
+    - cron: '0 9 1 1,4,7,10 *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run commitment audit scripts
+        id: audit
+        # `pnpm --filter @causl/core exec` was removed in #565: it
+        # silently reset cwd to packages/core/, breaking every
+        # script's `__dirname`-relative path resolution. Each script
+        # now runs from the workspace root via tsx, so relative
+        # paths like `../../docs/race-class-audit.md` resolve
+        # correctly.
+        run: |
+          set +e
+          mkdir -p /tmp/audit-output
+          for script in tools/audit/check-commitment-*.ts; do
+            name=$(basename "$script" .ts)
+            echo "## $name" >> /tmp/audit-output/results.md
+            echo '```' >> /tmp/audit-output/results.md
+            node --import tsx "$script" \
+              >> /tmp/audit-output/results.md 2>&1
+            status=$?
+            echo '```' >> /tmp/audit-output/results.md
+            if [ $status -ne 0 ]; then
+              echo "**STATUS: FAIL**" >> /tmp/audit-output/results.md
+            else
+              echo "**STATUS: PASS**" >> /tmp/audit-output/results.md
+            fi
+            echo '' >> /tmp/audit-output/results.md
+          done
+
+      - name: Open quarterly audit issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const body = [
+              '# Quarterly DESIGN-DISCIPLINE commitment audit',
+              '',
+              'Per `docs/commitment-audit.md`. This issue is the audit ledger',
+              'for the current quarter. Closing it requires a written team',
+              'consensus on each tier change.',
+              '',
+              '## Audit script results',
+              '',
+              fs.readFileSync('/tmp/audit-output/results.md', 'utf8'),
+              '',
+              '## Pending mechanizations (from docs/commitment-audit.md)',
+              '',
+              '- Commitment 11 (race-class audit) — REVIEW → MECHANICAL',
+              '- Commitment 5 (origin pinning) — PROPERTY → MECHANICAL',
+              '',
+              'See `docs/commitment-audit.md` for the full per-row status.',
+            ].join('\n')
+            const date = new Date().toISOString().slice(0, 10)
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Quarterly commitment audit — ${date}`,
+              body,
+              labels: ['audit', 'design-discipline'],
+            })

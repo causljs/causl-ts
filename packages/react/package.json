@@ -1,0 +1,61 @@
+{
+  "name": "@causl/react",
+  "version": "0.0.0",
+  "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap --external react",
+    "dev": "tsup src/index.ts --format esm --dts --watch --external react",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:perf-invariant": "vitest run test/useCausl.test.tsx test/useCauslShallow.test.tsx test/useSyncExternalStore.test.tsx test/strictMode.test.tsx test/family-grid.test.tsx",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:build": "tsup --config e2e/tsup.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.{ts,tsx}' 'test/**/*.{ts,tsx}' 'test-d/**/*.{ts,tsx}'"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@causl/core": "workspace:*",
+    "@causl/sync": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@reduxjs/toolkit": "^2.3.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "fast-check": "^3.23.2",
+    "jotai": "^2.10.0",
+    "jsdom": "^26.1.0",
+    "mobx": "^6.13.0",
+    "mobx-react-lite": "^4.0.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-redux": "^9.1.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

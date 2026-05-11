@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Causl formula — 60fps dropped-frame harness</title>
+  </head>
+  <body>
+    <!--
+      Harness fixture for #226. The page mounts a 100-cell diamond
+      graph through `@causl/core` (sufficient for the perf surface
+      this gate observes; the formula adapter wraps the same primitive
+      and adds parser cost that is not on the §14 hot path). A
+      `requestAnimationFrame` loop on `window.runHarness` issues one
+      commit per frame and records `performance.now()` of every frame
+      boundary. The Playwright spec invokes the loop, reads the
+      timestamps, and computes the dropped-frame ratio against the
+      configured budget.
+    -->
+    <main id="status">harness loading</main>
+    <script type="module">
+      import { createCausl } from '/packages/core/dist/index.js'
+
+      /**
+       * Build the 100-cell diamond used by the original placeholder
+       * (now deleted): ten input nodes, ten layer-1 derivations
+       * doubling each input, and ten layer-2 derivations adding one
+       * to the doubled value. The shape gives every commit a
+       * non-trivial recompute path while staying small enough that
+       * the dropped-frame signal isolates engine cost rather than
+       * graph-construction cost.
+       */
+      function buildDiamond() {
+        const g = createCausl()
+        const inputs = Array.from({ length: 10 }, (_, i) => g.input(`a${i}`, i))
+        const layer1 = []
+        for (let i = 0; i < 10; i++) {
+          layer1.push(g.derived(`b${i}`, (get) => get(inputs[i]) * 2))
+        }
+        for (let i = 0; i < 10; i++) {
+          g.derived(`c${i}`, (get) => get(layer1[i]) + 1)
+        }
+        return { g, inputs }
+      }
+
+      /**
+       * Run a `requestAnimationFrame`-driven commit loop for `frames`
+       * iterations and return per-frame `performance.now()` timestamps.
+       * The harness exposes the function on `window` so the Playwright
+       * spec can invoke it via `page.evaluate`.
+       *
+       * Each frame issues one commit that bumps a single input — that
+       * matches the §14 invariant the gate is meant to defend (a
+       * commit producing N recomputations runs in O(N), not O(graph
+       * size)). The work per frame is intentionally small; the gate is
+       * "do we hit vsync?", not "how big a graph can we churn?".
+       */
+      window.runHarness = function runHarness(frames) {
+        const { g, inputs } = buildDiamond()
+        return new Promise((resolve) => {
+          const samples = []
+          let n = 0
+          function tick(t) {
+            samples.push(t)
+            if (n >= frames) {
+              resolve(samples)
+              return
+            }
+            const target = inputs[n % inputs.length]
+            g.commit('bump', (tx) => tx.set(target, n))
+            n += 1
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        })
+      }
+
+      // Module scripts are deferred relative to HTML parse, so the
+      // initial `<main>` text is visible before this code runs. Flip
+      // the status only after `window.runHarness` is bound — that
+      // proves the module fetch + import resolved and gives the
+      // Playwright spec a deterministic `toHaveText('harness ready')`
+      // gate to wait on before invoking the loop.
+      document.getElementById('status').textContent = 'harness ready'
+    </script>
+  </body>
+</html>

@@ -1,0 +1,154 @@
+name: race-detection
+
+# EPIC-6 — three-tier race-detection CI per SPEC §16A.3.
+#
+# Tier 1 (PR gate, ≤2 min): static IR linter (causl-check, all 12
+# passes) plus property-based fuzz at the 1000-trial floor on
+# packages/core/test/properties/. Always runs on every PR.
+#
+# Tier 2 (labelled-or-main, ≤15 min): adds the bounded enumerator
+# at K=10 / D=5. Runs on push to main and on PRs labelled
+# `race-detection-tier-2`. Currently scaffolded; the enumerator
+# is the EPIC-3 milestone-2 work.
+#
+# Tier 3 (nightly, ≤2 hr): bounded enumerator at K=20 / D=8 plus
+# the Apalache differential corpus from EPIC-7. Runs on a nightly
+# schedule.
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  schedule:
+    # Nightly at 02:30 UTC.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  tier-1-pr-gate:
+    name: Tier 1 — static + property (≤2 min)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build causl-check (static linter)
+        working-directory: tools/checker
+        run: cargo build --release
+
+      - name: Run causl-check tests (12 passes)
+        working-directory: tools/checker
+        run: cargo test --release
+
+      - name: Run @causl/core property suite (1000-trial floor)
+        run: pnpm --filter @causl/core test:run -- properties/
+
+  tier-2-enumerator:
+    name: Tier 2 — bounded enumerator K=10 D=5 (≤15 min)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      contains(github.event.pull_request.labels.*.name, 'race-detection-tier-2')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build causl-enumerator
+        working-directory: tools/enumerator
+        run: cargo build --release
+
+      - name: Run causl-enumerator tests
+        working-directory: tools/enumerator
+        run: cargo test --release
+
+      # When the enumerator's CLI ships (EPIC-3 milestone 2), the
+      # next step is `causl-check enumerate --tier 2 < model.json`.
+      # The scaffolding above is the durable plumbing that won't
+      # change when that lands.
+
+  tier-3-nightly:
+    name: Tier 3 — enumerator K=20 D=8 + Apalache corpus (≤2 hr)
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build causl-enumerator
+        working-directory: tools/enumerator
+        run: cargo build --release
+
+      - name: Run causl-enumerator tests (extended)
+        working-directory: tools/enumerator
+        run: cargo test --release -- --include-ignored
+
+      - name: Install Apalache
+        # Apalache 0.47.x JAR. Updating the version requires checking
+        # the differential-runner's TLA-syntax expectations against
+        # the new release.
+        run: |
+          mkdir -p $HOME/apalache
+          curl -L -o $HOME/apalache/apalache.jar \
+            https://github.com/apalache-mc/apalache/releases/download/v0.47.2/apalache-0.47.2.jar || true
+          if [ -f "$HOME/apalache/apalache.jar" ]; then
+            echo "APALACHE_JAR=$HOME/apalache/apalache.jar" >> $GITHUB_ENV
+          else
+            echo "::warning::Apalache JAR fetch failed; differential-diff step will skip"
+          fi
+
+      - name: Run apalache-diff differential corpus
+        working-directory: tools/enumerator/diff
+        run: |
+          cargo build --release
+          # The skeleton currently exits 2 with a deferred-implementation
+          # message. When the full harness lands (TASK 7.3 follow-on),
+          # this step walks every scenario in
+          # `tools/enumerator/corpus/apalache/` against Apalache's
+          # verdict and asserts they agree with the static linter's
+          # verdict on the paired Rust scenario. v1 status: skeleton
+          # only.
+          if [ -n "${APALACHE_JAR:-}" ]; then
+            ./target/release/apalache-diff --apalache "$APALACHE_JAR" || \
+              echo "::warning::apalache-diff is a skeleton; full differential lands in TASK 7.3 follow-on"
+          else
+            echo "::warning::APALACHE_JAR not set; skipping differential corpus run"
+          fi

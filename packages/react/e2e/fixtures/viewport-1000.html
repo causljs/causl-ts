@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Causl react — useCauslNode 1000-cell dropped-frame harness</title>
+    <style>
+      /*
+        Tight per-cell box so the 1000 cells lay out as a long flat
+        column rather than blowing the viewport into a many-page
+        scroll. Layout work isn't what the gate is measuring (the
+        gate is measuring the per-node-subscription path inside React
+        + the engine's commit/notify), but a saner layout means
+        Chromium isn't doing pathological reflow work each frame —
+        which would mask engine regressions behind layout cost.
+      */
+      body { margin: 0; padding: 0; font: 12px/1 system-ui, sans-serif; }
+      #app { display: flex; flex-wrap: wrap; }
+      #app > div > span { display: inline-block; width: 32px; height: 16px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Harness fixture for #765. The 1000-cell viewport is mounted by the
+      bundled `viewport-1000.js` module (built from `viewport-1000.tsx`
+      via the `test:e2e:build` script before the spec runs). The bundle bakes in
+      React, react-dom/client, `@causl/core`, and `@causl/react` so the
+      harness runs from a static `python3 -m http.server` with no
+      importmap or UMD shim plumbing. The Playwright spec waits for
+      `#status` to flip to "harness ready" before invoking
+      `window.runHarness(durationMs, frequencyHz)`.
+    -->
+    <main id="status">harness loading</main>
+    <div id="app"></div>
+    <script type="module" src="./viewport-1000.js"></script>
+    <script type="module">
+      // Module scripts are deferred relative to HTML parse + bundle
+      // load. Poll until the harness binds `window.runHarness` so the
+      // status flip is deterministic regardless of how long the bundle
+      // took to evaluate (the bundle includes React + dist of `@causl/*`
+      // and is non-trivial in size). This mirrors the formula harness'
+      // status protocol so the Playwright wait condition stays uniform
+      // across the two e2e suites.
+      const start = performance.now()
+      while (typeof window.runHarness !== 'function') {
+        await new Promise((r) => requestAnimationFrame(r))
+        if (performance.now() - start > 10_000) {
+          document.getElementById('status').textContent =
+            'harness load timeout'
+          throw new Error('viewport-1000 harness failed to bind in 10s')
+        }
+      }
+      document.getElementById('status').textContent = 'harness ready'
+    </script>
+  </body>
+</html>

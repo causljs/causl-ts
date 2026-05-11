@@ -1,0 +1,17 @@
+{
+  "name": "@causl-fixture/vite5-app",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Vite 5 bundler-interop fixture for @causl/core + @causl/core/wasm (#689).",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@causl/core": "file:../../../packages/core"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

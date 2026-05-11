@@ -1,0 +1,11 @@
+{
+  "$schema": "Machine-readable flake budget for the migration-validation gate. Consumed by the future flake-rate CI gate (#225 sub-task d). The current value is the team's published ceiling; a regression in measured failure rate over the rolling window is a required-action signal, not a silent change.",
+  "windowDays": 30,
+  "maxFailureRate": 0.01,
+  "appliesTo": [
+    "packages/migration-check/test/fixtures.before.test.ts",
+    "packages/migration-check/test/fixtures.after.test.ts",
+    "packages/migration-check/test/properties/parity.property.test.ts"
+  ],
+  "reproductionEnvVar": "CAUSL_FUZZ_SEED"
+}

@@ -1,0 +1,103 @@
+name: cross-backend-fuzz
+
+# Issue #1073 — tiered fuzz budgets for the WASM-vs-TS cross-backend
+# determinism gate.
+#
+# This workflow runs the `nightly` tier (100 000 trials, maxCommands
+# 2000) on a daily schedule against `main`. The PR-lane gate (5k
+# trials) ships as a separate matrix leg of the main test workflow
+# once that workflow lands; until then, every PR runs at the default
+# 1000-trial floor and this workflow is the 100k canary.
+#
+# Cargo-fuzz tier: a separate `tools/engine-rs-fuzz/` harness drives
+# the corpus-aware run; that workflow lands alongside the engine work
+# in a follow-up. The `CAUSL_FUZZ_TIER=cargo-fuzz` value is reserved
+# in `seed.ts` so the TS suite emits a structured skip line if it's
+# ever set on this side.
+#
+# Trigger: cron daily at 04:00 UTC + `workflow_dispatch` for ad-hoc
+# tier bumps. The cron timing is well outside the Pacific working day
+# so a 100k-trial run with a heavy WASM build behind it does not
+# compete with PR-CI for runners.
+
+on:
+  schedule:
+    # 04:00 UTC daily — runner pool is empty, results land before
+    # the next Pacific working day.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Fuzz tier (default | pr | nightly | cargo-fuzz)'
+        required: false
+        default: 'nightly'
+      trials:
+        description: 'Numeric override (CAUSL_FUZZ_TRIALS). Takes precedence over `tier` if set.'
+        required: false
+        default: ''
+
+concurrency:
+  group: cross-backend-fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cross-backend-fuzz:
+    name: cross-backend determinism (${{ github.event.inputs.tier || 'nightly' }} tier)
+    runs-on: ubuntu-latest
+    # 100k trials at the Phase-1 budget (~ms per trial including
+    # engine init) lands well inside a single CI hour. We pad to two
+    # to absorb wasm-build setup and the heavier maxCommands ceiling.
+    timeout-minutes: 120
+    env:
+      # Wire tier inputs through to the property suite. The seed.ts
+      # resolver honours `CAUSL_FUZZ_TIER` first, then `CAUSL_FUZZ_TRIALS`
+      # as a numeric override.
+      CAUSL_FUZZ_TIER: ${{ github.event.inputs.tier || 'nightly' }}
+      CAUSL_FUZZ_TRIALS: ${{ github.event.inputs.trials || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build @causl/core first so the cross-backend property suite
+      # has the dist artefacts the wasm loader and bundle-shape checks
+      # depend on. The cross-backend test itself runs against the
+      # src/ tree under tsx/vitest so no separate "build everything"
+      # step is required.
+      - name: Build @causl/core
+        run: pnpm --filter @causl/core run build
+
+      - name: Echo selected fuzz tier
+        run: |
+          echo "::notice::CAUSL_FUZZ_TIER=$CAUSL_FUZZ_TIER"
+          echo "::notice::CAUSL_FUZZ_TRIALS=$CAUSL_FUZZ_TRIALS"
+
+      # Run only the cross-backend determinism property file. The
+      # full property suite at 100k trials would burn hours for no
+      # additional coverage of the WASM gate; the tier knob exists to
+      # bias compute toward the cell that benefits from extra trials.
+      - name: Cross-backend determinism property (tiered)
+        working-directory: packages/core
+        run: pnpm vitest run test/properties/cross-backend-determinism.property.test.ts --reporter=verbose
+
+      # Surface the active tier in the run summary so a human reading
+      # the GH UI sees the budget without grepping logs.
+      - name: Run summary
+        if: always()
+        run: |
+          {
+            echo "## cross-backend-fuzz tier summary"
+            echo ""
+            echo "- tier: \`${CAUSL_FUZZ_TIER}\`"
+            echo "- trials override: \`${CAUSL_FUZZ_TRIALS:-<unset>}\`"
+            echo "- workflow: \`cross-backend-fuzz.yml\`"
+            echo "- issue: [#1073](https://github.com/iasbuilt/causl/issues/1073)"
+          } >> "$GITHUB_STEP_SUMMARY"

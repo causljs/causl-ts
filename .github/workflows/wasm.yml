@@ -1,0 +1,314 @@
+name: wasm
+
+# Issue #683 — wasm-pack build pipeline.
+#
+# Sub-task of EPIC #680. Validates the three Rust bridge crates from
+# #682 compile to wasm32-unknown-unknown and that wasm-pack produces
+# the four artefacts the runtime loader (#684) selects between at
+# startup. Sequencing note: this workflow lands before #682, #693, and
+# #1006; it is defensively structured to skip cleanly when the bridge
+# crates do not yet exist on the branch under test.
+#
+# Job layout:
+#
+#   - cargo-check: workspace-wide `cargo check`. Fast guard against the
+#     enumerator pulling wasm-bindgen into its native dep tree (the
+#     architectural failure mode #682 calls out). Skipped if no root
+#     Cargo.toml exists yet.
+#
+#   - wasm-pack: matrix on (crate × features) for the three artefacts.
+#     Defensively skips per-target when the crate dir is absent. Each
+#     job runs `pnpm wasm:build:check` first to surface any wasm-pack
+#     install issue with a clean message before the heavyweight build.
+#
+# Triggers: push to main + pull_request. Pre-EPIC-#680 we run on every
+# PR — once #682 lands and the three crates fill in, we may want to
+# add a paths filter (`tools/engine-rs-*/**`, `.github/workflows/wasm.yml`)
+# to skip on PRs that don't touch the wasm side; deferred until the
+# pipeline is doing real work.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same branch — the Rust toolchain
+# install is the slow step and there is no reason to keep stale runs
+# alive once a newer commit lands. Mirrors the convention in
+# .github/workflows-disabled/ci.yml.
+concurrency:
+  group: wasm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-check:
+    name: cargo check (workspace, defensive)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Defensive — #682 lands the workspace Cargo.toml. Until then the
+      # only Rust crates are tools/checker and tools/enumerator (each
+      # with its own Cargo.toml, no workspace root). Skip cleanly so
+      # the workflow runs on every PR without false-failing.
+      - name: Detect workspace
+        id: detect
+        run: |
+          if [ -f Cargo.toml ] && grep -q '\[workspace\]' Cargo.toml; then
+            echo "has_workspace=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_workspace=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No root Cargo.toml workspace found yet — lands in #682. Skipping cargo check."
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.detect.outputs.has_workspace == 'true'
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.detect.outputs.has_workspace == 'true'
+
+      - name: cargo check --workspace
+        if: steps.detect.outputs.has_workspace == 'true'
+        run: cargo check --workspace --all-targets
+
+      # The architectural invariant from #682: the native enumerator
+      # MUST NOT pull wasm-bindgen / js-sys / serde-wasm-bindgen
+      # transitively. Verified via cargo tree once the crate exists.
+      - name: enumerator cleanliness gate (no wasm-bindgen leak)
+        if: steps.detect.outputs.has_workspace == 'true'
+        run: |
+          if [ -d tools/enumerator ]; then
+            tree=$(cargo tree -p causl-enumerator --no-default-features --edges normal 2>/dev/null || true)
+            if echo "$tree" | grep -E '(^|[^a-z-])(wasm-bindgen|js-sys|serde-wasm-bindgen)([^a-z-]|$)' >/dev/null; then
+              echo "::error::wasm-bindgen / js-sys / serde-wasm-bindgen leaked into causl-enumerator dep tree (per #682 invariant)"
+              echo "$tree"
+              exit 1
+            fi
+            echo "OK: enumerator dep tree is wasm-shim-free"
+          else
+            echo "::notice::tools/enumerator absent in current tree — skipping cleanliness gate"
+          fi
+
+  wasm-pack:
+    # Per #1103 the build driver produces both `--target bundler` and
+    # `--target nodejs` artefacts per bridge. The matrix below covers
+    # all six (bridge × target) cells; each leg uploads its produced
+    # artefact tree separately so adopters / downstream jobs can pick
+    # the variant they actually need. The wasm-pack build is invoked
+    # once per leg via `pnpm wasm:build` (which iterates over the full
+    # 6-row matrix internally — see `tools/wasm-build/build.mjs`). The
+    # per-leg `id` filters the upload step to a single artefact tree.
+    name: wasm-pack build (${{ matrix.id }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: serde-bundler
+            bridge: serde
+            target: bundler
+            crate: tools/engine-rs-bridge-serde
+            features: ''
+          - id: serde-nodejs
+            bridge: serde
+            target: nodejs
+            crate: tools/engine-rs-bridge-serde
+            features: ''
+          - id: gc-builtins-bundler
+            bridge: gc-builtins
+            target: bundler
+            crate: tools/engine-rs-bridge-gc
+            features: js-string-builtins
+          - id: gc-builtins-nodejs
+            bridge: gc-builtins
+            target: nodejs
+            crate: tools/engine-rs-bridge-gc
+            features: js-string-builtins
+          - id: gc-classic-bundler
+            bridge: gc-classic
+            target: bundler
+            crate: tools/engine-rs-bridge-gc
+            features: classic-strings
+          - id: gc-classic-nodejs
+            bridge: gc-classic
+            target: nodejs
+            crate: tools/engine-rs-bridge-gc
+            features: classic-strings
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # Sanity-check the driver before we install the Rust toolchain.
+      # If wasm-pack is missing or the script is broken, fail loud
+      # with the install incantation.
+      - name: pnpm wasm:build --check (driver sanity)
+        run: |
+          # `--check` is permitted to fail with the explicit
+          # "wasm-pack not installed" message — that is the
+          # validation criterion in #683. We expect success here
+          # because the next step installs wasm-pack.
+          pnpm wasm:build:check || echo "::warning::driver check failed pre-toolchain — expected if wasm-pack not yet installed"
+
+      - name: Detect bridge crate
+        id: detect
+        run: |
+          if [ -d "${{ matrix.crate }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.crate }} not present — lands in #682. Pipeline wired; skipping build."
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.detect.outputs.present == 'true'
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.detect.outputs.present == 'true'
+
+      - name: Install wasm-pack
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          if ! command -v wasm-pack >/dev/null 2>&1; then
+            curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          fi
+          wasm-pack --version
+
+      # Issue #1085 — bundle-size enforcement gate. The driver in
+      # `tools/wasm-build/build.mjs` shells out to an external
+      # `wasm-opt` (binaryen) with `--enable-reference-types
+      # --enable-gc --enable-nontrapping-float-to-int` because
+      # wasm-pack 0.14.0's bundled wasm-opt is from a pre-WasmGC
+      # binaryen release and rejects those flags. Pin binaryen 119
+      # (December 2024 — first release with stable WasmGC support).
+      - name: Install binaryen (wasm-opt) for #1085 size gate
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          BINARYEN_VERSION=119
+          curl -sSL -o /tmp/binaryen.tar.gz \
+            "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz"
+          tar -xzf /tmp/binaryen.tar.gz -C /tmp/
+          sudo cp -r /tmp/binaryen-version_${BINARYEN_VERSION}/bin/* /usr/local/bin/
+          sudo cp -r /tmp/binaryen-version_${BINARYEN_VERSION}/lib/* /usr/local/lib/ 2>/dev/null || true
+          wasm-opt --version
+
+      - name: pnpm wasm:build (real build + #1085 size gate)
+        if: steps.detect.outputs.present == 'true'
+        # `pnpm wasm:build` now runs wasm-pack → wasm-opt -Oz → raw +
+        # Brotli q11 budget check per artefact (issue #1085). A bridge
+        # that crosses its SPEC §17.6 cap fails the step with the
+        # `BUDGET EXCEEDED` line in the driver log.
+        run: pnpm wasm:build
+
+      - name: Upload artefact
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          # Per #1103 the artefact tree lives at
+          # `packages/core/wasm-pkg/<bridge>-<target>/`. The matrix
+          # `id` carries the `<bridge>-<target>` segment directly so
+          # one job per (bridge × target) uploads exactly that leg.
+          name: wasm-pkg-${{ matrix.id }}
+          path: packages/core/wasm-pkg/${{ matrix.id }}/
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Issue #1085 — second-layer raw-byte gate via `size-limit`. The
+      # `pnpm wasm:build` step above already failed the build on cap
+      # violation; running `pnpm size` against the `size-limit` cells
+      # in root `package.json` re-verifies the raw caps with an
+      # independent tool, catches drift between the driver's hardcoded
+      # table and the package.json cells, and produces the canonical
+      # `size — bundle-size gate` summary the repo conventions expect.
+      - name: Size-limit cells (raw bytes) — #1085 second gate
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm size
+
+  bundler-interop:
+    name: bundler-interop (${{ matrix.fixture }})
+    runs-on: ubuntu-latest
+    # Issue #689 — three minimal fixture apps under e2e/bundler-interop/
+    # that import `@causl/core` (main barrel) and dynamically import
+    # `@causl/core/wasm` (lazy-load entry). Each fixture's `verify.mjs`
+    # enforces the bundle-no-wasm-leak invariant: the main chunk must
+    # not contain the `loadWasmBackend` / `WasmBackendUnavailableError`
+    # sentinels, and some other chunk MUST contain them (proves the
+    # dynamic import was preserved as a code-split rather than
+    # inlined).
+    #
+    # Failures attributable to a specific bundler are labelled by the
+    # matrix-leg name, satisfying the "labelled per bundler" piece of
+    # #689's exit criterion.
+    #
+    # Per-fixture install runs with `npm install --no-save` rather than
+    # via pnpm: the fixtures live OUTSIDE the workspace by design
+    # (#689 — fixtures must mirror how an external adopter consumes
+    # `@causl/core`, not a workspace member that can resolve devDeps
+    # the wild adopter wouldn't have access to). The `file:` specifier
+    # in each fixture's package.json resolves into the freshly-built
+    # `packages/core/` directory.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fixture: webpack5-app
+          - fixture: vite5-app
+          - fixture: esbuild-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      # The fixtures consume `@causl/core` via a `file:` specifier that
+      # points at `packages/core/`. The bundler reads `packages/core/dist/`
+      # via the package's `exports` map, so a build must happen first.
+      - name: Build @causl/core
+        run: pnpm --filter @causl/core run build
+
+      # Stub the wasm-pkg artifact tree so bundlers that statically
+      # analyse `new URL('./pkg/...', import.meta.url)` (notably
+      # webpack 5 with `experiments.asyncWebAssembly`) can resolve
+      # the asset paths. The stubs are minimal-valid 8-byte WASM
+      # modules; they're never instantiated — `loadWasmBackend()`
+      # throws before reaching the fetch path. See
+      # `e2e/bundler-interop/stub-wasm-pkg.mjs` for the rationale.
+      #
+      # Once the real wasm-pack pipeline (#683 / #682) produces
+      # artifacts and they land on disk before this job, the stubs
+      # become a no-op overwrite — drop this step then.
+      - name: Stub wasm-pkg artifacts (bundler resolver bait)
+        run: node e2e/bundler-interop/stub-wasm-pkg.mjs
+
+      - name: Install fixture deps (${{ matrix.fixture }})
+        working-directory: e2e/bundler-interop/${{ matrix.fixture }}
+        run: npm install --no-save --no-audit --no-fund
+
+      - name: Build fixture (${{ matrix.fixture }})
+        working-directory: e2e/bundler-interop/${{ matrix.fixture }}
+        run: npm run build
+
+      - name: Verify bundle-no-wasm-leak (${{ matrix.fixture }})
+        working-directory: e2e/bundler-interop/${{ matrix.fixture }}
+        run: npm run verify

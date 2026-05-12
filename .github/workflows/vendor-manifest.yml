@@ -1,0 +1,34 @@
+name: vendor-manifest
+
+# Issue #1264 — vendor MANIFEST.json freshness gate.
+#
+# Recomputes the SHA-256 of every file in causl-org/vendor/ and compares
+# against causl-org/vendor/MANIFEST.json. Fails when any vendored byte
+# drifts from its pinned hash — the contributor must re-run
+# scripts/refresh-vendor.sh and commit both the regenerated vendor
+# bundle and the updated MANIFEST.json.
+
+on:
+  pull_request:
+    paths:
+      - 'causl-org/vendor/**'
+      - 'scripts/refresh-vendor.sh'
+      - 'scripts/check-vendor-manifest.sh'
+      - '.github/workflows/vendor-manifest.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'causl-org/vendor/**'
+      - 'scripts/refresh-vendor.sh'
+      - 'scripts/check-vendor-manifest.sh'
+      - '.github/workflows/vendor-manifest.yml'
+
+jobs:
+  check-vendor-manifest:
+    name: vendor SHA-256 gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run scripts/check-vendor-manifest.sh
+        run: bash scripts/check-vendor-manifest.sh

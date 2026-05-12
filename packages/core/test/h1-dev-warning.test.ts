@@ -1,26 +1,35 @@
 /**
  * @packageDocumentation
  *
- * Pins down the contract of the dev-only H1 hazard warning (#1155).
+ * Pins down the contract of the dev-only H1 hazard warning (#1155,
+ * #1241).
  *
  * H1 from `docs/wasm-backend-adopter-audit.md` is the load-bearing
  * adopter hazard surfaced by the Markbåge/Miller panel review of
  * post-0.9.0 Rust-port epic #1133: holding a `graph.read(node)` return
  * value across a commit boundary. PR #1129 amended SPEC §15.1 to make
- * the reference-identity non-guarantee explicit; this issue adds a
- * runtime safety net that catches the hazard in dev with a single
- * `console.warn` (never a throw — backward compatibility preserved).
+ * the reference-identity non-guarantee explicit; PR #1238 added the
+ * dev-only runtime safety net (one `console.warn`, never a throw).
  *
- * The acceptance criteria from #1155:
- *   1. Hold a `read()` return across a commit → warning fires.
+ * #1241 — the panel review of #1238 flipped the default from auto-
+ * detected dev/prod to **`false`** (opt-in). Tests that exercise the
+ * positive arm now pass `enableH1HazardWarning: true` explicitly; tests
+ * that assert suppression (production, primitive returns,
+ * `subscribeReads` window, the new adapter-exemption seam) continue
+ * to assert no warning regardless of the opt-in flag's value.
+ *
+ * The acceptance criteria from #1155 (preserved through #1241):
+ *   1. Hold a `read()` return across a commit with opt-in enabled →
+ *      warning fires.
  *   2. Discard the read return before the commit → no warning.
  *   3. Production (`__DEV__ === false` OR `NODE_ENV === 'production'`)
- *      → warning never fires.
- *
- * Plus the construction-time options surface:
- *   - `enableH1HazardWarning` defaults to `true` in dev and `false`
- *     in production. Explicit values override the auto-detection in
- *     either direction.
+ *      → warning never fires for the default (no-opt-in) path.
+ *   4. **NEW (#1241)**: Default is `false` — calling `createCausl()`
+ *      without the explicit `enableH1HazardWarning: true` flag never
+ *      arms the tracker.
+ *   5. **NEW (#1241)**: Reads issued under the
+ *      `__causlAdapterRead(graph, fn)` seam (used by canonical
+ *      `@causl/react` hooks) are exempted from H1 tracking.
  *
  * The WeakRef-based tracker is best-effort by design: V8 may keep a
  * referent alive past the last user-side reference (escape analysis,
@@ -34,6 +43,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCausl } from '../src/index.js'
+import { __causlAdapterRead } from '../src/internal.js'
 
 /**
  * Match the canonical warning text emitted by the H1 instrumentation
@@ -74,7 +84,7 @@ async function tryForceGc(): Promise<void> {
   }
 }
 
-describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
+describe('H1 hazard dev-only warning (#1155 / #1241, SPEC §15.1)', () => {
   // Stash the original NODE_ENV / __DEV__ values so individual tests
   // can mutate them without bleeding state across the suite.
   let warnSpy: { mock: { calls: unknown[][] }; mockRestore: () => void }
@@ -82,9 +92,9 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
   const originalDev = (globalThis as { __DEV__?: unknown }).__DEV__
 
   beforeEach(() => {
-    // Default to a dev environment so the auto-detection path fires
-    // unless a specific test overrides it. Clear `__DEV__` so the
-    // env-var fallback is the one under test.
+    // Default to a dev environment so the tree-shake gate
+    // (`process.env.NODE_ENV !== 'production'`) holds. Clear
+    // `__DEV__` so explicit per-test overrides take effect.
     process.env.NODE_ENV = 'development'
     delete (globalThis as { __DEV__?: unknown }).__DEV__
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -106,13 +116,34 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
   })
 
   /**
-   * Holding a `read()` return value across a commit boundary fires
-   * the H1 warning naming the offending node id. The reference is
-   * kept alive on a closure-captured local so the WeakRef cannot
-   * be GC'd between the read and the commit-boundary check.
+   * #1241 — the new default. Calling `createCausl()` without the
+   * explicit opt-in flag never arms the tracker, so the same "hold
+   * a read across commit" pattern that fires in the opt-in arm
+   * stays silent here.
    */
-  it('warns when an adopter holds a read() return across commit (default-dev)', () => {
+  it('does NOT warn by default (no enableH1HazardWarning) — #1241', () => {
     const g = createCausl()
+    const input = g.input('count', 0)
+    const view = g.derived('view', (get) => ({ count: get(input) }))
+    const held = g.read(view)
+    expect(held).toEqual({ count: 0 })
+    g.commit('count→1', (tx) => tx.set(input, 1))
+    expect(countH1Warnings(warnSpy)).toBe(0)
+    expect(held.count).toBe(0) // anchor
+  })
+
+  /**
+   * Holding a `read()` return value across a commit boundary fires
+   * the H1 warning naming the offending node id when the adopter
+   * explicitly opts in. The reference is kept alive on a closure-
+   * captured local so the WeakRef cannot be GC'd between the read
+   * and the commit-boundary check.
+   *
+   * #1241 — must pass `enableH1HazardWarning: true` now that the
+   * default is `false`.
+   */
+  it('warns when an adopter holds a read() return across commit (opt-in)', () => {
+    const g = createCausl({ enableH1HazardWarning: true })
     const input = g.input('count', 0)
     // Derive an OBJECT so the WeakRef tracker engages — primitives
     // are skipped by construction (they cannot desynchronise from a
@@ -139,7 +170,7 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
    * commit succeeds normally even with the H1 hazard present.
    */
   it('warning never throws; commit pipeline completes normally', () => {
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
     const held = g.read(obj)
@@ -158,7 +189,7 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
    * sentinel WeakRef the test owns).
    */
   it('does not warn when read() return is discarded before commit', async () => {
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
     // Sentinel WeakRef captured by the test so we can detect whether
@@ -195,15 +226,16 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
   })
 
   /**
-   * `NODE_ENV=production` flips the default to `false`, suppressing
-   * the warning even when the adopter holds the read across the
-   * commit boundary. This is the load-bearing prod-safety property:
-   * adopters who ship a production bundle do not pay the WeakRef
-   * bookkeeping cost AND do not see the warning.
+   * `NODE_ENV=production` keeps the warning suppressed even when the
+   * adopter holds the read across the commit boundary AND tries to
+   * opt in. The H1 apparatus is tree-shaken in production builds
+   * (#1241 fix C); at runtime the `process.env.NODE_ENV` guard in
+   * `read()` short-circuits the WeakRef push regardless of the
+   * opt-in flag.
    */
-  it('does NOT warn in production (NODE_ENV=production)', () => {
+  it('does NOT warn in production (NODE_ENV=production), even with opt-in', () => {
     process.env.NODE_ENV = 'production'
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
     const held = g.read(obj)
@@ -213,47 +245,9 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
   })
 
   /**
-   * `globalThis.__DEV__ === false` flips the default to `false` even
-   * when `NODE_ENV` is unset. This is the React-Native / bundler-
-   * replaced flag path — Metro, Vite, esbuild, and Rollup all
-   * support a build-time `__DEV__` replacement that resolves to a
-   * plain boolean. The check has precedence over `NODE_ENV`.
-   */
-  it('does NOT warn when globalThis.__DEV__ === false', () => {
-    ;(globalThis as { __DEV__?: unknown }).__DEV__ = false
-    // Keep NODE_ENV=development to verify __DEV__ wins.
-    process.env.NODE_ENV = 'development'
-    const g = createCausl()
-    const a = g.input('a', 0)
-    const obj = g.derived('obj', (get) => ({ a: get(a) }))
-    const held = g.read(obj)
-    g.commit('a→1', (tx) => tx.set(a, 1))
-    expect(countH1Warnings(warnSpy)).toBe(0)
-    expect(held.a).toBe(0)
-  })
-
-  /**
-   * `globalThis.__DEV__ === true` arms the warning even when
-   * `NODE_ENV === 'production'`. Adopters who deliberately ship a
-   * `__DEV__: true` bundle (a debug build masquerading as prod)
-   * see the dev warning. The __DEV__ check has precedence.
-   */
-  it('warns when globalThis.__DEV__ === true overrides production NODE_ENV', () => {
-    ;(globalThis as { __DEV__?: unknown }).__DEV__ = true
-    process.env.NODE_ENV = 'production'
-    const g = createCausl()
-    const a = g.input('a', 0)
-    const obj = g.derived('obj', (get) => ({ a: get(a) }))
-    const held = g.read(obj)
-    g.commit('a→1', (tx) => tx.set(a, 1))
-    expect(countH1Warnings(warnSpy)).toBe(1)
-    expect(held.a).toBe(0)
-  })
-
-  /**
    * Explicit `enableH1HazardWarning: false` suppresses the warning
-   * in dev. Useful for adopters running benchmarks where the
-   * WeakRef bookkeeping would skew the measurement.
+   * in dev (which is now the same as the default, but kept explicit
+   * here as a regression gate against future default flips).
    */
   it('respects explicit enableH1HazardWarning: false even in dev', () => {
     const g = createCausl({ enableH1HazardWarning: false })
@@ -266,29 +260,13 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
   })
 
   /**
-   * Explicit `enableH1HazardWarning: true` arms the warning even
-   * in production. Useful for diagnosing a live H1 incident on a
-   * deployed engine.
-   */
-  it('respects explicit enableH1HazardWarning: true even in production', () => {
-    process.env.NODE_ENV = 'production'
-    const g = createCausl({ enableH1HazardWarning: true })
-    const a = g.input('a', 0)
-    const obj = g.derived('obj', (get) => ({ a: get(a) }))
-    const held = g.read(obj)
-    g.commit('a→1', (tx) => tx.set(a, 1))
-    expect(countH1Warnings(warnSpy)).toBe(1)
-    expect(held.a).toBe(0)
-  })
-
-  /**
    * Primitive `read()` returns are skipped by the tracker — there
    * is no reference identity to lose for a number / string /
    * boolean, so holding one across a commit is harmless and the
    * warning would be a false positive.
    */
   it('does not warn when read() returns a primitive (numbers cannot desync)', () => {
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     // Hold a primitive read return across a commit.
     const held = g.read(a)
@@ -304,13 +282,7 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
    * represent an adopter-cached reference.
    */
   it('does not warn for reads inside a subscribeReads projection', () => {
-    // `subscribeReads` is part of the second-tier surface; the
-    // signature is `(observer, projection)` with the projection
-    // closing over engine reads. Reads issued from the projection
-    // run under `activeReadTracker` and are filtered out of the
-    // H1 tracker by construction — the read-set is engine-internal
-    // bookkeeping, not an adopter-cached reference.
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     if (typeof g.subscribeReads !== 'function') return
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
@@ -335,13 +307,91 @@ describe('H1 hazard dev-only warning (#1155, SPEC §15.1)', () => {
    * across a long-running app.
    */
   it('emits at most one warning per held reference (no re-warn on every commit)', () => {
-    const g = createCausl()
+    const g = createCausl({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
     const held = g.read(obj)
     g.commit('a→1', (tx) => tx.set(a, 1))
     g.commit('a→2', (tx) => tx.set(a, 2))
     g.commit('a→3', (tx) => tx.set(a, 3))
+    expect(countH1Warnings(warnSpy)).toBe(1)
+    expect(held.a).toBe(0) // anchor
+  })
+
+  /**
+   * #1241 — the adapter-exemption seam. Reads issued under
+   * `__causlAdapterRead(graph, fn)` (the helper canonical
+   * `@causl/react` hooks wrap their `getSnapshot` body in) bypass
+   * the H1 hazard tracker even with the opt-in flag armed.
+   *
+   * The mechanism is a closure-scoped depth counter the engine
+   * increments for the duration of `fn`'s synchronous body, then
+   * decrements unconditionally in `finally`. Reads landed inside
+   * (or in any function `fn` calls synchronously) skip the WeakRef
+   * push exactly as they do for `activeReadTracker`-windowed
+   * reads.
+   */
+  it('does NOT warn for reads issued under __causlAdapterRead seam — #1241', () => {
+    const g = createCausl({ enableH1HazardWarning: true })
+    const a = g.input('a', 0)
+    const obj = g.derived('obj', (get) => ({ a: get(a) }))
+    // Read the derived object inside the adapter-exemption seam —
+    // mirrors the pattern `useCauslNode`'s `getSnapshot` uses.
+    const held = __causlAdapterRead(g, () => g.read(obj))
+    expect(held).toEqual({ a: 0 })
+    g.commit('a→1', (tx) => tx.set(a, 1))
+    expect(countH1Warnings(warnSpy)).toBe(0)
+    expect(held.a).toBe(0) // anchor
+  })
+
+  /**
+   * #1241 — the depth counter composes. A read inside a NESTED
+   * adapter-mode call (e.g. an adapter hook reading through another
+   * adapter hook's selector) still suppresses tracking. The
+   * `finally` decrement returns the depth to its pre-call value, so
+   * subsequent reads outside the seam are tracked normally.
+   */
+  it('seam depth counter composes — nested calls remain exempt — #1241', () => {
+    const g = createCausl({ enableH1HazardWarning: true })
+    const a = g.input('a', 0)
+    const obj = g.derived('obj', (get) => ({ a: get(a) }))
+    // Nested adapter-mode reads.
+    const held = __causlAdapterRead(g, () =>
+      __causlAdapterRead(g, () => g.read(obj)),
+    )
+    expect(held).toEqual({ a: 0 })
+    g.commit('a→1', (tx) => tx.set(a, 1))
+    expect(countH1Warnings(warnSpy)).toBe(0)
+    // After the seam returns, reads outside it are tracked again.
+    // Hold this one across a commit to verify the depth counter
+    // restored to zero rather than staying sticky on `1`.
+    const trackedHeld = g.read(obj)
+    g.commit('a→2', (tx) => tx.set(a, 2))
+    expect(countH1Warnings(warnSpy)).toBe(1)
+    expect(trackedHeld.a).toBe(1) // anchor — survivor across a→2
+  })
+
+  /**
+   * #1241 — a throwing seam body must NOT leave the depth counter
+   * sticky. The `finally`-driven decrement is the load-bearing
+   * invariant; a sticky counter would silently suppress every
+   * subsequent H1 warning for the engine's lifetime.
+   */
+  it('seam unwinds cleanly on throw — depth counter is not sticky — #1241', () => {
+    const g = createCausl({ enableH1HazardWarning: true })
+    const a = g.input('a', 0)
+    const obj = g.derived('obj', (get) => ({ a: get(a) }))
+    expect(() =>
+      __causlAdapterRead(g, () => {
+        // Trigger the engine read, then synthesise a throw to test
+        // the `finally` decrement path.
+        g.read(obj)
+        throw new Error('synthetic')
+      }),
+    ).toThrow('synthetic')
+    // Subsequent ordinary read should be tracked — depth must be 0.
+    const held = g.read(obj)
+    g.commit('a→1', (tx) => tx.set(a, 1))
     expect(countH1Warnings(warnSpy)).toBe(1)
     expect(held.a).toBe(0) // anchor
   })

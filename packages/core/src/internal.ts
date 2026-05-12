@@ -128,6 +128,64 @@ export function _migrateFrom(graph: Graph, snap: GraphSnapshot): void {
 }
 
 /**
+ * H1 adapter-exemption seam (issue #1241). Run `fn` with the engine's
+ * H1 hazard tracker suppressed for reads issued synchronously from
+ * inside the body.
+ *
+ * Used by canonical `@causl/react` hooks (`useCauslNode`,
+ * `useCausl`, `useCauslShallow`, `useCauslTypedArrayNode`) to wrap
+ * their `useSyncExternalStore` `getSnapshot` body. The
+ * `useSyncExternalStore` contract retains the snapshot across
+ * commits for tearing detection — that retention is intrinsic to
+ * the adapter, not an adopter bug. Wrapping the snapshot body in
+ * `__causlAdapterRead` flags those reads as engine-internal
+ * bookkeeping so the H1 hazard tracker skips them, eliminating
+ * the false-positive warning that flagged PR #1238 in review.
+ *
+ * The helper composes via a depth counter — nested adapter calls
+ * (an adapter hook reading through another adapter hook) all
+ * suppress tracking for the whole sub-tree, with unconditional
+ * decrement on throw via `finally`.
+ *
+ * In production builds (`process.env.NODE_ENV === 'production'`)
+ * the H1 apparatus is tree-shaken away and this helper degenerates
+ * to invoking `fn()` directly. Adapter code does not need to guard
+ * the import on the environment — every code path is uniform.
+ *
+ * @typeParam T - Return type of the wrapped function.
+ *
+ * @param graph - The handle returned by `createCausl`.
+ * @param fn - Synchronous body whose reads should bypass the H1
+ *  hazard tracker.
+ * @returns Whatever `fn()` returns.
+ * @throws Error when `graph` was not produced by `createCausl`.
+ *
+ * @remarks
+ * **Strictly internal.** Application code MUST NOT import this
+ * helper, and the underscore-double-prefix naming (`__causl_*`)
+ * is deliberately ugly to discourage drive-by adoption. The
+ * shape is not part of any SemVer-stable surface; adapter
+ * packages that import it pin a tight version range on
+ * `@causl/core`.
+ *
+ * @example
+ * Inside an adapter hook:
+ * ```ts
+ * import { __causlAdapterRead } from '@causl/core/internal';
+ *
+ * const getSnapshot = useCallback(
+ *   () => __causlAdapterRead(graph, () => graph.read(node)),
+ *   [graph, node],
+ * )
+ * ```
+ *
+ * @internal
+ */
+export function __causlAdapterRead<T>(graph: Graph, fn: () => T): T {
+  return lookupInternalDispatch(graph).__causlAdapterRead(fn);
+}
+
+/**
  * Exhaustiveness helper for discriminated-union switches.
  *
  * Place `assertNever(value)` in the `default` arm of a `switch` over

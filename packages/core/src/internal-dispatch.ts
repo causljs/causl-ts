@@ -52,6 +52,33 @@ export interface InternalDispatch {
    * preserved §3 monotonicity argument.
    */
   readonly _migrateFrom: (snap: GraphSnapshot) => void;
+  /**
+   * H1 adapter-exemption seam (issue #1241). Runs `fn` with the
+   * engine's H1 hazard tracker suppressed for reads issued
+   * synchronously from inside the body. Used by canonical
+   * `@causl/react` hooks (`useCauslNode`, `useCausl`,
+   * `useCauslShallow`, `useCauslTypedArrayNode`) to wrap their
+   * `useSyncExternalStore` `getSnapshot` body so the snapshot-
+   * retention contract does not produce false-positive H1 warnings
+   * when the opt-in dev safety net is armed.
+   *
+   * The implementation increments a closure-scoped depth counter
+   * for the duration of `fn`'s synchronous execution; reads issued
+   * inside `fn` (or any function it calls synchronously) bypass
+   * the H1 tracker. Decrement is unconditional via `finally`, so a
+   * throwing `fn` cannot leave the counter sticky.
+   *
+   * In production builds (`process.env.NODE_ENV === 'production'`)
+   * the H1 apparatus is tree-shaken away and this helper
+   * degenerates to invoking `fn()` directly — adapter code does
+   * not need to guard the import path on the environment.
+   *
+   * Reachable from outside the engine only via
+   * `@causl/core/internal`'s `__causlAdapterRead(graph, fn)`
+   * helper. The seam is INTERNAL and explicitly NOT part of any
+   * SemVer-stable surface — adopter code MUST NOT depend on it.
+   */
+  readonly __causlAdapterRead: <T>(fn: () => T) => T;
 }
 
 // One registry, keyed weakly so a discarded graph and its dispatch

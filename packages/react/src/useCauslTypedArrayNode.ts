@@ -49,6 +49,7 @@
  */
 
 import type { Node } from '@causl/core'
+import { __causlAdapterRead } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useRef, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 
@@ -282,22 +283,30 @@ export function useCauslTypedArrayNode<T extends CauslTypedArray>(
   // is `false` (probe rejected) or `null` (probe still in flight)
   // and the JS coercion fallback runs.
   const getSnapshot = useCallback((): T => {
-    const raw = graph.read(node) as unknown
-    const cached = cache.current
-    if (cached && cached.graph === graph && Object.is(cached.raw, raw)) {
-      // Same commit, same value — return the same view reference
-      // so consumers skip rendering work by identity.
-      return cached.view
-    }
-    // FUTURE (#680): when `wasmBackendAvailable === true`, read the
-    // node's `(ptr, len)` pair from the WASM-backed engine and
-    // return `new ctor(memory.buffer, ptr, len)` directly. The
-    // engine guarantees no `memory.grow()` between this read and
-    // React's render — grows happen only at commit boundaries.
-    void wasmBackendAvailable
-    const view = coerceToTypedArray(raw, ctor)
-    cache.current = { raw, view, graph }
-    return view
+    // #1241 — wrap the snapshot body in `__causlAdapterRead` so the
+    // opt-in H1 hazard tracker does not flag the raw `graph.read`
+    // beneath the typed-array view. `useSyncExternalStore` retains
+    // the view across commits for tearing detection (same contract
+    // as the other canonical hooks). The seam is a no-op in
+    // production builds.
+    return __causlAdapterRead(graph, () => {
+      const raw = graph.read(node) as unknown
+      const cached = cache.current
+      if (cached && cached.graph === graph && Object.is(cached.raw, raw)) {
+        // Same commit, same value — return the same view reference
+        // so consumers skip rendering work by identity.
+        return cached.view
+      }
+      // FUTURE (#680): when `wasmBackendAvailable === true`, read
+      // the node's `(ptr, len)` pair from the WASM-backed engine
+      // and return `new ctor(memory.buffer, ptr, len)` directly.
+      // The engine guarantees no `memory.grow()` between this read
+      // and React's render — grows happen only at commit boundaries.
+      void wasmBackendAvailable
+      const view = coerceToTypedArray(raw, ctor)
+      cache.current = { raw, view, graph }
+      return view
+    })
   }, [graph, node, ctor])
 
   const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)

@@ -90,6 +90,39 @@ import type {
 } from './types.js'
 
 /**
+ * Ambient `process` declaration for the bundler-replacement
+ * `process.env.NODE_ENV !== 'production'` literal gate used by the
+ * H1 hazard tree-shake region (#1241 fix C). `@causl/core`'s
+ * tsconfig does not include `@types/node` so the type-checker
+ * cannot resolve `process` from the Node global; this minimal
+ * declaration is the smallest patch that makes the literal
+ * expression typecheck.
+ *
+ * @remarks
+ * Critically, the declaration is a literal `const` rather than a
+ * `function` or method access. esbuild / terser / webpack
+ * substitute the literal string `'production'` for
+ * `process.env.NODE_ENV` at build time (the
+ * `DefinePlugin` / `--define:process.env.NODE_ENV='"production"'`
+ * conventions every major JS bundler honours) iff the access is
+ * shape `process.env.NODE_ENV` exactly. Any indirection
+ * (`globalThis.process`, `import.meta.env`, etc.) defeats the
+ * substitution. So this file uses the bare `process.env.NODE_ENV`
+ * form and relies on this declaration to keep the TS source
+ * typecheck-clean for adopters whose tsconfig does not include
+ * `@types/node`.
+ *
+ * At runtime (when no bundler substitution has happened — e.g.
+ * Vitest's source-on-the-fly transform), `process.env.NODE_ENV`
+ * is the actual Node global, which is always present in the
+ * supported runtime matrix (Node ≥ 22 per
+ * `package.json#engines.node`). In browser bundles consumers go
+ * through a bundler that substitutes `process.env.NODE_ENV`
+ * anyway.
+ */
+declare const process: { env: { NODE_ENV?: string } }
+
+/**
  * Internal alias used everywhere the engine needs to refer to a node whose value
  * type is irrelevant to the surrounding logic. The public API is generic; the
  * engine bookkeeping is uniform.
@@ -474,49 +507,6 @@ function makeFreezeIfDev(flags: CauslFlags): <T>(value: T) => T {
   return <T>(value: T): T => Object.freeze(value)
 }
 
-/**
- * Best-effort detection of "are we running in a development build?".
- *
- * @remarks
- * Used at `createCausl` construction-time to derive the default value
- * for `options.enableH1HazardWarning` (#1155 — the H1 hazard warning
- * is dev-only). The order-of-checks is deliberate:
- *
- *   1. **`globalThis.__DEV__`** if defined as a boolean. This is the
- *      idiomatic React-Native / bundler-replaced flag — Metro, Vite,
- *      esbuild, Rollup, and Webpack all support a build-time
- *      `__DEV__` replacement, and adopters who bundle Causl with a
- *      replacement will see the constant resolve cleanly in prod
- *      bundles (`false` → no warning, no WeakRef churn).
- *   2. **`process.env.NODE_ENV !== 'production'`** as a Node-side
- *      fallback. The classic `'production'` sentinel is the
- *      lowest-common-denominator dev/prod gate for SSR + tooling.
- *   3. **`false`** if neither signal is present. Conservative: a
- *      runtime without `__DEV__` AND without `process.env` is most
- *      likely an embedded / browser-prod context, and emitting a
- *      console warning there would be a surprise.
- *
- * Each branch is wrapped to defend against the same hostile-Proxy
- * vectors `./flags.ts` defends against (Proxies that throw on
- * property access). Construction-time only — the engine captures
- * the resolved boolean once and never re-checks the environment.
- */
-function isDevEnvironment(): boolean {
-  try {
-    const g = globalThis as { __DEV__?: unknown }
-    if (typeof g.__DEV__ === 'boolean') return g.__DEV__
-  } catch {
-    // Defensive: a Proxy on globalThis could throw on access.
-  }
-  try {
-    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    const nodeEnv = proc?.env?.NODE_ENV
-    if (typeof nodeEnv === 'string') return nodeEnv !== 'production'
-  } catch {
-    // Defensive: a Proxy on process.env could throw on access.
-  }
-  return false
-}
 /**
  * Default cap for the disposed-node tombstone map.
  *
@@ -941,22 +931,34 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // helper covers; outer Commit / Explanation objects stay frozen
   // unconditionally at the public-surface boundary.
   const freezeIfDev = makeFreezeIfDev(flags)
-  // #1155 — H1 hazard warning (SPEC §15.1). Per
+  // #1155 / #1241 — H1 hazard warning (SPEC §15.1). Per
   // `docs/wasm-backend-adopter-audit.md`, the load-bearing adopter
   // hazard surfaced by the Markbåge/Miller panel review of #1133 is
   // holding a `graph.read(node)` return value across a commit
   // boundary: reference-identity is not guaranteed, so a cached
   // reference can silently desynchronise from the live cell. The
   // dev-only WeakRef instrumentation here catches the hazard at
-  // runtime with a `console.warn`. The default is the
-  // {@link isDevEnvironment} verdict; adopters can override either
-  // direction via `createCausl({ enableH1HazardWarning })`. The
-  // warning never throws — it is informational only, preserving
-  // backward compatibility with adopters who deliberately cache
-  // `read()` values (PR #1129 amended SPEC §15.1 to make the
-  // non-guarantee explicit; this is the runtime safety net).
+  // runtime with a `console.warn`. The warning never throws — it is
+  // informational only, preserving backward compatibility with
+  // adopters who deliberately cache `read()` values (PR #1129
+  // amended SPEC §15.1 to make the non-guarantee explicit; this is
+  // the runtime safety net).
+  //
+  // #1241 — the default is now **`false`** (opt-in). PR #1238
+  // originally shipped with an auto-detected dev/prod default, but
+  // the canonical `@causl/react` adapter retains the `read()` return
+  // inside `useSyncExternalStore`'s snapshot cache for tearing
+  // detection — that single retained reference triggered the
+  // warning on every commit for any adapter usage. Adopters who
+  // want the dev safety net opt in via
+  // `createCausl({ enableH1HazardWarning: true })`. The
+  // adapter-exemption seam below (the `adapterReadDepth` counter)
+  // keeps the opt-in path honest for adopters who legitimately want
+  // the warning AND use `@causl/react`'s canonical hooks: the
+  // adapters bracket their `getSnapshot` boundary so reads inside
+  // are exempted from H1 tracking.
   const enableH1HazardWarning =
-    options.enableH1HazardWarning ?? isDevEnvironment()
+    options.enableH1HazardWarning ?? false
   /**
    * #1155 — H1 hazard tracking ring. Each entry records a WeakRef
    * to a value returned by {@link read} together with the GraphTime
@@ -987,8 +989,39 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     readonly nodeId: NodeId
     readonly capturedAt: GraphTime
   }
-  const h1HazardTrack: H1HazardRecord[] | null =
-    enableH1HazardWarning ? [] : null
+  // #1241 — wrap the H1 hazard allocation in a literal
+  // `process.env.NODE_ENV !== 'production'` block so esbuild / terser
+  // can DCE the WeakRef apparatus in production builds. The bundler
+  // sees the constant `'production'` after substitution; the dead
+  // branch (and every helper closure inside) drops from the prod
+  // bundle. In dev / test the branch evaluates to true, and the
+  // tracker materialises iff `enableH1HazardWarning` opted in.
+  let h1HazardTrack: H1HazardRecord[] | null = null
+  if (process.env.NODE_ENV !== 'production') {
+    h1HazardTrack = enableH1HazardWarning ? [] : null
+  }
+  // #1241 — adapter-exemption seam. Canonical `@causl/react` hooks
+  // call `graph.read(node)` from inside `useSyncExternalStore`'s
+  // `getSnapshot` callback, which React invokes during render AND
+  // retains across commits for tearing detection. The retention is
+  // intrinsic to the adapter contract, not an adopter bug — so the
+  // H1 tracker must skip reads originating inside that boundary.
+  //
+  // The seam is a single closure-scoped counter incremented by the
+  // adapter via the internal-dispatch entrypoint
+  // `runInAdapterReadMode(fn)`. When the counter is non-zero the
+  // `read()` hot path's H1 instrumentation is short-circuited
+  // exactly as it is for `activeReadTracker`-windowed reads. The
+  // counter is a depth (not a boolean) so nested adapter calls
+  // compose correctly — a hook that reads through another hook's
+  // selector still suppresses tracking for the whole sub-tree.
+  //
+  // The seam is INTERNAL: it lives behind `@causl/core/internal`'s
+  // `__causlAdapterRead(graph, fn)` helper and is NOT part of the
+  // public `Graph` interface. Adopters MUST NOT depend on the
+  // shape — the next adapter primitive (e.g., a fence around
+  // `subscribe` callbacks) may extend the same counter or split it.
+  let adapterReadDepth = 0
   // Validate and bind the graph name (schema-3 graphId source).
   // Application-supplied wins; absence falls back to UUID v4. The
   // regex pattern is exported as {@link GRAPH_ID_REGEX} so the
@@ -2853,39 +2886,53 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    */
   function read<T>(node: Node<T>): T {
     const value = readEntry(node)
-    // #1155 — H1 hazard instrumentation. When the dev-only warning
-    // is armed (default in dev; opt-in in prod), record a WeakRef
-    // to every non-null object/function returned to user code so
-    // the commit-boundary walk can detect survivors carried across
-    // a `now` tick. Three guards apply:
+    // #1155 / #1241 — H1 hazard instrumentation. When the dev-only
+    // warning is armed (opt-in via
+    // `createCausl({ enableH1HazardWarning: true })`), record a
+    // WeakRef to every non-null object/function returned to user
+    // code so the commit-boundary walk can detect survivors carried
+    // across a `now` tick. Four guards apply:
     //
     //   1. `h1HazardTrack === null` → instrumentation disabled
-    //      (production default). Single null check, no work.
+    //      (production default, or adopter did not opt in). Single
+    //      null check, no work. The whole branch is wrapped in
+    //      `process.env.NODE_ENV !== 'production'` so esbuild /
+    //      terser DCE the body in prod (#1241 fix C).
     //   2. `activeReadTracker !== null` → we are inside a tracking
     //      projection (subscribeReads). Those reads are engine-
     //      internal and re-run on every commit by construction, so
     //      they never represent an adopter-cached reference.
-    //   3. Value must be a non-null object or function for WeakRef
+    //   3. `adapterReadDepth > 0` → the read originates inside a
+    //      canonical adapter's snapshot boundary (#1241 fix B). The
+    //      adapter — e.g. `@causl/react`'s `useCauslNode` — wraps
+    //      its `getSnapshot` callback in `__causlAdapterRead`, which
+    //      enters this counter for the duration of the body. The
+    //      retention is intrinsic to `useSyncExternalStore`'s
+    //      tearing-detection contract, not an adopter bug.
+    //   4. Value must be a non-null object or function for WeakRef
     //      to accept it. Primitives, `null`, and `undefined` cannot
     //      desynchronise from a backing cell because they ARE the
     //      cell value — H1 only bites when the engine's
     //      structurally-cloned object reference identity changes.
-    if (
-      h1HazardTrack !== null &&
-      activeReadTracker === null &&
-      value !== null &&
-      (typeof value === 'object' || typeof value === 'function')
-    ) {
-      h1HazardTrack.push({
-        ref: new WeakRef(value as object),
-        nodeId: node.id,
-        capturedAt: now,
-      })
-      // Bound worst-case walk cost by pruning aggressively when the
-      // tracker grows past a soft cap. The prune is in-place
-      // copy-survivors; dead refs (already-GC'd values) fall out.
-      if (h1HazardTrack.length > H1_HAZARD_TRACK_CAP) {
-        pruneH1HazardTrack()
+    if (process.env.NODE_ENV !== 'production') {
+      if (
+        h1HazardTrack !== null &&
+        activeReadTracker === null &&
+        adapterReadDepth === 0 &&
+        value !== null &&
+        (typeof value === 'object' || typeof value === 'function')
+      ) {
+        h1HazardTrack.push({
+          ref: new WeakRef(value as object),
+          nodeId: node.id,
+          capturedAt: now,
+        })
+        // Bound worst-case walk cost by pruning aggressively when
+        // the tracker grows past a soft cap. The prune is in-place
+        // copy-survivors; dead refs (already-GC'd values) fall out.
+        if (h1HazardTrack.length > H1_HAZARD_TRACK_CAP) {
+          pruneH1HazardTrack()
+        }
       }
     }
     return value
@@ -2897,6 +2944,13 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * before appending more entries. Sized to absorb common burst-
    * read patterns (e.g. a viewport-render fan-out of ~1000 reads)
    * without growing unbounded between commits.
+   *
+   * #1241 — kept outside the tree-shake block because module-level
+   * constant declarations cannot be conditionally declared in a TS
+   * source. The `const` itself does not pull the WeakRef apparatus
+   * into the prod bundle; it is dead-code-eliminated once the only
+   * caller (`pruneH1HazardTrack`) is unreachable from the
+   * tree-shaken `read()` body.
    */
   const H1_HAZARD_TRACK_CAP = 4096
 
@@ -2908,6 +2962,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * cap plus one commit's burst.
    */
   function pruneH1HazardTrack(): void {
+    if (process.env.NODE_ENV === 'production') return
     if (h1HazardTrack === null) return
     let write = 0
     for (let read = 0; read < h1HazardTrack.length; read++) {
@@ -2930,6 +2985,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * "still-current" and produce no warnings.
    */
   function checkH1HazardOnCommit(): void {
+    if (process.env.NODE_ENV === 'production') return
     if (h1HazardTrack === null || h1HazardTrack.length === 0) return
     let write = 0
     for (let read = 0; read < h1HazardTrack.length; read++) {
@@ -2952,6 +3008,46 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       h1HazardTrack[write++] = rec
     }
     h1HazardTrack.length = write
+  }
+
+  /**
+   * #1241 — Run `fn` with the H1 adapter-exemption seam engaged.
+   *
+   * Increments {@link adapterReadDepth} for the duration of `fn`'s
+   * synchronous body; reads issued inside `fn` (or any function it
+   * calls synchronously) bypass the H1 hazard tracker. Decrement is
+   * unconditional via `finally`, so a throwing `fn` cannot leave
+   * the counter sticky.
+   *
+   * Reachable only through `@causl/core/internal`'s
+   * `__causlAdapterRead(graph, fn)` helper. Canonical adapters
+   * (`@causl/react`'s `useCauslNode`, `useCausl`, `useCauslShallow`,
+   * `useCauslTypedArrayNode`) wrap their `getSnapshot` body in
+   * that helper so `useSyncExternalStore`'s snapshot-retention
+   * contract does not produce a false-positive H1 warning.
+   *
+   * The seam is INTERNAL — adopter code MUST NOT import or rely on
+   * it. The depth counter composes (a nested adapter call still
+   * suppresses the outer one's tracking) but the public shape is
+   * intentionally unconstrained.
+   *
+   * @internal
+   */
+  function runInAdapterReadMode<T>(fn: () => T): T {
+    if (process.env.NODE_ENV === 'production') {
+      // In production the H1 apparatus is tree-shaken away; the
+      // depth counter is a no-op and the helper degenerates to
+      // calling `fn()` directly. Keeping the function reachable
+      // (rather than `undefined`) means adapter code does not need
+      // a conditional on the import — every code path is uniform.
+      return fn()
+    }
+    adapterReadDepth++
+    try {
+      return fn()
+    } finally {
+      adapterReadDepth--
+    }
   }
 
   /**
@@ -4278,12 +4374,12 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         phaseH_dispatchCommitObservers(c, now)
       }
 
-      // #1155 — H1 hazard warning (SPEC §15.1). Walks the WeakRef
-      // tracker populated by `read()` and emits one
+      // #1155 / #1241 — H1 hazard warning (SPEC §15.1). Walks the
+      // WeakRef tracker populated by `read()` and emits one
       // `console.warn` per survivor whose `capturedAt < now`.
       // No-op when the tracker is disabled (production default
-      // or explicit `enableH1HazardWarning: false`). Runs after
-      // Phase H so the warning order is observable-stable:
+      // or `enableH1HazardWarning` omitted / set to `false`). Runs
+      // after Phase H so the warning order is observable-stable:
       // subscribers fire, then dev diagnostics, then `commit`
       // returns. Placed inside the success arm (not the finally)
       // because the rollback path restores `now = beforeNow`,
@@ -4291,7 +4387,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // "still-current" and produce no warnings on a throw —
       // the desired behaviour: H1 hazards are scoped to commits
       // that actually advanced the clock.
-      if (h1HazardTrack !== null) checkH1HazardOnCommit()
+      //
+      // #1241 — the dispatch is wrapped in
+      // `process.env.NODE_ENV !== 'production'` so esbuild /
+      // terser DCE both the call site AND the function body in
+      // prod bundles; the H1 apparatus drops entirely.
+      if (process.env.NODE_ENV !== 'production') {
+        if (h1HazardTrack !== null) checkH1HazardOnCommit()
+      }
 
       return c
     } catch (err) {
@@ -6598,6 +6701,11 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   registerInternalDispatch(graph, {
     dispose: (node) => backend.dispose(node),
     _migrateFrom: (snap) => _migrateFrom(snap),
+    // #1241 — adapter-exemption seam. Routes through the
+    // closure-scoped `runInAdapterReadMode` helper which manages the
+    // H1 hazard tracker's depth counter. See
+    // `InternalDispatch.__causlAdapterRead` for the contract.
+    __causlAdapterRead: <T,>(fn: () => T) => runInAdapterReadMode(fn),
   })
 
   // Publish the disposed-tombstone size accessor to the parallel

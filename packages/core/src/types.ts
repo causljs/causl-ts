@@ -769,7 +769,7 @@ export interface CreateCauslOptions {
   readonly adaptThresholds?: Partial<import('./auto-adapt.js').AdaptThresholds>
 
   /**
-   * Enable the dev-only H1 hazard warning (#1155).
+   * Enable the dev-only H1 hazard warning (#1155, #1241).
    *
    * Per `docs/wasm-backend-adopter-audit.md` H1 and SPEC §15.1 (PR #1129),
    * the engine does NOT guarantee reference-identity stability for values
@@ -788,20 +788,37 @@ export interface CreateCauslOptions {
    * throws; the contract is informational only.
    *
    * @remarks
-   * Default is **true in development** and **false in production**.
-   * Development is detected via `globalThis.__DEV__` (if defined as a
-   * boolean) or, as a fallback, `process.env.NODE_ENV !== 'production'`.
-   * Pass `false` explicitly to suppress the check in dev (rare; preferred
-   * when running benchmarks where WeakRef bookkeeping would skew the
-   * measurement). Pass `true` explicitly in production only when
-   * diagnosing a live H1 incident — the WeakRef churn has measurable
-   * (but small) commit-boundary cost.
+   * Default is **`false`** (opt-in) per the panel review of #1241. PR
+   * #1238 originally shipped with an auto-detected dev/prod default,
+   * but the canonical `@causl/react` adapter holds the `read()`
+   * return inside `useSyncExternalStore`'s snapshot cache for tearing
+   * detection — that single retained reference triggered the warning
+   * on every commit for any adapter usage.
    *
-   * Bookkeeping cost: one `WeakRef` allocation per qualifying `read()`
-   * call (primitives, `null`, and reads during a tracking projection
-   * window are skipped); one O(N) walk per commit over the survivor
-   * list with dead-ref pruning. Empirically <1% on `linear-chain ×
-   * 1000` traces in dev mode.
+   * The follow-up (#1241) ships three coordinated fixes:
+   *
+   *   - **A.** Default `enableH1HazardWarning` is now `false`; adopters
+   *     who want the dev safety net opt in explicitly with
+   *     `createCausl({ enableH1HazardWarning: true })`.
+   *   - **B.** An internal `__causl_*` adapter-exemption seam (used by
+   *     `@causl/react`'s canonical hooks) suppresses H1 tracking for
+   *     reads inside an adapter's `getSnapshot` boundary, so opt-in
+   *     adopters do not see false positives from official adapters.
+   *   - **C.** The instrumentation is wrapped in
+   *     `process.env.NODE_ENV !== 'production'` literal blocks so
+   *     esbuild / terser can dead-code-eliminate the WeakRef apparatus
+   *     in production builds.
+   *
+   * Pass `true` explicitly to engage the dev-only WeakRef tracker; pass
+   * `false` (or omit the option) to keep the engine on the production
+   * hot path with no per-`read()` bookkeeping.
+   *
+   * Bookkeeping cost when armed: one `WeakRef` allocation per qualifying
+   * `read()` call (primitives, `null`, reads inside a tracking
+   * projection, and reads inside the adapter-exemption seam are
+   * skipped); one O(N) walk per commit over the survivor list with
+   * dead-ref pruning. Empirically <1% on `linear-chain × 1000` traces
+   * in dev mode.
    */
   readonly enableH1HazardWarning?: boolean
 }

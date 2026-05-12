@@ -43,7 +43,7 @@
  */
 
 import type { Graph, Node } from '@causl/core'
-import { dispose } from '@causl/core/internal'
+import { __causlAdapterRead, dispose } from '@causl/core/internal'
 import { useContext, useEffect } from 'react'
 import { CauslContext } from './context.js'
 
@@ -128,9 +128,19 @@ export function useCauslFamily<T>(
   // factory once and seed a refcount-zero entry; the mount-effect bumps
   // the count, and the unmount cleanup decrements it (and schedules a
   // deferred dispose if the count hits zero).
+  //
+  // #1241 — the factory invocation runs through `__causlAdapterRead`
+  // so any incidental `graph.read(...)` issued by an adopter-supplied
+  // factory bypasses the opt-in H1 hazard tracker. The factory's
+  // public surface (`FamilyGraph`) does not include `read`, but TS
+  // narrowing is structural and an `as` cast could smuggle a read
+  // through; wrapping at the call site keeps the adapter boundary
+  // honest regardless. The seam is a no-op in production builds.
   let entry = families.get(key)
   if (!entry) {
-    const node = factory(graph, key) as Node<unknown>
+    const node = __causlAdapterRead(graph, () =>
+      factory(graph, key) as Node<unknown>,
+    )
     entry = { node, refcount: 0 }
     families.set(key, entry)
   }

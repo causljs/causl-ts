@@ -23,6 +23,7 @@
  */
 
 import type { Node } from '@causl/core'
+import { __causlAdapterRead } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 
@@ -77,7 +78,18 @@ export function useCauslNode<T>(node: Node<T>): T {
   // committed value. React calls this during render and after every
   // onChange notification. Because onChange only fires when the node's
   // value actually changed, this read always returns a fresh value.
-  const getSnapshot = useCallback((): T => graph.read(node), [graph, node])
+  //
+  // #1241 — the read is wrapped in `__causlAdapterRead` so the opt-in
+  // H1 hazard tracker skips it. `useSyncExternalStore` retains the
+  // last snapshot reference across commits for tearing detection;
+  // that retention is intrinsic to the adapter contract, not an
+  // adopter bug, so the hazard tracker must NOT flag it. The seam is
+  // a no-op in production builds (tree-shaken with the rest of the H1
+  // apparatus).
+  const getSnapshot = useCallback(
+    (): T => __causlAdapterRead(graph, () => graph.read(node)),
+    [graph, node],
+  )
 
   const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   useDebugValue(value)

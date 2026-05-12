@@ -13,7 +13,7 @@
  */
 
 import type { Graph } from '@causl/core'
-import { narrowCapability, type ReadOnlyGraph } from '@causl/core/internal'
+import { __causlAdapterRead, narrowCapability, type ReadOnlyGraph } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 
@@ -116,15 +116,26 @@ export function useCausl<T>(selector: Selector<T>): T {
   // store-change callbacks; a stable reference is the mechanism that
   // gives concurrent-render `GraphTime` consistency and prevents
   // tearing across the double-invocation protocol in strict mode.
+  //
+  // #1241 — the selector body is wrapped in `__causlAdapterRead` so
+  // any `graph.read(...)` calls it issues bypass the opt-in H1
+  // hazard tracker. `useSyncExternalStore` retains the last snapshot
+  // reference across commits for tearing detection; flagging that
+  // retention as an H1 hazard would be a false positive (the
+  // retention is intrinsic to the adapter contract, not an adopter
+  // bug). The seam is a no-op in production builds (tree-shaken
+  // with the rest of the H1 apparatus).
   const getSnapshot = useCallback((): T => {
-    const next = selector(cap)
-    if (lastValue.current && lastValue.current.from === graph) {
-      if (Object.is(lastValue.current.value, next)) {
-        return lastValue.current.value
+    return __causlAdapterRead(graph, () => {
+      const next = selector(cap)
+      if (lastValue.current && lastValue.current.from === graph) {
+        if (Object.is(lastValue.current.value, next)) {
+          return lastValue.current.value
+        }
       }
-    }
-    lastValue.current = { value: next, from: graph }
-    return next
+      lastValue.current = { value: next, from: graph }
+      return next
+    })
   }, [graph, cap, selector])
 
   const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)

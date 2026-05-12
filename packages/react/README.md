@@ -165,6 +165,45 @@ Practical consequences in React:
   g.read(node).count`) are unaffected because primitives compare by
   value.
 
+### Migration: memoise on `engine.stats().nodeVersion(node)` (#1242)
+
+If your code relied on `read()` reference identity for object-shaped
+values (the H1 hazard SPEC §15.1 now calls out), the supported
+migration is to memoise on the engine's per-node version counter
+instead. `engine.stats().nodeVersion(node)` returns a monotonically-
+increasing integer that advances by exactly 1 each commit in which the
+node's value changed (per the SPEC §15.1 `!Object.is` cutoff) and
+stays unchanged on every other commit — a no-op write, an empty
+commit, or a sibling-write that did not touch this node. Pinning a
+downstream cache key to that integer gives you a stable memoisation
+surface that survives the engine's per-read `structuredClone` boundary.
+
+```tsx
+import { useMemo } from 'react'
+import { useCausl } from '@causl/react'
+import type { Node } from '@causl/core'
+
+function ExpensiveProjection({ node }: { node: Node<MyValue> }) {
+  // `useCausl((g) => …)` returns a stable value (the selector's
+  // result). Keying on `nodeVersion(node)` produces an integer that
+  // changes IFF the node's value actually changed under the
+  // engine's `!Object.is` cutoff.
+  const version = useCausl((g) => g.stats().nodeVersion(node))
+  const value = useCausl((g) => g.read(node))
+  // `useMemo` recomputes only when `version` increments — i.e. only
+  // when the node's underlying value actually changed. A no-op commit
+  // (re-setting an input to its current value) keeps `version` the
+  // same, so the memoised projection is reused.
+  return useMemo(() => projectExpensively(value), [version])
+}
+```
+
+The counter is cross-backend byte-identical (TS engine vs. Phase-1
+WasmBackend wrapper) for the same commit sequence, so a future
+migration to the Rust/WASM engine (#1133) inherits the same cache
+behaviour without code changes. See SPEC §15.1 and PR #1245 for the
+underlying contract.
+
 ## React 18 / 19 compatibility
 
 All hooks are built on `useSyncExternalStore`. StrictMode

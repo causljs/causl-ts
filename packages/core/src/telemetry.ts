@@ -50,7 +50,7 @@
  *   `commitLogConsumerCount`, `entries`, `retainedCommits` row).
  */
 
-import type { GraphTime } from './types.js'
+import type { GraphTime, Node } from './types.js'
 
 /**
  * Engine-wide retained-state telemetry surface — the cross-backend
@@ -245,4 +245,53 @@ export interface EngineTelemetry {
    * snapshots where both sides are `undefined`.
    */
   readonly migrationPaybackCommits?: number | undefined
+  /**
+   * Per-node version counter (#1242, SPEC §15.1).
+   *
+   * @remarks
+   * Returns the monotonically-increasing counter for how many commits
+   * the given node has appeared in `Commit.changedNodes`. The counter
+   * advances by exactly 1 each time the node's value changed in a
+   * commit (per SPEC §15.1 / #1129 semantics: change =
+   * `!Object.is(prevValue, nextValue)`); it advances by 0 on a
+   * commit where the node's value did not change (no-op commit,
+   * equality-cutoff path, sibling-shape isolation). The initial value
+   * (before any commit changes the node) is implementation-defined;
+   * the canonical TS engine returns `0` for a never-changed node,
+   * including nodes the engine has never seen.
+   *
+   * The accessor is the load-bearing memoisation surface for adopters
+   * who can no longer rely on `read()` reference identity (H1 hazard,
+   * fixed in PR #1245). Memoise on `engine.stats().nodeVersion(node)`
+   * and downstream caches invalidate iff the node's value actually
+   * changed — a no-op commit will not bump the counter and so will
+   * not invalidate the cache.
+   *
+   * Cross-backend contract: `nodeVersion(node)` MUST be byte-identical
+   * across the canonical TS engine and the Phase-1 WasmBackend wrapper
+   * for the same commit sequence, because `nodeVersion` is a pure
+   * derivation of `Commit.changedNodes`, which is already pinned
+   * byte-identically by the determinism gate (#1059 / PR #1107).
+   *
+   * Disposed-node semantics (#1164 generational NodeId): a disposed
+   * node's counter is reset. If the slot is reused with a new
+   * generation, the new node starts at counter 0.
+   *
+   * @param node - Any handle reachable through the engine's public
+   *   surface — input, derived, or commit-metadata derived.
+   * @returns The number of commits in which `node.id` has appeared in
+   *   `commit.changedNodes` over this engine's lifetime; `0` if the
+   *   node has never changed (or has never been seen).
+   *
+   * @example Cache key for adopter-side memoisation
+   * ```ts
+   * const v = engine.stats().nodeVersion(node)
+   * if (v !== prevVersion) {
+   *   // The node's value changed; recompute the memoised projection.
+   *   cache.set(node.id, project(engine.read(node)))
+   *   prevVersion = v
+   * }
+   * ```
+   */
+  nodeVersion(node: Node<unknown>): number
 }

@@ -1381,6 +1381,35 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // devtools tab calling `stats()` once per render.
   let inputCount = 0
   let derivedCount = 0
+  // #1242 — per-node version counter map surfaced by
+  // `EngineTelemetry.nodeVersion(node)` (SPEC §15.1). Counts how many
+  // commits each node has appeared in `Commit.changedNodes`. The
+  // counter increments by exactly 1 per commit where the node's value
+  // changed (per SPEC §15.1 / #1129 semantics:
+  // change = `!Object.is(prevValue, nextValue)`); it advances by 0 on
+  // a commit where the node's value did not change. Maintained
+  // alongside the existing `changed` set in `commitInternal`'s success
+  // arm, post Phase F.5 (so commit-metadata recomputes are included)
+  // and pre Phase G (so per-node subscribers calling `stats()` from
+  // inside an observer see the post-commit counter). The map is
+  // engine-closure scoped; disposed nodes have their entry deleted in
+  // `_dispose` so a future reuse under generational NodeId (#1164)
+  // starts from a fresh counter at 0. Adopters who can no longer
+  // rely on `read()` reference identity (H1 hazard, PR #1245) key
+  // their memoisation on this counter.
+  const nodeVersions = new Map<NodeId, number>()
+  // Stable accessor closure surfaced through `stats().nodeVersion`.
+  // Hoisted out of the per-call literal so sequential `stats()`
+  // snapshots share the same function reference (otherwise the
+  // deep-equality leak-gate test in `stats.test.ts` would compare two
+  // distinct closure identities and fail). The closure captures
+  // `nodeVersions` by reference, so its return value reflects the
+  // engine's current state at call time — semantically equivalent to
+  // a per-call closure, but byte-identical across snapshots so
+  // adopter-side `Object.is(prev.stats().nodeVersion, next.stats().
+  // nodeVersion)` is `true` (a cheap cache-key for "engine identity").
+  const nodeVersionAccessor = (node: Node<unknown>): number =>
+    nodeVersions.get(node.id) ?? 0
   // #696 — running counter for live transient subscriptions
   // (`options.transient === true` on `subscribe` / `subscribeMany`).
   // Maintained at the four mutation sites: increment in `subscribe` /
@@ -4327,6 +4356,28 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         for (const id of metadataChanged) changed.add(id)
       }
 
+      // #1242 — per-node version counter bookkeeping (SPEC §15.1
+      // memoisation key). Runs immediately after Phase F.5 so commit-
+      // metadata-derived ids that surfaced in that pass are included
+      // in this commit's increment, and immediately before Phase G so
+      // per-node subscribers calling `stats().nodeVersion(node)` from
+      // inside an observer see the post-commit counter. The set this
+      // pass iterates is the FINAL `changed` set published as
+      // `Commit.changedNodes` (#1245) — by definition the per-node
+      // version is the running count of commits in which a node's id
+      // appears in `changedNodes`. No allocation in the steady state:
+      // each entry is a `Map<NodeId, number>` set/update at the per-
+      // commit changedNodes density, which on a typical adopter graph
+      // is O(1)–O(10) ids per commit. Rollback handling: a throw
+      // escaping Phase G / H would land in the success arm AFTER this
+      // pass; the catch arm above already restores `now` and derived
+      // state, and the version-counter bumps are only applied here on
+      // the success path (after F.5 has settled), so no rollback
+      // bookkeeping is required for `nodeVersions`.
+      for (const id of changed) {
+        nodeVersions.set(id, (nodeVersions.get(id) ?? 0) + 1)
+      }
+
       // Phase F.6 — retain a per-commit input snapshot for `readAt(t)`,
       // structurally shared as a delta-chain (#235). The new row owns a
       // `delta` of *only* the input ids that actually changed at this
@@ -6482,6 +6533,12 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // returns false for missing ids and the dispose pipeline already
     // owns this id's lifetime (#452).
     commitMetadataIds.delete(id)
+    // #1242 — drop the per-node version counter on disposal so a
+    // subsequent reuse of the id (generational NodeId, #1164; or the
+    // useCauslFamily P7 full unmount + remount lifecycle that maps
+    // back to the same string id) starts from a fresh counter at 0.
+    // Cheap unconditional delete; missing-key delete is O(1) on Map.
+    nodeVersions.delete(id)
     disposed.set(id, now)
     // FIFO-evict the oldest tombstone past the cap. JS Map iteration
     // is insertion-ordered, so the head of `keys()` is the oldest
@@ -6559,6 +6616,21 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       entries: entries.size,
       lastCommitTime: now,
       retainedCommits: commitHistory.length,
+      // #1242 — per-node version accessor (SPEC §15.1). Closure-captured
+      // lookup against the `nodeVersions` Map maintained alongside the
+      // existing `changed` set in `commitInternal`'s success arm (post
+      // Phase F.5 / pre Phase G). Returns `0` for a never-changed node,
+      // including nodes the engine has never seen, so adopters can
+      // safely call `nodeVersion(node)` without preconditioning on
+      // registration. Disposed nodes have their entry deleted in
+      // `_dispose`, so a future reuse under generational NodeId (#1164)
+      // starts from a fresh counter at 0. Function reference is hoisted
+      // (see `nodeVersionAccessor` declaration above) so sequential
+      // `stats()` snapshots share the same closure identity — the leak-
+      // gate `expect(s1).toEqual(s2)` test in `stats.test.ts` compares
+      // function-typed fields by reference under vitest's deep-equal,
+      // and a fresh closure per call would defeat that gate.
+      nodeVersion: nodeVersionAccessor,
     }
   }
 

@@ -83,7 +83,7 @@ import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { tieredPropertyTrials } from '@causl/core-testing-internal'
 
-import { createCausl } from '../../src/index.js'
+import { createCausl, type Graph } from '../../src/index.js'
 import type { BackendEngine } from '../../wasm/index.js'
 import {
   __createWasmBackendSyncForTests,
@@ -515,6 +515,115 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
       // §15 contract would slip past pure parity; the absolute
       // oracle catches that.
       expect(jsTrace).toEqual([0, 1, 2, 4, 5, 6, 8, 9])
+    })
+  })
+
+  // ---------------------------------------------------------------
+  // #1242 — `EngineTelemetry.nodeVersion(node)` cross-backend
+  // byte-identity. SPEC §15.1 promotes the per-node version counter
+  // to a public accessor adopters can memoise on (H1 hazard fix, PR
+  // #1245). The counter is a pure derivation of `Commit.changedNodes`,
+  // which is already pinned byte-identically across backends by the
+  // determinism gate (#1059 / PR #1107); therefore `nodeVersion(node)`
+  // must produce the same integer on the TS engine and the Phase-1
+  // WasmBackend wrapper for the same commit sequence.
+  //
+  // Phase-1 caveat: the WasmBackend wraps a TS engine internally
+  // (see `WasmBackend.__graph()`), so the arm fires green by
+  // construction today — same correct dormant-arm behaviour as the
+  // H6 cell above. The gate auto-activates the moment
+  // `loadWasmBackend()` returns a real Rust-driven `BackendEngine`
+  // whose counter implementation could drift.
+  // ---------------------------------------------------------------
+  describe('nodeVersion(node) cross-backend byte-identity (#1242)', () => {
+    it('engine.stats().nodeVersion(node) is byte-identical across TS and WASM after every commit (dormant green today)', async () => {
+      const graphName = 'cross-backend-nodeversion-1242'
+      let wasmBackend: BackendEngine
+      try {
+        wasmBackend = await loadWasmBackendWithPinnedName(graphName)
+      } catch (err) {
+        if (err instanceof WasmBackendUnavailableError) {
+          logWasmSkip(err.message)
+          return
+        }
+        throw err
+      }
+      if (!__isPhase1WasmBackendForTests(wasmBackend)) {
+        throw new Error('Phase-1 invariant broken: backend is not a WasmBackend')
+      }
+      // Build a small DAG on both sides: two inputs feeding a sum
+      // derived, plus a constant derived that depends on nothing.
+      // The constant derived pins H8 sibling-shape isolation (it
+      // MUST stay at version 0 across every commit, on both sides).
+      const jsGraph = createCausl({ name: graphName })
+      const wGraph = wasmBackend.__graph()
+      const ja = jsGraph.input('a', 0)
+      const jb = jsGraph.input('b', 0)
+      const jSum = jsGraph.derived<number>('sum', (get) => get(ja) + get(jb))
+      const jConst = jsGraph.derived<number>('konst', () => 42)
+      jsGraph.read(jSum)
+      jsGraph.read(jConst)
+      const wa = wGraph.input('a', 0)
+      const wb = wGraph.input('b', 0)
+      const wSum = wGraph.derived<number>('sum', (get) => get(wa) + get(wb))
+      const wConst = wGraph.derived<number>('konst', () => 42)
+      wGraph.read(wSum)
+      wGraph.read(wConst)
+      // Trace covers all four nodeVersion semantic arms: real write,
+      // no-op write, empty commit, equality-cutoff (a=2, b=-1 →
+      // sum 1; pre: 0+0=0; post: 1. Then a=3, b=-2 → sum still 1 →
+      // equality cutoff fires; sum's version MUST NOT bump).
+      const trace: ReadonlyArray<{ kind: 'a' | 'b' | 'noop' | 'empty'; value?: number }> = [
+        { kind: 'a', value: 1 },
+        { kind: 'b', value: 1 },
+        { kind: 'a', value: 1 }, // no-op (re-set to current)
+        { kind: 'empty' },
+        { kind: 'a', value: 2 },
+        { kind: 'b', value: -1 }, // sum=1 (unchanged from prior commit)
+        { kind: 'a', value: 3 },
+        { kind: 'b', value: -2 }, // sum=1 again — equality cutoff
+        { kind: 'noop' }, // re-set a and b to their current values
+      ]
+      for (let k = 0; k < trace.length; k++) {
+        const step = trace[k]!
+        const apply = (g: Graph, inA: ReturnType<Graph['input']>, inB: ReturnType<Graph['input']>) => {
+          if (step.kind === 'a') g.commit(`c${k}`, (tx) => tx.set(inA, step.value!))
+          else if (step.kind === 'b') g.commit(`c${k}`, (tx) => tx.set(inB, step.value!))
+          else if (step.kind === 'noop')
+            g.commit(`c${k}`, (tx) => {
+              tx.set(inA, g.read(inA) as number)
+              tx.set(inB, g.read(inB) as number)
+            })
+          else g.commit(`c${k}`, () => {})
+        }
+        apply(jsGraph, ja, jb)
+        apply(wGraph, wa, wb)
+        // Byte-identity assertion: every tracked node's nodeVersion
+        // MUST agree across backends after every commit. A divergence
+        // surfaces here as the failing step index k.
+        expect(jsGraph.stats().nodeVersion(ja)).toBe(wGraph.stats().nodeVersion(wa))
+        expect(jsGraph.stats().nodeVersion(jb)).toBe(wGraph.stats().nodeVersion(wb))
+        expect(jsGraph.stats().nodeVersion(jSum)).toBe(wGraph.stats().nodeVersion(wSum))
+        expect(jsGraph.stats().nodeVersion(jConst)).toBe(wGraph.stats().nodeVersion(wConst))
+      }
+      // Absolute oracle: a regression that satisfies "diverge by the
+      // same shape on both sides" but violates the §15.1 semantics
+      // would slip past pure cross-backend parity. Pin the expected
+      // final counters explicitly. Trace step-by-step (a, b, sum):
+      //   step 0 a→1:  a 0→1, b 0, sum 0→1                  bumps: a, sum
+      //   step 1 b→1:  a 1,   b 0→1, sum 1→2                bumps: b, sum
+      //   step 2 a→1:  no-op                                bumps: (none)
+      //   step 3 empty:                                     bumps: (none)
+      //   step 4 a→2:  a 1→2, b 1, sum 2→3                  bumps: a, sum
+      //   step 5 b→-1: a 2,   b 1→-1, sum 3→1               bumps: b, sum
+      //   step 6 a→3:  a 2→3, b -1, sum 1→2                 bumps: a, sum
+      //   step 7 b→-2: a 3,   b -1→-2, sum 2→1              bumps: b, sum
+      //   step 8 noop: re-set a=3, b=-2 (both unchanged)    bumps: (none)
+      // Final tally: a=3, b=3, sum=6, konst=0.
+      expect(jsGraph.stats().nodeVersion(ja)).toBe(3)
+      expect(jsGraph.stats().nodeVersion(jb)).toBe(3)
+      expect(jsGraph.stats().nodeVersion(jSum)).toBe(6)
+      expect(jsGraph.stats().nodeVersion(jConst)).toBe(0)
     })
   })
 

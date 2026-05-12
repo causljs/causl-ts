@@ -25,42 +25,39 @@
  *      written input. The panel-review H8 hazard the per-node
  *      version counter is designed to defend against.
  *
- * ## How `nodeVersion(node)` is computed in these tests
+ * ## How `nodeVersion(node)` is wired in these tests
  *
- * The current TS engine surfaces "this node's value changed in this
- * commit" through {@link Commit.changedNodes}. The per-node version
- * counter `EngineTelemetry.nodeVersion(node)` documented in
- * `docs/wasm-adoption-guide.md` is the running count of commits in
- * which `node.id ∈ changedNodes` — a pure derivation over the
- * cross-backend-deterministic surface that #1059 / PR #1107 already
- * pins byte-identically across backends. These tests therefore
- * compute the counter inline (a `Map<NodeId, number>` advanced by
- * each commit) and assert the increment semantics directly. When the
- * `EngineTelemetry.nodeVersion(node)` accessor lands as a public
- * surface, these tests swap the inline accumulator for the engine
- * call without changing the assertions.
+ * Issue #1242 promoted `EngineTelemetry.nodeVersion(node)` from an
+ * inline test oracle to a public accessor — the engine now maintains
+ * a per-node version counter map alongside its existing `changed`-set
+ * state and surfaces the count through `engine.stats().nodeVersion(
+ * node)`. These tests therefore call the accessor directly; the
+ * earlier `Map<NodeId, number>` inline oracle is gone. The semantic
+ * contract is unchanged: a no-op commit MUST NOT bump any node's
+ * version, a real commit advances the version of every node in
+ * `commit.changedNodes` by exactly 1, and a derived's version
+ * advances only when its recomputed value actually moved (the
+ * equality-cutoff seam at #972).
  *
  * @see https://github.com/iasbuilt/causl/issues/1156 — this gate.
+ * @see https://github.com/iasbuilt/causl/issues/1242 — the accessor PR.
  * @see https://github.com/iasbuilt/causl/pull/1021 — adopter audit.
  */
 
 import { describe, expect, it } from 'vitest'
-import { createCausl, type Commit, type NodeId } from '../src/index.js'
+import { createCausl, type Graph, type Node } from '../src/index.js'
 
 /**
- * Running per-node version accumulator. Bumps a node's count by 1
- * iff its id appears in `commit.changedNodes`. Returns the updated
- * map (mutated in place).
+ * Read the engine's `nodeVersion(node)` accessor for a given node.
  *
- * Defined freestanding so every test block uses the same single
- * helper — a regression that drifts this helper would surface as a
- * test failure across every arm, not as a silent divergence in one
+ * Thin sugar around `graph.stats().nodeVersion(node)`. Centralised
+ * here so every test block calls the same one-line helper — a future
+ * regression that drifts the accessor's signature surfaces as a test
+ * failure across every arm, not as a silent divergence in one
  * fixture.
  */
-function applyCommit(versions: Map<NodeId, number>, commit: Commit): void {
-  for (const id of commit.changedNodes) {
-    if (versions.has(id)) versions.set(id, versions.get(id)! + 1)
-  }
+function nodeVersion(graph: Graph, node: Node<unknown>): number {
+  return graph.stats().nodeVersion(node)
 }
 
 describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => {
@@ -71,20 +68,19 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
     it('re-setting an input to its current value does NOT bump the input version', () => {
       const g = createCausl({ name: 'noop-arm' })
       const a = g.input('a', 7)
-      const versions = new Map<NodeId, number>([[a.id, 0]])
+      // Pre-write: a never-changed input reports nodeVersion 0.
+      expect(nodeVersion(g, a)).toBe(0)
       // Real write — version advances by 1.
       const c1 = g.commit('first', (tx) => tx.set(a, 99))
-      applyCommit(versions, c1)
-      expect(versions.get(a.id)).toBe(1)
+      expect(c1.changedNodes).toContain(a.id)
+      expect(nodeVersion(g, a)).toBe(1)
       // No-op write — version MUST NOT bump.
       const c2 = g.commit('noop', (tx) => tx.set(a, 99))
       expect(c2.changedNodes.length).toBe(0)
-      applyCommit(versions, c2)
-      expect(versions.get(a.id)).toBe(1)
+      expect(nodeVersion(g, a)).toBe(1)
       // Second real write — version advances again.
-      const c3 = g.commit('second', (tx) => tx.set(a, 100))
-      applyCommit(versions, c3)
-      expect(versions.get(a.id)).toBe(2)
+      g.commit('second', (tx) => tx.set(a, 100))
+      expect(nodeVersion(g, a)).toBe(2)
     })
 
     it('an entirely empty commit (no writes) does NOT bump any version', () => {
@@ -93,22 +89,20 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const b = g.input('b', 0)
       const d = g.derived<number>('d', (get) => get(a) + get(b))
       g.read(d)
-      const versions = new Map<NodeId, number>([
-        [a.id, 0],
-        [b.id, 0],
-        [d.id, 0],
-      ])
       // Seed: a write that bumps a and d.
-      applyCommit(versions, g.commit('seed', (tx) => tx.set(a, 1)))
-      const versionsBefore = new Map(versions)
+      g.commit('seed', (tx) => tx.set(a, 1))
+      const before = {
+        a: nodeVersion(g, a),
+        b: nodeVersion(g, b),
+        d: nodeVersion(g, d),
+      }
       // Empty commit — no writes inside the tx body.
       const empty = g.commit('empty', () => {})
       expect(empty.changedNodes.length).toBe(0)
-      applyCommit(versions, empty)
-      // Every tracked id keeps its prior version exactly.
-      for (const [id, v] of versionsBefore) {
-        expect(versions.get(id)).toBe(v)
-      }
+      // Every tracked node keeps its prior version exactly.
+      expect(nodeVersion(g, a)).toBe(before.a)
+      expect(nodeVersion(g, b)).toBe(before.b)
+      expect(nodeVersion(g, d)).toBe(before.d)
     })
 
     it('re-setting every input to its current value across a multi-input DAG bumps no version', () => {
@@ -118,16 +112,13 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
         inputs.reduce<number>((acc, n) => acc + (get(n) as number), 0),
       )
       g.read(d)
-      const versions = new Map<NodeId, number>()
-      for (const n of inputs) versions.set(n.id, 0)
-      versions.set(d.id, 0)
       // No-op commit — re-set every input to its current value.
       const c = g.commit('noop', (tx) => {
         for (const n of inputs) tx.set(n, g.read(n) as number)
       })
       expect(c.changedNodes.length).toBe(0)
-      applyCommit(versions, c)
-      for (const v of versions.values()) expect(v).toBe(0)
+      for (const n of inputs) expect(nodeVersion(g, n)).toBe(0)
+      expect(nodeVersion(g, d)).toBe(0)
     })
   })
 
@@ -142,18 +133,13 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const a = g.input('a', 1)
       const d = g.derived<number>('d', (get) => get(a) * 0)
       g.read(d)
-      const versions = new Map<NodeId, number>([
-        [a.id, 0],
-        [d.id, 0],
-      ])
       // Write a different `a` — input version bumps, but derived
       // value is `0` either way so the derived version MUST NOT bump.
       const c = g.commit('a:1→2', (tx) => tx.set(a, 2))
-      applyCommit(versions, c)
       expect(c.changedNodes).toContain(a.id)
       expect(c.changedNodes).not.toContain(d.id)
-      expect(versions.get(a.id)).toBe(1)
-      expect(versions.get(d.id)).toBe(0)
+      expect(nodeVersion(g, a)).toBe(1)
+      expect(nodeVersion(g, d)).toBe(0)
     })
 
     it('derived `a + b` does not bump when `a` and `b` change but the sum is the same', () => {
@@ -162,24 +148,18 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const b = g.input('b', 9)
       const d = g.derived<number>('sum', (get) => get(a) + get(b))
       g.read(d) // sum = 10
-      const versions = new Map<NodeId, number>([
-        [a.id, 0],
-        [b.id, 0],
-        [d.id, 0],
-      ])
       // Write a=2, b=8 in one tx — both inputs change, but sum is
       // still 10. The derived's version MUST NOT bump.
       const c = g.commit('a+b=10', (tx) => {
         tx.set(a, 2)
         tx.set(b, 8)
       })
-      applyCommit(versions, c)
       expect(c.changedNodes).toContain(a.id)
       expect(c.changedNodes).toContain(b.id)
       expect(c.changedNodes).not.toContain(d.id)
-      expect(versions.get(a.id)).toBe(1)
-      expect(versions.get(b.id)).toBe(1)
-      expect(versions.get(d.id)).toBe(0)
+      expect(nodeVersion(g, a)).toBe(1)
+      expect(nodeVersion(g, b)).toBe(1)
+      expect(nodeVersion(g, d)).toBe(0)
     })
 
     it('derived nested chain — middle derived unchanged blocks downstream version bumps', () => {
@@ -192,19 +172,13 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const b = g.derived<number>('b', (get) => get(a) * 0)
       const c = g.derived<number>('c', (get) => get(b) + 1)
       g.read(c)
-      const versions = new Map<NodeId, number>([
-        [a.id, 0],
-        [b.id, 0],
-        [c.id, 0],
-      ])
       const commit = g.commit('a:1→2', (tx) => tx.set(a, 2))
-      applyCommit(versions, commit)
       expect(commit.changedNodes).toContain(a.id)
       expect(commit.changedNodes).not.toContain(b.id)
       expect(commit.changedNodes).not.toContain(c.id)
-      expect(versions.get(a.id)).toBe(1)
-      expect(versions.get(b.id)).toBe(0)
-      expect(versions.get(c.id)).toBe(0)
+      expect(nodeVersion(g, a)).toBe(1)
+      expect(nodeVersion(g, b)).toBe(0)
+      expect(nodeVersion(g, c)).toBe(0)
     })
   })
 
@@ -223,22 +197,14 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const dC = g.derived<number>('d_c', (get) => get(c) + 1)
       g.read(dA)
       g.read(dC)
-      const versions = new Map<NodeId, number>([
-        [a.id, 0],
-        [b.id, 0],
-        [c.id, 0],
-        [dA.id, 0],
-        [dC.id, 0],
-      ])
       // Write only `a` — the version of `b`, `c`, and `d_c` MUST
       // NOT change. `a` and `d_a` MUST advance by exactly 1.
-      const commit = g.commit('write-a', (tx) => tx.set(a, 42))
-      applyCommit(versions, commit)
-      expect(versions.get(a.id)).toBe(1)
-      expect(versions.get(dA.id)).toBe(1)
-      expect(versions.get(b.id)).toBe(0)
-      expect(versions.get(c.id)).toBe(0)
-      expect(versions.get(dC.id)).toBe(0)
+      g.commit('write-a', (tx) => tx.set(a, 42))
+      expect(nodeVersion(g, a)).toBe(1)
+      expect(nodeVersion(g, dA)).toBe(1)
+      expect(nodeVersion(g, b)).toBe(0)
+      expect(nodeVersion(g, c)).toBe(0)
+      expect(nodeVersion(g, dC)).toBe(0)
     })
 
     it('disjoint sibling sub-DAG writes never cross-contaminate version counters', () => {
@@ -256,41 +222,34 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
       const rSum = g.derived<number>('R_sum', (get) => get(rA) + get(rB))
       g.read(lSum)
       g.read(rSum)
-      const versions = new Map<NodeId, number>([
-        [lA.id, 0],
-        [lB.id, 0],
-        [lSum.id, 0],
-        [rA.id, 0],
-        [rB.id, 0],
-        [rSum.id, 0],
-      ])
       // Write only into the L sub-DAG.
-      applyCommit(versions, g.commit('L:a→1', (tx) => tx.set(lA, 1)))
-      applyCommit(versions, g.commit('L:b→2', (tx) => tx.set(lB, 2)))
+      g.commit('L:a→1', (tx) => tx.set(lA, 1))
+      g.commit('L:b→2', (tx) => tx.set(lB, 2))
       // R-side versions MUST still be 0.
-      expect(versions.get(rA.id)).toBe(0)
-      expect(versions.get(rB.id)).toBe(0)
-      expect(versions.get(rSum.id)).toBe(0)
+      expect(nodeVersion(g, rA)).toBe(0)
+      expect(nodeVersion(g, rB)).toBe(0)
+      expect(nodeVersion(g, rSum)).toBe(0)
       // L-side: each input bumped once, sum bumped on each (both
       // commits changed the sum value).
-      expect(versions.get(lA.id)).toBe(1)
-      expect(versions.get(lB.id)).toBe(1)
-      expect(versions.get(lSum.id)).toBe(2)
-      // Now write into the R sub-DAG — L-side versions MUST stay put.
-      const lSnapshot = new Map([
-        [lA.id, versions.get(lA.id)!],
-        [lB.id, versions.get(lB.id)!],
-        [lSum.id, versions.get(lSum.id)!],
-      ])
-      applyCommit(versions, g.commit('R:a→1', (tx) => tx.set(rA, 1)))
-      applyCommit(versions, g.commit('R:b→2', (tx) => tx.set(rB, 2)))
-      for (const [id, v] of lSnapshot) {
-        expect(versions.get(id)).toBe(v)
+      expect(nodeVersion(g, lA)).toBe(1)
+      expect(nodeVersion(g, lB)).toBe(1)
+      expect(nodeVersion(g, lSum)).toBe(2)
+      // Snapshot L-side counters before R-side writes.
+      const lSnapshot = {
+        lA: nodeVersion(g, lA),
+        lB: nodeVersion(g, lB),
+        lSum: nodeVersion(g, lSum),
       }
+      // Now write into the R sub-DAG — L-side versions MUST stay put.
+      g.commit('R:a→1', (tx) => tx.set(rA, 1))
+      g.commit('R:b→2', (tx) => tx.set(rB, 2))
+      expect(nodeVersion(g, lA)).toBe(lSnapshot.lA)
+      expect(nodeVersion(g, lB)).toBe(lSnapshot.lB)
+      expect(nodeVersion(g, lSum)).toBe(lSnapshot.lSum)
       // R-side: each input bumped once, sum bumped on each.
-      expect(versions.get(rA.id)).toBe(1)
-      expect(versions.get(rB.id)).toBe(1)
-      expect(versions.get(rSum.id)).toBe(2)
+      expect(nodeVersion(g, rA)).toBe(1)
+      expect(nodeVersion(g, rB)).toBe(1)
+      expect(nodeVersion(g, rSum)).toBe(2)
     })
   })
 
@@ -305,28 +264,17 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
   describe('cross-backend determinism sibling arm', () => {
     it('two TS-engine graphs driven by the same trace agree on every nodeVersion at every step', () => {
       function makeWorld(): {
-        graph: ReturnType<typeof createCausl>
-        a: ReturnType<ReturnType<typeof createCausl>['input']>
-        b: ReturnType<ReturnType<typeof createCausl>['input']>
-        d: ReturnType<ReturnType<typeof createCausl>['derived']>
-        versions: Map<NodeId, number>
+        graph: Graph
+        a: ReturnType<Graph['input']>
+        b: ReturnType<Graph['input']>
+        d: ReturnType<Graph['derived']>
       } {
         const g = createCausl({ name: 'cross-backend-sibling' })
         const a = g.input('a', 0)
         const b = g.input('b', 0)
         const d = g.derived<number>('d', (get) => get(a) + get(b))
         g.read(d)
-        return {
-          graph: g,
-          a,
-          b,
-          d,
-          versions: new Map([
-            [a.id, 0],
-            [b.id, 0],
-            [d.id, 0],
-          ]),
-        }
+        return { graph: g, a, b, d }
       }
       const left = makeWorld()
       const right = makeWorld()
@@ -348,20 +296,43 @@ describe('EngineTelemetry.nodeVersion semantic-invariance (issue #1156)', () => 
         })
         // changedNodes membership must agree on both engines.
         expect([...cL.changedNodes].sort()).toEqual([...cR.changedNodes].sort())
-        applyCommit(left.versions, cL)
-        applyCommit(right.versions, cR)
-        for (const id of left.versions.keys()) {
-          expect(left.versions.get(id)).toBe(right.versions.get(id))
-        }
+        // Cross-backend nodeVersion parity at every step.
+        expect(nodeVersion(left.graph, left.a)).toBe(nodeVersion(right.graph, right.a))
+        expect(nodeVersion(left.graph, left.b)).toBe(nodeVersion(right.graph, right.b))
+        expect(nodeVersion(left.graph, left.d)).toBe(nodeVersion(right.graph, right.d))
       }
       // Final tally: a wrote twice with distinct values (0→1, 1→5)
       // and re-wrote 1 (no-op) and 5 (no-op). b wrote twice with
       // distinct values (0→1, 1→-4). The derived sum: 0→1 (first),
       // then 1→2 (b→1), no-op (a re-write 1), 2→6 (a→5), 6→1 (b→-4),
       // no-op (a re-write 5). So d bumps 4 times.
-      expect(left.versions.get(left.a.id)).toBe(2)
-      expect(left.versions.get(left.b.id)).toBe(2)
-      expect(left.versions.get(left.d.id)).toBe(4)
+      expect(nodeVersion(left.graph, left.a)).toBe(2)
+      expect(nodeVersion(left.graph, left.b)).toBe(2)
+      expect(nodeVersion(left.graph, left.d)).toBe(4)
+    })
+  })
+
+  // -----------------------------------------------------------------
+  // Arm 5: Disposed-node lifecycle. A disposed node's counter is
+  // reset; subsequent reuse (#1164 generational NodeId) starts from
+  // counter 0. Pins the dispose-then-reuse semantics flagged by
+  // #1242's acceptance row.
+  // -----------------------------------------------------------------
+  describe('disposed-node lifecycle', () => {
+    it('disposing a node and re-registering the same id starts the new node at version 0', async () => {
+      const g = createCausl({ name: 'disposed-reuse-arm' })
+      const a = g.input('a', 0)
+      g.commit('w1', (tx) => tx.set(a, 1))
+      g.commit('w2', (tx) => tx.set(a, 2))
+      expect(nodeVersion(g, a)).toBe(2)
+      // Dispose via the internal-dispatch surface (the only public path).
+      const { dispose } = await import('../src/internal.js')
+      dispose(g, a)
+      // Re-register at the same id — the new node MUST start at version 0.
+      const a2 = g.input('a', 0)
+      expect(nodeVersion(g, a2)).toBe(0)
+      g.commit('w3', (tx) => tx.set(a2, 9))
+      expect(nodeVersion(g, a2)).toBe(1)
     })
   })
 })

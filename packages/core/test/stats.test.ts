@@ -473,6 +473,11 @@ describe('graph.stats() — engine telemetry surface (#757)', () => {
           'entries',
           'inputs',
           'lastCommitTime',
+          // #1242 — `nodeVersion(node)` accessor on the snapshot
+          // surface (SPEC §15.1 memoisation key). Lands at the tail
+          // of the literal per the cross-backend telemetry contract's
+          // append-only discipline.
+          'nodeVersion',
           'retainedCommits',
           'subscribersByNodeKeys',
           'subscribersTotal',

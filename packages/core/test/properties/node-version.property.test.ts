@@ -85,47 +85,22 @@ import { describe, expect, it } from 'vitest'
 import { tieredPropertyTrials } from '@causl/core-testing-internal'
 import {
   createCausl,
-  type Commit,
   type Graph,
   type InputNode,
   type Node,
 } from '../../src/index.js'
 
 /**
- * Snapshot of the running `nodeVersion(node)` counter for a set of
- * node ids. Maps `node.id → version`. Built incrementally by
- * `updateVersions(commit, snapshot)`: for every id in
- * `commit.changedNodes` that is being tracked, the snapshot's count
- * for that id is bumped by exactly 1.
+ * Read the engine's `nodeVersion(node)` accessor (#1242).
  *
- * Defined here as a freestanding helper so the property body and the
- * cross-backend sibling property share one definition of the
- * invariant — a regression that drifts the helper would surface as a
- * test failure in both properties, not as a silent divergence.
+ * Thin sugar around `graph.stats().nodeVersion(node)`. Centralised
+ * here so the property body and the cross-backend sibling property
+ * share one definition of the engine accessor surface — a regression
+ * that drifts the accessor signature surfaces as a property failure
+ * in both arms, not as a silent divergence.
  */
-type NodeVersionMap = Map<string, number>
-
-/**
- * Apply a commit's `changedNodes` to a running `NodeVersionMap`.
- * Returns the updated map (mutating in place — the helper is
- * called inside a tight loop, so an allocation per commit would
- * dominate the property's runtime).
- *
- * The function's signature matches the contract under test: for
- * every tracked id, the version advances by 1 iff the id appeared
- * in `commit.changedNodes`. Ids absent from `changedNodes` keep
- * their prior version.
- */
-function updateVersions(
-  commit: Commit,
-  versions: NodeVersionMap,
-): NodeVersionMap {
-  for (const id of commit.changedNodes) {
-    if (versions.has(id)) {
-      versions.set(id, versions.get(id)! + 1)
-    }
-  }
-  return versions
+function nodeVersion(graph: Graph, node: Node<unknown>): number {
+  return graph.stats().nodeVersion(node)
 }
 
 /**
@@ -219,15 +194,21 @@ describe('node-version semantic-invariance gate (#1156)', () => {
           // Oracle: track each node's value across commits; the oracle
           // version is the count of commits in which the node's read()
           // value differs from the prior commit's value.
-          const oracle: NodeVersionMap = new Map()
-          const versions: NodeVersionMap = new Map()
+          const oracle: Map<string, number> = new Map()
           const lastSeen: Map<string, number> = new Map()
-          for (const id of trackedIds) {
-            oracle.set(id, 0)
-            versions.set(id, 0)
+          // Build the tracked id → node map once so the engine
+          // accessor reads route through the correct handle on every
+          // step (the accessor takes `Node<unknown>`, not a raw id).
+          const trackedNodes: Map<string, Node<number>> = new Map()
+          for (const id of trackedIds) oracle.set(id, 0)
+          for (const n of inputs) {
+            lastSeen.set(n.id, graph.read(n) as number)
+            trackedNodes.set(n.id, n)
           }
-          for (const n of inputs) lastSeen.set(n.id, graph.read(n) as number)
-          for (const n of deriveds) lastSeen.set(n.id, graph.read(n) as number)
+          for (const n of deriveds) {
+            lastSeen.set(n.id, graph.read(n) as number)
+            trackedNodes.set(n.id, n)
+          }
 
           for (let k = 0; k < trace.length; k++) {
             const [kind, rawIdx, value] = trace[k]!
@@ -237,7 +218,7 @@ describe('node-version semantic-invariance gate (#1156)', () => {
             // (kind === 2) emits no writes and must produce an empty
             // changedNodes — same invariant as kind === 1 (no-op
             // write) but exercises the no-write fast path.
-            const commit = graph.commit(`c${k}`, (tx) => {
+            graph.commit(`c${k}`, (tx) => {
               if (kind === 0) {
                 tx.set(target, value)
               } else if (kind === 1) {
@@ -248,8 +229,6 @@ describe('node-version semantic-invariance gate (#1156)', () => {
               }
               // kind === 2: no writes — empty commit.
             })
-            // Engine-driven version update.
-            updateVersions(commit, versions)
             // Oracle update: walk every tracked node, compare its
             // post-commit read against the pre-commit read; bump iff
             // they differ under `Object.is`.
@@ -273,21 +252,23 @@ describe('node-version semantic-invariance gate (#1156)', () => {
             // at every step. A divergence here is the failure trace
             // fast-check shrinks to a minimal counter-example.
             for (const id of trackedIds) {
-              if (versions.get(id) !== oracle.get(id)) {
+              const engineVersion = nodeVersion(graph, trackedNodes.get(id)!)
+              if (engineVersion !== oracle.get(id)) {
                 throw new Error(
                   `nodeVersion divergence at step ${k} for ${id}: ` +
-                    `engine=${versions.get(id)} oracle=${oracle.get(id)} ` +
+                    `engine=${engineVersion} oracle=${oracle.get(id)} ` +
                     `(kind=${kind}, idx=${idx}, value=${value})`,
                 )
               }
             }
           }
-          // Final sanity: the engine's accumulated version map equals
-          // the oracle's. fc-friendly Array.from for the diff
-          // surfaces in the failure message.
-          expect(Array.from(versions.entries()).sort()).toEqual(
-            Array.from(oracle.entries()).sort(),
-          )
+          // Final sanity: the engine's accumulated counter matches
+          // the oracle on every tracked node.
+          for (const id of trackedIds) {
+            expect(nodeVersion(graph, trackedNodes.get(id)!)).toBe(
+              oracle.get(id),
+            )
+          }
         },
       ),
       tieredPropertyTrials('node-version/oracle-agreement'),
@@ -315,36 +296,40 @@ describe('node-version semantic-invariance gate (#1156)', () => {
             numInputs,
             numDeriveds,
           )
-          const versions: NodeVersionMap = new Map()
-          for (const id of trackedIds) versions.set(id, 0)
+          // Build a tracked id → node lookup so the engine accessor
+          // can be queried via `Node<unknown>` (the public surface)
+          // rather than a raw id.
+          const trackedNodes: Map<string, Node<number>> = new Map()
+          for (const n of inputs) trackedNodes.set(n.id, n)
+          for (const n of deriveds) trackedNodes.set(n.id, n)
           // Phase 1: drive the real writes. This seeds the graph with
           // a non-trivial state so the no-op commit below has actual
           // values to re-set.
           for (let i = 0; i < writes.length; i++) {
             const [rawIdx, v] = writes[i]!
             const idx = rawIdx % numInputs
-            const c = graph.commit(`w${i}`, (tx) => tx.set(inputs[idx]!, v))
-            updateVersions(c, versions)
+            graph.commit(`w${i}`, (tx) => tx.set(inputs[idx]!, v))
           }
           // Snapshot the version map post-Phase-1 — the no-op commit
           // below must preserve every entry byte-identically.
-          const versionsBeforeNoop = new Map(versions)
+          const versionsBeforeNoop = new Map<string, number>()
+          for (const id of trackedIds) {
+            versionsBeforeNoop.set(id, nodeVersion(graph, trackedNodes.get(id)!))
+          }
           // Phase 2: a no-op commit that writes every input back to
           // its current value. The engine must surface an empty
-          // `changedNodes`; the version map must be unchanged.
+          // `changedNodes`; the version counters must be unchanged.
           const noop = graph.commit('no-op', (tx) => {
             for (const input of inputs) {
               tx.set(input, graph.read(input) as number)
             }
           })
           expect(noop.changedNodes.length).toBe(0)
-          updateVersions(noop, versions)
           for (const id of trackedIds) {
-            expect(versions.get(id)).toBe(versionsBeforeNoop.get(id))
+            expect(nodeVersion(graph, trackedNodes.get(id)!)).toBe(
+              versionsBeforeNoop.get(id),
+            )
           }
-          void deriveds // tracked via trackedIds; deriveds handle is
-          // unused at the assertion level but the closure pins their
-          // registration with the graph.
         },
       ),
       tieredPropertyTrials('node-version/no-op-idempotence'),
@@ -391,48 +376,40 @@ describe('node-version semantic-invariance gate (#1156)', () => {
           g.read(dAB)
           g.read(dC)
           g.read(dConst)
-          const trackedIds = new Set([
-            a.id,
-            b.id,
-            c.id,
-            dAB.id,
-            dC.id,
-            dConst.id,
-          ])
-          const versions: NodeVersionMap = new Map()
-          for (const id of trackedIds) versions.set(id, 0)
           // Oracle: track per-write expected bumps. Writing `a` or
           // `b` MAY bump `d_ab` (only if its value actually moved).
           // Writing `c` MAY bump `d_c`. `d_const` MUST NEVER bump.
-          const aDeps: ReadonlyArray<string> = [dAB.id]
-          const bDeps: ReadonlyArray<string> = [dAB.id]
-          const cDeps: ReadonlyArray<string> = [dC.id]
           const targets = [
-            { node: a, depends: aDeps, otherInputs: [b.id, c.id] },
-            { node: b, depends: bDeps, otherInputs: [a.id, c.id] },
-            { node: c, depends: cDeps, otherInputs: [a.id, b.id] },
+            { node: a, depends: [dAB], otherInputs: [b, c] },
+            { node: b, depends: [dAB], otherInputs: [a, c] },
+            { node: c, depends: [dC], otherInputs: [a, b] },
           ] as const
           const currentValues: Record<'a' | 'b' | 'c', number> = { a: 0, b: 0, c: 0 }
           for (let k = 0; k < writes.length; k++) {
             const [tIdx, value] = writes[k]!
             const target = targets[tIdx]!
             const tKey = (['a', 'b', 'c'] as const)[tIdx]!
-            // Snapshot the version map BEFORE the commit so assertions
-            // below can compare against the pre-commit state. `Map`
-            // does not spread into a plain object, so use the
-            // Map-copy constructor.
-            const before = new Map(versions)
+            // Snapshot the engine's version counter for every tracked
+            // node BEFORE the commit so assertions below can compare
+            // against the pre-commit state.
+            const before = {
+              target: nodeVersion(g, target.node),
+              otherInputs: target.otherInputs.map((n) => nodeVersion(g, n)),
+              dConst: nodeVersion(g, dConst),
+              depends: target.depends.map((n) => nodeVersion(g, n)),
+            }
             const beforeVal = currentValues[tKey]
-            const commit = g.commit(`c${k}`, (tx) => tx.set(target.node, value))
-            updateVersions(commit, versions)
+            g.commit(`c${k}`, (tx) => tx.set(target.node, value))
             // The "other" inputs MUST keep their version exactly.
-            for (const otherId of target.otherInputs) {
-              expect(versions.get(otherId)).toBe(before.get(otherId))
+            for (let i = 0; i < target.otherInputs.length; i++) {
+              expect(nodeVersion(g, target.otherInputs[i]!)).toBe(
+                before.otherInputs[i],
+              )
             }
             // `d_const` MUST keep its version exactly — no input it
             // depends on changed, so the equality cutoff (Phase D)
             // and the dep-free-derived fast path both apply.
-            expect(versions.get(dConst.id)).toBe(before.get(dConst.id))
+            expect(nodeVersion(g, dConst)).toBe(before.dConst)
             // If the write changed the input's value, the input MUST
             // bump by 1 and its downstream deriveds MAY bump (the
             // derived bumps only if its value actually moves — for
@@ -440,23 +417,19 @@ describe('node-version semantic-invariance gate (#1156)', () => {
             // where `a + b` happens to equal the prior `a + b` is a
             // no-op for `d_ab`).
             if (!Object.is(beforeVal, value)) {
-              expect(versions.get(target.node.id)).toBe(
-                (before.get(target.node.id) ?? 0) + 1,
-              )
+              expect(nodeVersion(g, target.node)).toBe(before.target + 1)
               currentValues[tKey] = value
               // Downstream derived must NEVER bump more than 1 per commit.
-              for (const dId of target.depends) {
-                const delta = (versions.get(dId) ?? 0) - (before.get(dId) ?? 0)
+              for (let i = 0; i < target.depends.length; i++) {
+                const delta = nodeVersion(g, target.depends[i]!) - before.depends[i]!
                 expect(delta === 0 || delta === 1).toBe(true)
               }
             } else {
               // Equal-write no-op: the input MUST NOT bump, and the
               // downstream deriveds MUST NOT bump either.
-              expect(versions.get(target.node.id)).toBe(
-                before.get(target.node.id),
-              )
-              for (const dId of target.depends) {
-                expect(versions.get(dId)).toBe(before.get(dId))
+              expect(nodeVersion(g, target.node)).toBe(before.target)
+              for (let i = 0; i < target.depends.length; i++) {
+                expect(nodeVersion(g, target.depends[i]!)).toBe(before.depends[i])
               }
             }
           }
@@ -496,12 +469,16 @@ describe('node-version semantic-invariance gate (#1156)', () => {
         (trace) => {
           const left = buildDag(3, 2)
           const right = buildDag(3, 2)
-          const versionsL: NodeVersionMap = new Map()
-          const versionsR: NodeVersionMap = new Map()
-          for (const id of left.trackedIds) {
-            versionsL.set(id, 0)
-            versionsR.set(id, 0)
-          }
+          // Map each tracked id to the corresponding node handle on
+          // each side. Both worlds use the same id-set (the DAG shape
+          // is deterministic), so iterating either side's trackedIds
+          // is byte-equivalent to iterating the other's.
+          const lNodes: Map<string, Node<number>> = new Map()
+          const rNodes: Map<string, Node<number>> = new Map()
+          for (const n of left.inputs) lNodes.set(n.id, n)
+          for (const n of left.deriveds) lNodes.set(n.id, n)
+          for (const n of right.inputs) rNodes.set(n.id, n)
+          for (const n of right.deriveds) rNodes.set(n.id, n)
           for (let k = 0; k < trace.length; k++) {
             const [kind, rawIdx, value] = trace[k]!
             const idx = rawIdx % 3
@@ -523,12 +500,14 @@ describe('node-version semantic-invariance gate (#1156)', () => {
             expect([...cL.changedNodes].sort()).toEqual(
               [...cR.changedNodes].sort(),
             )
-            updateVersions(cL, versionsL)
-            updateVersions(cR, versionsR)
             // After each commit, every tracked id has the same
-            // version on both sides.
+            // nodeVersion on both sides — pinned via the public
+            // accessor (#1242), which is the cross-backend contract
+            // the future Rust port must satisfy.
             for (const id of left.trackedIds) {
-              expect(versionsL.get(id)).toBe(versionsR.get(id))
+              expect(nodeVersion(left.graph, lNodes.get(id)!)).toBe(
+                nodeVersion(right.graph, rNodes.get(id)!),
+              )
             }
           }
         },

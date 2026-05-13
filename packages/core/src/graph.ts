@@ -825,6 +825,20 @@ function pretenureInputAllocationSites(): void {
   // type representation across the loop. Removing the sink kept
   // the warmup deopt-clean while the freeze call alone defeats the
   // optimiser's DCE pass.)
+  // #1312 — Shape-tracking contract: this loop calls `makeInputEntry`
+  // (the canonical InputEntry constructor) rather than constructing a
+  // local literal. That means if the {@link InputEntry} interface
+  // grows another field (#1311 added `hasDownstreamSubscriber` to the
+  // post-PR shape; future PRs may add more), the warmup automatically
+  // tracks the canonical literal shape — the doc-block on
+  // `makeInputEntry` already gates field-set drift via the source-
+  // state assertion in
+  // `properties/input-allocation-pretenured.property.test.ts`. The
+  // bench-side `pretenure-warmup-deopt-floor.test.ts` (#1312) closes
+  // the loop on `scrolling-viewport × 10000` (the
+  // `scrolling-viewport-10000.deopt-log.txt` fixture is the post-fix
+  // anchor: 0 `dependent allocation site tenuring changed` events on
+  // `makeInputEntry` and `makeInputNode`).
   for (let i = 0; i < PRETENURE_WARMUP_COUNT; i++) {
     const id = `__causl_pretenure__:${i}`
     const node = makeInputNode<unknown>(id)

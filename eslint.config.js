@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import causl from './tools/eslint-plugin-causl/index.js';
 
 export default [
   {
@@ -15,6 +16,9 @@ export default [
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
+    plugins: {
+      causl,
+    },
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -29,6 +33,30 @@ export default [
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // Issue #1151 — property tests must route numRuns through the
+      // fuzz-tier system (`resolveCrossBackendFuzzTier`,
+      // `tieredPropertyOptions`, `tieredPropertyTrials`). Hardcoded
+      // `numRuns` literals silently bypass `CAUSL_FUZZ_TIER` and pin
+      // the suite at one tier, defeating the PR-lane (5k) and nightly
+      // (100k) signal. The allowlist holds files whose hardcoded count
+      // is structurally required (coverage-math spot-checks, etc.) and
+      // each entry is justified by a comment at the call site.
+      'causl/no-hardcoded-property-trials': [
+        'error',
+        {
+          allowlist: [
+            // cross-tree.property.test.tsx line ~808: a
+            // `dag-shape-coverage` spot-check whose Poisson-style
+            // coverage guarantee on the rare linear-chain family
+            // demands 5000+ trials (P(0 hits) at 1000 ≈ 19%, at 5000
+            // ≈ 2e-4 — within the once-per-decade-per-PR target the
+            // §15.2 floor implicitly enforces). A tier-resolved
+            // numRuns would drop to 1000 at the default tier and burn
+            // CI again. Documented inline at the call site.
+            'packages/react/test/cross-tree.property.test.tsx',
+          ],
+        },
       ],
     },
   },

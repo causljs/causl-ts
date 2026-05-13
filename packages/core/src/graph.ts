@@ -3221,7 +3221,20 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     //
     // The Phase 3 Kahn drain reads the same indegree map structure,
     // so its body is unchanged.
-    const affected = new Set<NodeId>()
+    //
+    // #NNNN — fused `affected` + `indegree`. The pre-fusion walker kept
+    // an `affected: Set<NodeId>` for membership and an
+    // `indegree: Map<NodeId, number>` for the Kahn count. Both keysets
+    // are identical at every program point (every `affected.add` is
+    // followed by an `indegree.set`, and every read is in lockstep), so
+    // they collapse to a single Map. `indegree.has(d)` plays the role of
+    // `affected.has(d)`; `indegree.size` replaces `affected.size`;
+    // `indegree.entries()` already drives the Kahn seed loop. The win
+    // is one allocation + one hash probe per BFS edge in Phase 3's
+    // drain (previously `affected.has(d)` THEN `indegree.get(d)`).
+    // Map iteration is insertion-order, which is exactly the BFS
+    // discovery order today — Phase D's topo order is preserved
+    // (SPEC §3 Theorem 2).
     const indegree = new Map<NodeId, number>()
     const queue: NodeId[] = []
     // Seed: each input's immediate downstream gets enqueued with
@@ -3230,8 +3243,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       const downstream = dependents.get(id)
       if (!downstream) continue
       for (const d of downstream) {
-        if (!affected.has(d)) {
-          affected.add(d)
+        if (!indegree.has(d)) {
           indegree.set(d, 0)
           queue.push(d)
         }
@@ -3254,15 +3266,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       const downstream = dependents.get(id)
       if (!downstream) continue
       for (const d of downstream) {
-        if (affected.has(d)) {
+        const cur = indegree.get(d)
+        if (cur !== undefined) {
           // `d` was already discovered by an earlier edge; bump its
           // internal-incoming count by 1 for this newly-walked edge.
-          indegree.set(d, indegree.get(d)! + 1)
+          indegree.set(d, cur + 1)
         } else {
           // First time we see `d`. The current edge counts as 1
           // internal incoming; later visits to `d`'s other parents
           // will bump the count further.
-          affected.add(d)
           indegree.set(d, 1)
           queue.push(d)
         }
@@ -3284,7 +3296,6 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       const downstream = dependents.get(id)
       if (!downstream) continue
       for (const d of downstream) {
-        if (!affected.has(d)) continue
         const cur = indegree.get(d)
         if (cur === undefined) continue
         const next = cur - 1
@@ -3302,10 +3313,10 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // residue node along nodes that remain in the residue (cycles
     // are exactly the strongly-connected components Kahn could not
     // drain).
-    if (ordered.length < affected.size) {
+    if (ordered.length < indegree.size) {
       const orderedSet = new Set(ordered)
       const residue: NodeId[] = []
-      for (const id of affected) {
+      for (const id of indegree.keys()) {
         if (!orderedSet.has(id)) residue.push(id)
       }
       throw new CycleError(recoverCyclePath(residue))

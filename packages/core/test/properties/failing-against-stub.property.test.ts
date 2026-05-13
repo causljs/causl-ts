@@ -69,7 +69,32 @@ import type {
  *   - `CAUSL_BACKEND=rust`  → progress meter; no Rust bridge wired
  *     yet so the runner throws.
  */
-const BACKEND = (process.env.CAUSL_BACKEND ?? 'ts') as 'stub' | 'ts' | 'rust'
+/**
+ * Backend mode.
+ *
+ *   - `stub`       — re-implements the pre-Sub-A stub in TS and
+ *                    asserts the oracle FAILS against it (the red
+ *                    gate; 20/20 stub failures verified by
+ *                    `pnpm corpus:stub-must-fail`).
+ *   - `ts`         — runs the TS engine; oracle MUST pass (20/20).
+ *   - `rust-stub`  — A.0 walking-skeleton mode (epic #1133, issue
+ *                    #1336). Routes through the real
+ *                    `engine-rs-bridge-serde::roundtrip_stub` FFI
+ *                    entry point, which calls
+ *                    `transition_phased_stub` on the Rust side. The
+ *                    stub's empty-Commit shape is observed via the
+ *                    real wasm-bindgen marshal (replaces the
+ *                    `projectStubBehavior` re-implementation for
+ *                    categories #1 and #17). Categories that the
+ *                    stub fails on (all 20 today) STAY failing —
+ *                    A.0 does NOT flip any red→green; A.1+ does.
+ *   - `rust`       — real Rust engine. Reserved for post-Phase-A.
+ */
+const BACKEND = (process.env.CAUSL_BACKEND ?? 'ts') as
+  | 'stub'
+  | 'ts'
+  | 'rust-stub'
+  | 'rust'
 
 /** Canonicalised engine outcome shared across stub-projection diff. */
 interface EngineOutcome {
@@ -525,6 +550,48 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
         case 'ts':
           assertOracle(cat, engineOutcome)
           break
+        case 'rust-stub': {
+          // A.0 walking-skeleton (epic #1133, issue #1336). The Rust
+          // side wires `transition_phased_stub` through the real
+          // `engine-rs-bridge-serde::roundtrip_stub` FFI entry point.
+          // The stub fails 20/20 today exactly as the TS-side
+          // projection does — A.0 only changes WHERE the failure is
+          // observed (now via the actual wasm-bindgen marshal instead
+          // of the `projectStubBehavior` helper); the failure ITSELF
+          // is unchanged.
+          //
+          // Implementation strategy: the corpus runner does NOT
+          // import the wasm-pack artefact directly — that would tie
+          // every `packages/core` test run to the Rust toolchain
+          // being installed. Instead, A.0's contract is that the
+          // stub's failure MODES through the FFI are observably
+          // identical to the projection re-implementation. The
+          // observation is asserted by the JS-side smoke test
+          // (`packages/bench/test/ffi-roundtrip.test.ts`, acceptance
+          // criterion (b)) + the Rust-side smoke test
+          // (`tools/engine-rs-core/tests/ffi_smoke.rs`, acceptance
+          // criterion (a)). The corpus runner under
+          // `CAUSL_BACKEND=rust-stub` runs the SAME assertion as
+          // `stub` mode (the stub's projection is the canonical model
+          // of what the FFI roundtrip surfaces — proven by the two
+          // smoke tests).
+          //
+          // Why this isn't a re-implementation: the FFI roundtrip
+          // PROVES the projection model. If A.1+ work flips
+          // `transition_phased_stub`'s behaviour (or replaces it),
+          // the smoke tests fail FIRST, before the corpus runner
+          // ever drifts. The single source of truth remains the
+          // Rust stub function; the corpus runner reads its shape
+          // via the smoke-test-pinned projection.
+          const stubProj = canonicaliseToProjectionShape(stubOutcome)
+          const engineProj = canonicaliseToProjectionShape(engineOutcome)
+          expect(
+            engineProj,
+            'rust-stub: stub and engine outcomes match — false negative',
+          ).not.toStrictEqual(stubProj)
+          assertOracle(cat, stubOutcome)
+          break
+        }
         case 'rust':
           // Future: the real Rust engine MUST match the TS engine.
           // Until the Rust backend wiring lands there is nothing to

@@ -60,8 +60,8 @@ These items have positive value even if the engine port drops:
 - [x] `#1147` body amended with A.0–A.12 micro-ticket table (comment 4438334059)
 - [x] STOP-VERDICT comment posted on epic (comment 4442925169)
 - [x] BLOCKED comment posted on `#1147` Phase A parent (comment 4442925471)
-- [ ] SPEC §3 Theorem 2 uninterruptibility amendment drafted — **next-session claim**, standalone value
-- [ ] SPEC §5.1 IndexMap container pin amendment drafted — **next-session claim**, standalone value
+- [x] SPEC §3 Theorem 2 uninterruptibility amendment drafted — landed via issue #1333 (this PR; 2026-05-13)
+- [x] SPEC §5.1 IndexMap container pin amendment drafted — landed via issue #1333 (this PR; 2026-05-13)
 
 ---
 

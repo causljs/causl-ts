@@ -196,8 +196,8 @@ Per the perf-floor-probe design agent. Probe name: `op-rust-bridge-floor-1k`. St
 - **If Phase 0 is complete** → claim **Phase 1 blockers in this order**:
   1. `#1150` — bundle ceiling violation must close (NO-GO blocker)
   2. `#1151` — hardcoded trial counts codemod + lint rule
-  3. SPEC §3 Theorem 2 uninterruptibility amendment (file as PR against `SPEC.md`)
-  4. SPEC §5.1 IndexMap pin amendment
+  3. SPEC §3 Theorem 2 uninterruptibility amendment (file as PR against `SPEC.md`) — **SHIPPED** via issue #1333 (2026-05-13)
+  4. SPEC §5.1 IndexMap pin amendment — **SHIPPED** via issue #1333 (2026-05-13)
   5. `#1160` Criterion 6 + 7 re-open (the closed issue gets amended sub-issues)
 - **If Phase 1 is complete** → claim **A.0** (walking-skeleton FFI roundtrip).
 - **If Phase A is mid-flight** → check `git log origin/dev --oneline -20` for the last `A.N` commit; claim `A.(N+1)`.
@@ -207,7 +207,7 @@ Per the perf-floor-probe design agent. Probe name: `op-rust-bridge-floor-1k`. St
 - [ ] ABI shape decision (#1160) re-opened with Criteria 6+7
 - [ ] failing_against_stub corpus running red on stub
 - [ ] A.1 perf-floor probe scaffolding in place
-- [ ] SPEC §3 + §5.1 amendments drafted
+- [x] SPEC §3 + §5.1 amendments drafted — landed via issue #1333 (2026-05-13)
 
 **Handoff details**: see `docs/epic-1133/HANDOFF.md` (per-session bookmark, in addition to this canonical plan).
 
@@ -250,8 +250,8 @@ Code references:
 - `tools/engine-rs-bridge-serde/src/lib.rs:60-78` — current bridge cost source
 
 SPEC sections to amend (drafted in Phase 1):
-- `SPEC.md` §3 (Theorem 2 uninterruptibility)
-- `SPEC.md` §5.1 (IndexMap container pin, subscriber throw isolation, Phase G ordering)
+- `SPEC.md` §3 (Theorem 2 uninterruptibility) — **SHIPPED** via issue #1333 (2026-05-13)
+- `SPEC.md` §5.1 (IndexMap container pin) — **SHIPPED** via issue #1333 (2026-05-13); subscriber throw isolation + Phase G ordering remain deferred
 - `SPEC.md` §5.2 (rollback pre-image structure)
 - `SPEC.md` §15.1 (value-type compatibility / `JsonRoundtrippable`)
 - `SPEC.md` §17.5 (perf residual band post-Rust)

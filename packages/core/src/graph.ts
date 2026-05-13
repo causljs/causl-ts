@@ -220,6 +220,49 @@ interface InputEntry {
    * because the read-shadow probe gates on `lastStagedAt` first.
    */
   lastStagedRow: number
+  /**
+   * #1303 — O(1) cache of "this input has at least one transitively-
+   * downstream subscriber". Mirrors the predicate
+   * "any `SubscriptionEntry s` exists where `s.node` is reachable
+   * along the `dependents` adjacency forward from this input id", i.e.
+   * a subscriber on this input itself OR on any derived (or chain of
+   * deriveds) whose recorded read-set transitively includes this id.
+   *
+   * Maintained by:
+   *   - `subscribe` / `subscribeMany` — walks upward via `e.deps` from
+   *     the subscribed node and increments a per-node refcount; the
+   *     flag flips `false → true` when an InputEntry's count crosses
+   *     from 0 to ≥1.
+   *   - The user-returned `unsubscribe` closure + `disposeManyGroup`
+   *     + the Phase G transient drain + `_dispose(node)` — symmetric
+   *     decrement; the flag flips `true → false` when the count
+   *     crosses back to 0.
+   *   - `setDeps` / `setDepsFromArray` edge add / edge remove — when
+   *     a derived `D` with downstream subscribers (i.e. its own
+   *     refcount > 0) gains or loses an upstream edge, the refcount
+   *     delta `±D.refcount` is propagated up through the new / old
+   *     upstream's ancestor chain, flipping any InputEntry flag
+   *     whose count crossed 0.
+   *
+   * Phase G entry gate (`commitInternal`) consults
+   * {@link anyChangedInputHasSubscriber} which probes this flag for
+   * each id in `changedInputIds`; if every flag is `false`, the
+   * dispatch is short-circuited. The check is observable-equivalent
+   * to running Phase G: every subscriber whose value could have moved
+   * lives transitively-downstream of at least one changed input, and
+   * if no such subscriber exists, every `bucket = subscriptionsByNode
+   * .get(changedId)` in the inner loop would have returned
+   * `undefined` and `continue`d anyway. The flag pulls that probe
+   * up to the outer gate.
+   *
+   * Per-node refcount storage lives in the closure-level
+   * `subscriberRefcount` Map (sparse — only entries with `> 0` carry
+   * a key). Keeping the count off the entry preserves the post-#915 /
+   * #994 / #995 5-field InputEntry hidden-class monomorphism; a
+   * single boolean slot is the smallest addition that lets the
+   * Phase G gate ask the question without a Map probe.
+   */
+  hasDownstreamSubscriber: boolean
   // #915 — `inputRegisteredAt` and `serializableMemo` moved to
   // sibling Maps (`inputRegisteredAtMap` and `inputSerializableMemo`
   // in the `createCausl` closure). Both are observability /
@@ -227,11 +270,13 @@ interface InputEntry {
   // Phase F.6 boundaries respectively, never on the per-commit hot
   // path. Keeping them off the entry shrinks the per-input
   // allocation (5 fields after #915, plus #994's
-  // `hasDependents` boolean for the `tx.set` fast-path gate);
-  // matches the lazy-mint discipline PR #929 (#916) applied to
-  // SubscriptionEntry. The microbench `op-input-create-1k` paid
-  // for both fields on every input creation even when the user
-  // never opted into retention or serialization.
+  // `hasDependents` boolean for the `tx.set` fast-path gate, plus
+  // #1303's `hasDownstreamSubscriber` boolean for the Phase G
+  // entry-gate short-circuit); matches the lazy-mint discipline
+  // PR #929 (#916) applied to SubscriptionEntry. The microbench
+  // `op-input-create-1k` paid for both fields on every input
+  // creation even when the user never opted into retention or
+  // serialization.
 }
 
 /**
@@ -649,6 +694,12 @@ function makeInputEntry<T>(
     // rationale.
     lastStagedAt: -1,
     lastStagedRow: -1,
+    // #1303 — every freshly-registered input starts with no
+    // transitively-downstream subscriber. `subscribe` flips this true
+    // when the per-node refcount crosses 0 → ≥1 (either by a direct
+    // subscriber on this input or by a `setDeps` edge that newly
+    // routes a subscribed-derived's path through this input).
+    hasDownstreamSubscriber: false,
   }
 }
 
@@ -1202,6 +1253,37 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   const explainHandles = new Map<NodeId, DerivedNode<Explanation>>()
   /** Reverse-dependency graph: for each node, the set of derived ids that read it. */
   const dependents = new Map<NodeId, Set<NodeId>>()
+  /**
+   * #1303 — per-node path-count refcount of subscribers reachable
+   * transitively-downstream of each node along the `dependents`
+   * adjacency. Sparse: an entry with `0` paths-to-subscribers has no
+   * key in this Map (the entry is removed when its count
+   * decrements back to 0).
+   *
+   * Path semantics: each (subscription-entry, dep-chain-from-this-
+   * node-to-subscription-target) pair contributes 1 to the count.
+   * Diamonds inflate the count above the distinct-subscriber cardinal
+   * — that's deliberate and irrelevant to the only consumer: the
+   * boolean `count > 0` predicate that decides whether to flip the
+   * matching {@link InputEntry.hasDownstreamSubscriber} flag.
+   *
+   * Maintained at three sites:
+   *   - `subscribe` / `subscribeMany` increment along the path from
+   *     the subscribed node up through `e.deps` to every transitive
+   *     ancestor.
+   *   - The user-returned `unsubscribe`, `disposeManyGroup`, the
+   *     Phase G transient drain, and `_dispose(node)` decrement
+   *     symmetrically.
+   *   - `setDeps` / `setDepsFromArray` propagate `±D.subscriberRefcount`
+   *     up through every newly-added / newly-removed upstream of the
+   *     derived `D`, mirroring the path delta the dep-edge change
+   *     introduces.
+   *
+   * For an InputEntry `i`, `subscriberRefcount.get(i.id) > 0` iff
+   * `i.hasDownstreamSubscriber` is `true`; the bool slot is the hot-
+   * path read (Phase G entry gate, no Map probe needed).
+   */
+  const subscriberRefcount = new Map<NodeId, number>()
   /**
    * Disposed-node tombstones: id → GraphTime at which disposal was recorded.
    * Lookups on disposed ids surface {@link NodeDisposedError} rather than
@@ -1759,6 +1841,100 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     return false
   }
 
+  /**
+   * #1303 — Phase G outer-gate predicate: returns true iff any
+   * `changedInputIds` entry has a transitively-downstream subscriber.
+   * Probes the per-entry {@link InputEntry.hasDownstreamSubscriber}
+   * boolean (O(1) field load), short-circuiting on the first `true`.
+   *
+   * When this returns `false`, Phase G's inner loop would visit every
+   * `changedId` and find `subscriptionsByNode.get(changedId) ===
+   * undefined` (no direct subscriber on this input or any of its
+   * transitive consumers), `continue` past it, and ultimately fire
+   * zero observers — the dispatch is dead work. The gate hoists the
+   * "any work?" question above the iteration so the entire
+   * `phaseG_dispatchPerNodeSubscribers` call frame can be skipped on
+   * subscriber-free commits.
+   *
+   * Note: the predicate keys off `changedInputIds` (the Phase F input
+   * deltas), not `changed` (which includes Phase D's downstream
+   * deriveds). This is correct because every subscriber Phase G might
+   * fire is anchored on some node whose value moved — and such a
+   * node's movement was either (a) a direct input mutation or
+   * (b) a Phase D recompute caused by an upstream input mutation.
+   * Either way, an unchanged subscriber-bearing subtree maps back to
+   * at least one changed input id whose flag is `true`.
+   */
+  function anyChangedInputHasSubscriber(
+    changedInputIds: readonly NodeId[],
+  ): boolean {
+    if (changedInputIds.length === 0) return false
+    // #1303 — the bool field is the hot-path read; no Map probe in
+    // the inner loop. Skipping `entries.get` on the cold branch
+    // (count === 0) is the win: an input whose flag is `false` has
+    // its key absent from `subscriberRefcount` AND no entry in
+    // `subscriptionsByNode` for any of its transitive consumers.
+    for (const id of changedInputIds) {
+      const e = entries.get(id)
+      if (e !== undefined && e.kind === 'input' && e.hasDownstreamSubscriber) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * #1303 — propagate a subscriber path-count `delta` up from
+   * `startId` through every transitive upstream along the `e.deps`
+   * adjacency. Visits each ancestor as many times as there are
+   * distinct dep paths reaching it from `startId` (diamonds inflate
+   * the count, which is harmless for the boolean `count > 0`
+   * predicate the gate reads).
+   *
+   * Iterative DFS (stack-based) so 10k-deep chains don't consume V8
+   * frames. No visited-set: visits count multiplicities deliberately
+   * — see the `subscriberRefcount` Map's path-counting doc-comment.
+   *
+   * Flips {@link InputEntry.hasDownstreamSubscriber} whenever an
+   * input's count crosses 0 (false → true on positive delta;
+   * true → false on negative delta).
+   *
+   * @param startId - The node whose downstream-subscriber count
+   *   shifted by `delta`. The walk includes `startId` itself so
+   *   subscribing to an input directly (no derived in between) still
+   *   bumps the flag on that input.
+   * @param delta - Signed integer; positive on subscribe / edge-add,
+   *   negative on unsubscribe / edge-remove.
+   */
+  function bumpSubscriberRefcountUp(startId: NodeId, delta: number): void {
+    if (delta === 0) return
+    // Iterative walk; `e.deps` is forward upward in the dependency
+    // graph (the derived's read-set), which is exactly the path to
+    // every ancestor input.
+    const stack: NodeId[] = [startId]
+    while (stack.length > 0) {
+      const cur = stack.pop()!
+      const e = entries.get(cur)
+      if (e === undefined) continue
+      const prev = subscriberRefcount.get(cur) ?? 0
+      const next = prev + delta
+      if (next === 0) {
+        subscriberRefcount.delete(cur)
+        if (e.kind === 'input' && e.hasDownstreamSubscriber) {
+          e.hasDownstreamSubscriber = false
+        }
+      } else {
+        subscriberRefcount.set(cur, next)
+        if (e.kind === 'input' && !e.hasDownstreamSubscriber && next > 0) {
+          e.hasDownstreamSubscriber = true
+        }
+      }
+      if (e.kind === 'derived') {
+        for (const dep of e.deps) stack.push(dep)
+      }
+    }
+  }
+
   function setDeps(derivedId: NodeId, nextDeps: Set<NodeId>): void {
     const prev = entries.get(derivedId)
     if (!prev || prev.kind !== 'derived') return
@@ -1808,6 +1984,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         return
       }
     }
+    // #1303 — derived `prev`'s own downstream-subscriber path count.
+    // When this is > 0, dep-edge changes propagate `±derivedSubCount`
+    // up through the changed-upstream's transitive ancestors so
+    // every InputEntry on the new/old path has its
+    // `hasDownstreamSubscriber` flag refreshed. When 0, no
+    // propagation is needed (no path routes a subscriber through
+    // this derived).
+    const derivedSubCount = subscriberRefcount.get(derivedId) ?? 0
     // Remove reverse-dep edges for upstreams the derivation no longer reads.
     for (const oldDep of prev.deps) {
       if (!nextDeps.has(oldDep)) {
@@ -1827,6 +2011,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
               upstream.hasDependents = false
             }
           }
+        }
+        // #1303 — subtract this derived's downstream-subscriber
+        // path count from the dropped upstream and its ancestors.
+        // The edge `derivedId → oldDep` (forward read) used to
+        // route `derivedSubCount` paths up; removing it retires
+        // those paths.
+        if (derivedSubCount > 0) {
+          bumpSubscriberRefcountUp(oldDep, -derivedSubCount)
         }
       }
     }
@@ -1848,6 +2040,13 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         if (upstream !== undefined && upstream.kind === 'input') {
           upstream.hasDependents = true
         }
+      }
+      // #1303 — add this derived's downstream-subscriber path
+      // count to the freshly-added upstream and its ancestors.
+      // Mirrors the remove arm above; only fires for genuinely-new
+      // upstreams (i.e. not already in `prev.deps`).
+      if (derivedSubCount > 0 && !prev.deps.has(newDep)) {
+        bumpSubscriberRefcountUp(newDep, +derivedSubCount)
       }
     }
     // #715 follow-up — keep `commitLogConsumerCount` in sync with the
@@ -1941,6 +2140,11 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // already proved the sets disagree if they had the same size.
     const next = new Set<NodeId>()
     for (let i = 0; i < len; i++) next.add(arr[i]!)
+    // #1303 — derived `prev`'s own downstream-subscriber path
+    // count, captured BEFORE the dep diff so the propagation walks
+    // see the count as it was when the prior edge set was current.
+    // See `setDeps` for the full rationale.
+    const derivedSubCount = subscriberRefcount.get(derivedId) ?? 0
     // Remove reverse-dep edges for upstreams the derivation no longer
     // reads.
     for (const oldDep of prevDeps) {
@@ -1957,6 +2161,11 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
               upstream.hasDependents = false
             }
           }
+        }
+        // #1303 — retire dropped-edge path-count contribution.
+        // See `setDeps` for the full rationale.
+        if (derivedSubCount > 0) {
+          bumpSubscriberRefcountUp(oldDep, -derivedSubCount)
         }
       }
     }
@@ -1979,6 +2188,13 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         if (upstream !== undefined && upstream.kind === 'input') {
           upstream.hasDependents = true
         }
+      }
+      // #1303 — credit newly-added-edge path-count contribution.
+      // Only fires when the dep is genuinely new (i.e. not in
+      // `prevDeps`); steady-state dep-set stability (the
+      // structural-equality fast path above) never reaches here.
+      if (derivedSubCount > 0 && !prevDeps.has(newDep)) {
+        bumpSubscriberRefcountUp(newDep, +derivedSubCount)
       }
     }
     // #715 follow-up — keep `commitLogConsumerCount` in sync with
@@ -4489,7 +4705,33 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // `readEntry` + `Object.is` work. Observable contract is
       // unchanged: a subscriber whose underlying value didn't move
       // does not fire either way.
-      if (changed.size > 0) {
+      //
+      // #1303 — additional outer-gate short-circuit: if no changed
+      // input has a transitively-downstream subscriber AND no
+      // commit-log subscriber AND no projection registration is
+      // live, the inner loop's `subscriptionsByNode.get(id)` would
+      // return `undefined` for every changed id. The
+      // `anyChangedInputHasSubscriber` probe answers the same
+      // question against the cached `InputEntry
+      // .hasDownstreamSubscriber` flag in O(|changedInputIds|) field
+      // loads. The auxiliary disjuncts cover the two cases the
+      // input-side flag cannot see: (a) the engine-owned commit-log
+      // derived which is updated by Phase F.4 (not Phase D) and
+      // therefore enters `changed` without flowing through any
+      // input id; (b) `subscribeReads` projection registrations
+      // which Phase G dispatches against `subscribeReadsByNode`,
+      // not `subscriptionsByNode`. Observable contract preserved
+      // per §3 Theorem 2: a subscriber fires only when its observed
+      // node's value moved; the new gate skips the dispatch exactly
+      // when no path from a changed node reaches any subscribed
+      // node — both per-node and projection arms.
+      if (
+        changed.size > 0 &&
+        (anyChangedInputHasSubscriber(changedInputIds) ||
+          (changed.has(COMMIT_LOG_ID) &&
+            (subscriberRefcount.get(COMMIT_LOG_ID) ?? 0) > 0) ||
+          subscribeReadsRegistrations.size > 0)
+      ) {
         phaseG_dispatchPerNodeSubscribers(changed, c, now)
       }
 
@@ -4641,6 +4883,13 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
             b.delete(sub)
             if (b.size === 0) subscriptionsByNode.delete(sub.node.id)
           }
+          // #1303 — symmetric path-count decrement for the single-node
+          // transient auto-dispose. `wasPresent` gates the bump so a
+          // duplicate drop (e.g. the user called the returned
+          // `unsubscribe` between Phase G fire and the drain) is a
+          // no-op. Many-group transients route through
+          // `disposeManyGroup` above which already handles the bump.
+          if (wasPresent) bumpSubscriberRefcountUp(sub.node.id, -1)
           if (wasPresent && sub.node.id === COMMIT_LOG_ID) {
             commitLogConsumerCount--
           }
@@ -5093,6 +5342,17 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       subscriptionsByNode.set(node.id, bucket)
     }
     bucket.add(sub)
+    // #1303 — bump the downstream-subscriber path-count from this
+    // node up through every transitive upstream input. Flips
+    // `hasDownstreamSubscriber` from `false` to `true` on every
+    // upstream input whose count just crossed 0 → ≥1. The matching
+    // decrement lives in the user-returned `unsubscribe` closure
+    // below (and the Phase G transient drain / `_dispose` symmetric
+    // paths). The walk is `O(|ancestors|)` per registration; the
+    // matching commit-time win short-circuits the Phase G outer
+    // gate when zero changed inputs route through a subscribed
+    // subtree.
+    bumpSubscriberRefcountUp(node.id, +1)
     // #715 follow-up — bump the commitLog consumer counter when this
     // subscription targets the engine-owned commitLog node. Decrement
     // is in the unsubscribe closure below. Disposal of the commitLog
@@ -5132,6 +5392,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         b.delete(sub)
         if (b.size === 0) subscriptionsByNode.delete(node.id)
       }
+      // #1303 — symmetric decrement gated on `wasPresent` so a
+      // duplicate user-side unsubscribe (or one called after the
+      // Phase G transient drain / `_dispose(node)` already pulled
+      // the entry) is a no-op for the path-count. Walking up from
+      // `node.id` decrements every transitive ancestor by 1; any
+      // InputEntry whose count crosses ≥1 → 0 has its
+      // `hasDownstreamSubscriber` flag flipped back to `false`.
+      if (wasPresent) bumpSubscriberRefcountUp(node.id, -1)
       if (wasPresent && node.id === COMMIT_LOG_ID) commitLogConsumerCount--
       // #696 — gated on `wasPresent` so a duplicate user-side
       // unsubscribe (or one called after the Phase G drain has
@@ -5167,6 +5435,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         b.delete(entry)
         if (b.size === 0) subscriptionsByNode.delete(entry.node.id)
       }
+      // #1303 — symmetric path-count decrement per member, mirroring
+      // the per-member `+1` recorded in `subscribeMany` below. Each
+      // member contributed one path to every transitive upstream of
+      // its target node; dropping the group walks each path back to
+      // 0. `wasPresent` gates the decrement so a stale member
+      // (e.g. one already removed by `_dispose(memberNode)`) is a
+      // no-op.
+      if (wasPresent) bumpSubscriberRefcountUp(entry.node.id, -1)
       if (entry.node.id === COMMIT_LOG_ID) commitLogConsumerCount--
       // #696 — symmetric decrement for `subscribeMany({ transient: true })`
       // groups. Every entry of a transient group contributes one count
@@ -5295,6 +5571,13 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         subscriptionsByNode.set(node.id, bucket)
       }
       bucket.add(sub)
+      // #1303 — per-member path-count increment, matching the
+      // `subscribe` single-node arm. Each member contributes one
+      // path from its target node up through every transitive
+      // upstream input; flips `hasDownstreamSubscriber` on any
+      // input whose count just crossed 0 → ≥1. Symmetric drop is
+      // in `disposeManyGroup`.
+      bumpSubscriberRefcountUp(node.id, +1)
       if (node.id === COMMIT_LOG_ID) commitLogConsumerCount++
       // #696 — per-entry contribution to the running transient counter.
       // `transient` is the shared group flag; every entry contributes
@@ -6554,6 +6837,16 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     for (const sub of subscriptions) {
       if (sub.node.id === id) {
         subscriptions.delete(sub)
+        // #1303 — symmetric path-count decrement when disposal
+        // cancels a subscription. Mirrors the `subscribe` /
+        // `subscribeMany` `+1` per-entry contribution. Many-group
+        // members on the disposed node are handled member-by-
+        // member; the group's other members on *different* nodes
+        // continue to contribute their own +1s (the group is not
+        // bulk-disposed by a single-node dispose). Done BEFORE
+        // `entries.delete(id)` below so the bump walk can still
+        // resolve `id`'s entry shape.
+        bumpSubscriberRefcountUp(sub.node.id, -1)
         if (id === COMMIT_LOG_ID) commitLogConsumerCount--
         // #696 — keep `transientSubscriberCount` honest when a
         // transient subscription is cancelled by node disposal
@@ -6614,6 +6907,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // back to the same string id) starts from a fresh counter at 0.
     // Cheap unconditional delete; missing-key delete is O(1) on Map.
     nodeVersions.delete(id)
+    // #1303 — drop any residual path-count entry for the disposed
+    // id. After the subscription-cancel walk above and the dep-edge
+    // teardown, the count should be 0 (sparse Map invariant), but
+    // an unconditional `delete` is the safe, O(1) cleanup that
+    // matches the surrounding `nodeVersions.delete(id)` /
+    // `inputRegisteredAtMap.delete(id)` shape. Reuse of the id by a
+    // future `input()` / `derived()` registration must not inherit a
+    // stale path-count from the previous lifecycle.
+    subscriberRefcount.delete(id)
     disposed.set(id, now)
     // FIFO-evict the oldest tombstone past the cap. JS Map iteration
     // is insertion-ordered, so the head of `keys()` is the oldest

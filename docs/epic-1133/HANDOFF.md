@@ -8,11 +8,11 @@
 
 **Last session**: 2026-05-13 (Phase A kickoff — **A.0 walking-skeleton FFI roundtrip shipped under STOP-VERDICT override**)
 
-**dev branch HEAD**: `c72da8aa` (pre-A.0). Updated to A.0 merge commit by the closing handoff entry of this session.
+**dev branch HEAD**: `0706d19a` after Phase A complete + this handoff.
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: A (Engine port) — **A.0 IN-FLIGHT / SHIPPED THIS SESSION**.
+**Phase**: **A COMPLETE** (13/13 micro-tickets A.0-A.12 landed). Phase B (#1134) claimable next.
 
 **EPIC STATUS**: 🟢 **Project-owner GO-with-override on STOP-VERDICT** (comment 4444516666 on #1133): "GO with implementing all aspects of EPIC". A.0 is PIVOT-variant-independent — the walking-skeleton roundtrip is a precondition for any boundary architecture (serde / opaque-handle / batched / GC bridge), so the override applies cleanly to A.0. The 35×-over-threshold serde measurement (PR #1329) remains on record at `#1133` comment 4442925169; A.0 reuses the serde marshal pattern per the user brief (the ABI bench at `docs/abi-ab-bench.md` records opaque-handle winning ≥3.0× — a future PR can re-litigate the ABI choice if the epic pivots).
 
@@ -207,6 +207,52 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 **Local validate**: `pnpm validate` GREEN (typecheck + build + test:run + docs:test all pass).
 
 **Next ticket**: A.1 — Precondition: re-entrancy + tx-aliveness guards (`transition/validate.rs` new file; `CommitInProgressError` + `StaleTxError` ports from `graph.ts:4134/4173`). 2-day estimate per PLAN §5. **NOTE**: A.1's brief calls out the perf-floor probe firing point — given the override is already in place, A.1 proceeds without re-checking the probe.
+
+---
+
+### Session 2026-05-13 — Phase A COMPLETE (continuation)
+
+**Goal**: per user-override of STOP-VERDICT (2026-05-13), implement full epic. Auto-chain A.10 → A.11 → A.12 authorized.
+
+**Landed on `dev`** (Phase A entirety, 13 micro-tickets, 12 PRs across this session-continuation):
+- A.0 (#1337, `9b68d2d8`) ABI shape lock + walking-skeleton FFI roundtrip
+- A.1 (#1339, `4931e79c`) Precondition re-entrancy + tx-aliveness
+- A.2 (#1341, `c9fafa67`) Precondition node-resolution + generational NodeId validator
+- A.3 (#1343, `1cb1514a`) GraphTime monotonicity + Phase C clock advance
+- A.4 (#1345, `cb641bc1`) Tx::set slow-path staging
+- A.5 (#1347, `a301eba7`) Phase B publish + Object.is/SameValue + rollback pre-image
+- A.6 (#1349, `3c57b667`) Catch-arm rollback walk (SPEC §3 Theorem 3 preserved)
+- A.7 (#1351, `54d9a1ea`) Tx::set fast path (hasDependents=false)
+- A.8 (#1353, `079085ab`) Phase A.5 fast-path rollback-row compaction
+- A.9 (#1355, `030beabb`) Phase C.5 lastWriteTime stamp
+- A.10 (#1357, `03cd5b6d`) Typestate phase walker refactor (compile-time phase-ordering guarantee)
+- A.11 (#1359, `1a3ca1ee`) File-split DECISION ticket (Metz audit — all 8 files survived)
+- A.12 (#1361, `0706d19a`) BackendEngine trait decomposition (Transitioner real; Reader/Persister/Observable stubbed for #1136/#1144/#1145) + closes Phase A parent #1147
+
+**Issues closed (manual fallback pattern at 18/18 streak this session)**:
+- Phase A children: #1336, #1338, #1340, #1342, #1344, #1346, #1348, #1350, #1352, #1354, #1356, #1358, #1360 + parent #1147
+- Phase 0/1 stragglers earlier this session: #1150, #1151, #1326, #1328, #1333 (full audit at #1133 comment 4445681706)
+
+**Total session PR count**: **21 PRs merged to dev** (9 Phase 0/1 docs+test + 12 Phase A engine).
+
+**Corpus state post-Phase A**: 11/25 GREEN against `CAUSL_BACKEND=rust-stub`. Remaining 14 categories will flip as Phase B (Phase D Kahn recompute), Phase C (commit assembly), Phase D (subscriber dispatch) micro-tickets land.
+
+**Honest standing-state**:
+- **Phase A is structurally complete** — all promised functionality (preconditions / staging / publish / Object.is / rollback / fast-path / compaction / lwt stamp / typestate / trait carve-out) lives in `tools/engine-rs-core/src/transition/` and `tools/engine-rs-core/src/backend.rs`. 237+ cargo tests pass.
+- **STOP-VERDICT still on record**: A.1 perf-floor probe measured 35× over kill threshold (boundary tax alone consumes 25× of the projected savings ceiling). User-overridden; full EPIC proceeds. Real-Rust measurement against `equality-cutoff × 10000` lands at Phase G validation (#1145) — that's where the arithmetic verdict materializes.
+- **Cross-bridge byte-identity gate (#1071)** unaffected — Phase A's wire format stayed byte-identical throughout.
+
+## Next-session claim
+
+Phase B (#1134) is the next claimable umbrella per PLAN.md §3 phase decomposition. It's the **hardest single phase** of the port (Phase D Kahn topological recompute + glitch-freedom invariant). Estimated 1-3 weeks calendar single-developer; at micro-ticket-per-session pace and per the Phase A precedent, **~6-10 Claude sessions** to land.
+
+Alternative umbrellas (interleavable):
+- **Phase E** (#1135) — Subscriber callback bridge (JS↔WASM per-node notification). Can start anytime; doesn't require Phase B/C/D.
+- **Phase C** (#1144) — Phase E/F/F.4-F.6 commit assembly + log + retention. Independent of Phase B/D.
+
+If the next session continues the cascade, claim **Phase B** first (it unblocks the most downstream work).
+
+**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase A is complete and Phase B is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
 
 ---
 ## Cross-session protocol

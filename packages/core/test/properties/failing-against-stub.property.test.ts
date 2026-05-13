@@ -826,12 +826,58 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
           const isA1PreconditionFix =
             cat.id === 'precondition-nested-commit' ||
             cat.id === 'precondition-stale-tx-after-run'
+          // A.2 (#1340) flips three more categories from RED → GREEN
+          // against the rust-stub backend. The Rust-side
+          // `tools/engine-rs-core/src/transition/validate.rs::validate_node_handle`
+          // ports `getEntry()` + the `kind === 'input'` check from
+          // `packages/core/src/graph.ts:4181-4182`. All three reject
+          // pre-pipeline with the matching `RaceClass` variant and
+          // leave `State::hash()` byte-identical. The corresponding TS
+          // oracle paths in `runOnTsEngine` throw
+          // `NodeDisposedError` / `NotAnInputNodeError` /
+          // `UnknownNodeError`, which agree class-for-class with the
+          // Rust-side surface in the runner's `engineOutcome`.
+          const isA2NodeResolutionFix =
+            cat.id === 'precondition-tx-set-on-disposed-input' ||
+            cat.id === 'precondition-tx-set-on-derived' ||
+            cat.id === 'precondition-unknown-node-id'
+          // A.3 (#1342) flips two more categories from RED → GREEN:
+          // `tx-set-time-advances-by-one-per-commit` and
+          // `tick-advances-now-only`. The Rust-side
+          // `tools/engine-rs-core/src/transition/clock.rs::advance_clock`
+          // ports the TS engine's `now += 1` site at
+          // `packages/core/src/graph.ts:4459` — the success-arm Phase C
+          // clock advance. Both surfaces now agree on the
+          // `c.time == s_pre.time + 1` invariant + on the intent
+          // round-trip channel (the TS oracle's `intentRoundtrip` field
+          // is satisfied by the engine outcome's `commit.intent`). The
+          // Rust-side parity is asserted by
+          // `tools/engine-rs-core/tests/clock_advance.rs` (the
+          // `empty_tx_advances_now_by_one`, `bare_tick_advances_now_only`,
+          // and `successful_tx_advances_by_one` proptest properties).
+          const isA3ClockAdvance =
+            cat.id === 'tx-set-time-advances-by-one-per-commit' ||
+            cat.id === 'tick-advances-now-only'
           if (isA1PreconditionFix) {
             // GREEN — A.1 ported the gate; engine outcome satisfies
             // the oracle. Console-log the rust-stub PASS marker so
             // the parent agent's corpus diff can grep for the
             // RED → GREEN flip.
             console.error(`[rust-stub] ${cat.id} PASS (A.1 #1338)`)
+            assertOracle(cat, engineOutcome)
+          } else if (isA2NodeResolutionFix) {
+            // GREEN — A.2 ported the node-resolution validator. Engine
+            // outcome's `errorClass` matches the oracle's expected
+            // `NodeDisposedError` / `NotAnInputNodeError` /
+            // `UnknownNodeError` class string.
+            console.error(`[rust-stub] ${cat.id} PASS (A.2 #1340)`)
+            assertOracle(cat, engineOutcome)
+          } else if (isA3ClockAdvance) {
+            // GREEN — A.3 ported the Phase C clock advance into the
+            // Rust transition surface. Engine outcome's `time` and
+            // `intent` satisfy the oracle's `timeAdvanceFromBase` +
+            // `intentRoundtrip` fields.
+            console.error(`[rust-stub] ${cat.id} PASS (A.3 #1342)`)
             assertOracle(cat, engineOutcome)
           } else {
             const stubProj = canonicaliseToProjectionShape(stubOutcome)

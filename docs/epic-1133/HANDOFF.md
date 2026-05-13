@@ -8,7 +8,7 @@
 
 **Last session**: 2026-05-13 (Phase 0 complete — **A.1 perf-floor probe STOP-VERDICT fired**)
 
-**dev branch HEAD**: `b2332d68` (after PR #1329 merged) + this handoff-update PR.
+**dev branch HEAD**: `0de1fef8` (final Phase 1 amendment PR; this PR adds the closing handoff entry).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
@@ -52,7 +52,7 @@ These items have positive value even if the engine port drops:
 ## Kill-criteria status
 
 - [x] `#1150` closed via SPEC amendment + divergence documentation (Option C disposition shipped by PR #1161 on 2026-05-11; §19 amendment trail row + this checkbox + PLAN.md kill-criteria footnote landed post-STOP-VERDICT on 2026-05-13). The serde-bridge raw-byte gap (213 KB > 200 KB canonical) is now documented at §17.6 rather than silently shipped; re-tightening to ≤200 KB raw via Option A (`wasm-opt` direct invocation) is deferred to the post-STOP path (DROP / PIVOT / DEFER per the 2026-05-13 verdict).
-- [ ] `#1151` hardcoded trial counts codemod + lint rule — **next-session claim**, standalone value
+- [x] **`#1151` codemod + lint rule shipped** (PR #1332 at `f94b63bc`; 1 audit-found callsite codemodded, 1 allowlist exception with Poisson-coverage rationale, new ESLint rule `causl/no-hardcoded-property-trials` with 12-case test suite)
 - [ ] `#1160` Criteria 6 + 7 re-opened — gated on PIVOT decision (only useful if path 2(a) opaque-handle pursued)
 - [x] **failing_against_stub corpus PR on dev** (PR #1327, commit `ae99a093`; 20/20 stub failures verified red)
 - [x] **A.1 perf-floor probe PR on dev** (PR #1329, commit `b2332d68`; **STOP-VERDICT fired at 35× over threshold**)
@@ -142,6 +142,43 @@ After both ship, Phase 0 is complete and Phase 1 (preconditions: #1150, #1151, S
 **Quota status**: still within budget at session continuation point. Will continue Phase 1 standalone-value work next; pause only on user instruction or quota wall.
 
 **Honest framing**: the kill gate worked. The protocol surfaced a structurally negative outcome BEFORE 4-8 weeks of Phase A engine work were burnt. That IS the success of the discipline the entire plan was designed to enforce.
+
+---
+
+### Session 2026-05-13 — Phase 1 standalone-value work COMPLETE (continuation)
+
+**Goal**: ship the Phase 1 standalone-value items that have positive value regardless of the engine-port GO/NO-GO/PIVOT decision. **All three landed.**
+
+**Landed on `dev`**:
+- PR **#1331** (#1150 doc gaps, commit `9dcdf84e`) — Honest finding: #1150 was already CLOSED 2026-05-11 by PR #1161; this PR shipped the three documentation gaps that PR #1161 missed (§19 amendment trail row, §17.6 post-STOP framing, PLAN/HANDOFF cross-refs).
+- PR **#1332** (#1151 codemod + lint rule, commit `f94b63bc`) — Honest finding: #1151 was prematurely auto-closed 2026-05-11 by PR #1164 (whose title mentioned `(#1151)`); this PR shipped the actual codemod + lint rule the issue specified. 1 callsite codemodded (`packages/react/test/cross-tree.property.test.tsx:808` allowlisted with Poisson-coverage rationale), new `causl/no-hardcoded-property-trials` ESLint rule with 12-case test suite. `pnpm validate` + `pnpm lint` both green.
+- PR **#1334** (SPEC §3 + §5.1 amendments, commit `0de1fef8`) — Theorem 2 uninterruptibility paragraph at §3 line 84; §5.1 Amendment 4 (Phase G subscriber container pin) at line 166; §19 trail subsections at lines 2932 + 2944. Both amendments document FFI-boundary invariants any future native backend must honor — standalone value regardless of the STOP-VERDICT on the current Rust port.
+
+**Issues closed this continuation** (manual close needed in 3 of 4 cases per the recurring auto-close indexing lag):
+- #1150 — was already CLOSED before session.
+- #1151 — was already CLOSED prematurely before session.
+- #1326 (corpus) — manually closed after #1327 merged.
+- #1328 (probe) — manually closed after #1329 merged.
+- #1333 (SPEC amendments) — manually closed after #1334 merged.
+
+**Total today across both session-continuations**: 7 PRs merged to dev — #1324 (plan/handoff), #1327 (corpus), #1329 (probe + STOP), #1330 (STOP handoff), #1331 (#1150 doc gaps), #1332 (#1151 codemod), #1334 (SPEC amendments).
+
+**What's still pending — and why I am STOPPING here**:
+
+The remaining work per `docs/epic-1133/PLAN.md` is the **GO/NO-GO/PIVOT decision on epic #1133 itself**. That is a user-level call, NOT implementation work:
+
+- **DROP** — document the STOP measurement in the #1015 ledger as canonical; TS engine continues per existing GO/NO-GO criteria.
+- **PIVOT** — try a different boundary architecture (opaque-handle ABI / batched commits / raw wasm-bindgen / GC bridge tiebreaker).
+- **DEFER** — re-evaluate at the next 6-month GO/NO-GO review.
+
+I cannot make this decision on the user's behalf. The honest framing of the user prompt "continue until all rust engine work is complete" — per the protocol the V8/spec + TDD clusters designed — IS complete at this point. The kill gate fired; Phase 1 standalone-value items shipped; the decision artifact (the STOP-VERDICT comment on #1133) is in place.
+
+**Quota status**: well within budget at this stop point. Stopping not on quota; stopping because the next action requires a user-level decision.
+
+**Surprises / honest findings this continuation**:
+- Two issues (#1150, #1151) were already auto-closed by earlier PRs whose titles incidentally referenced them — the agents caught this and pivoted to closing the actual gaps that ahd been left.
+- The auto-close indexing-lag bug bit 5 times in a single session. The user's "ensure to close open issues" instruction caught all 5; manual `gh issue close` with reference comment is the workaround pattern.
+- The probe lower-bound framing held: 1.75 µs/op × 10k = 17.5 ms is far past the 0.5 ms kill threshold, vindicating the V8/spec cluster's 57× ratio prediction (theirs was 4 µs/op × 10k = 40 ms vs 0.7 ms; mine is lower than the pessimistic estimate but still 35× over the floor).
 
 ---
 ## Cross-session protocol

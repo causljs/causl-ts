@@ -172,4 +172,77 @@ describe('property: glitch-freedom (diamond)', () => {
       tieredPropertyOptions(),
     )
   })
+
+  /**
+   * Stable-chain glitch-freedom (NEW rec #16 / #1305 partner):
+   *
+   *   For every random write trace into a chain where an intermediate
+   *   derived is `Object.is`-stable across all writes, every observer
+   *   of the chain tail sees a value consistent with the pre-commit
+   *   state of the upstream — never a mid-commit interleaving.
+   *
+   * The chain shape — `a → erase = a*0 → succ = erase + offset` —
+   * exercises exactly the propagation-skip surface added by NEW rec
+   * #16: `erase` is `Object.is`-stable at 0 for every write, so
+   * `succ`'s recompute is skipped under the cutoff-propagation gate.
+   * The skip must not be observable to a subscriber on `succ` — every
+   * notification must reflect the SAME value as the prior commit's
+   * `succ` (since `succ`'s value didn't change), and the value itself
+   * must equal `offset` for the lifetime of the trace.
+   *
+   * If the skip were to leak a stale value or fire a spurious
+   * notification, this property would surface it as either a wrong
+   * value in the observer stream or an extra entry in the stream.
+   */
+  it('stable-chain: intermediate Object.is-stable derived never leaks a glitch', () => {
+    fc.assert(
+      fc.property(
+        // Write traces into `a`. Range chosen so multiplication by
+        // zero is exact in IEEE-754 (the cutoff hinges on `Object.is`,
+        // so we avoid NaN-class edge cases from random-large floats).
+        fc.array(fc.integer({ min: -1_000, max: 1_000 }), {
+          minLength: 1,
+          maxLength: 60,
+        }),
+        fc.integer({ min: -100, max: 100 }), // constant offset added by `succ`
+        (writes, offset) => {
+          // Engine setup: `a → erase → succ` where `erase = a * 0` is
+          // `Object.is`-stable at 0 and `succ = erase + offset` is
+          // therefore stable at `offset`. The propagation-skip gate
+          // fires for `succ` on every commit where `a` changes; the
+          // subscriber on `succ` must never see anything but `offset`.
+          const g = createCausl()
+          const a = g.input('a', 0)
+          const erase = g.derived('erase', (get) => (get(a) as number) * 0)
+          const succ = g.derived(
+            'succ',
+            (get) => (get(erase) as number) + offset,
+          )
+
+          // Drive: subscribe to `succ` and replay the random write trace.
+          const seen: number[] = []
+          g.subscribe(succ, (v) => seen.push(v))
+
+          for (let i = 0; i < writes.length; i++) {
+            const v = writes[i] ?? 0
+            g.commit(`c${i}`, (tx) => tx.set(a, v))
+          }
+
+          // Oracle: `succ` is constant at `offset` across the entire
+          // trace. The subscriber fires exactly once — the
+          // registration-time settle that yields the initial value;
+          // no commit changes `succ`'s value (the cutoff suppresses
+          // both Phase D recompute AND Phase G dispatch), so no
+          // further notifications fire.
+          expect(seen).toEqual([offset])
+
+          // Post-trace read: every observable read of `succ` returns
+          // `offset` — the cutoff-propagation skip preserved the
+          // value byte-identically across the entire trace.
+          expect(g.read(succ)).toBe(offset)
+        },
+      ),
+      tieredPropertyOptions(),
+    )
+  })
 })

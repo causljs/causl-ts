@@ -49,6 +49,8 @@ import {
   NodeDisposedError,
   CommitInProgressError,
   StaleTxError,
+  UnknownNodeError,
+  NotAnInputNodeError,
 } from '../../src/errors.js'
 import type {
   Graph,
@@ -276,6 +278,132 @@ function runOnTsEngine(cat: StubCategory): EngineOutcome {
       )
     }
 
+    // A.2 precondition: tx.set on a disposed input. The TS oracle
+    // registers an input, disposes it via the adapter-layer `dispose`
+    // hook, then captures the (now-stale) handle into a `tx.set`. The
+    // engine throws `NodeDisposedError` at graph.ts:4181 because
+    // `getEntry()` consults the disposal tombstone and surfaces the
+    // typed error.
+    if (cat.id === 'precondition-tx-set-on-disposed-input') {
+      const graph = createCausl()
+      const inputA = graph.input('a', 0)
+      disposeNode(graph, inputA)
+      try {
+        graph.commit('set-on-disposed', (tx) => {
+          tx.set(inputA, 1)
+        })
+      } catch (e) {
+        if (e instanceof NodeDisposedError) {
+          return {
+            outcome: {
+              engineModeled: true,
+              changedNodes: [],
+              time: graph.now,
+              intent: null,
+              subscriberTrace: [],
+              disposedContains: 'a',
+              errorClass: 'NodeDisposedError',
+              resourceState: null,
+              pipelineLengthDelta: 0,
+              returnShapeIsTuple: true,
+              phaseStepSequence: [],
+              stateHashStableAcrossRuns: null,
+            },
+            snapshotAfter: graph.snapshot(),
+          }
+        }
+        throw e
+      }
+      throw new Error(
+        'precondition-tx-set-on-disposed-input did not throw NodeDisposedError — corpus invariant broken',
+      )
+    }
+
+    // A.2 precondition: tx.set on a derived. The TS oracle registers a
+    // derived (`d1 = derived(() => 0)`) and attempts `tx.set(d1, ...)`;
+    // the engine throws `NotAnInputNodeError` at graph.ts:4182 because
+    // `getEntry()` resolves but the entry's kind is `'derived'`.
+    if (cat.id === 'precondition-tx-set-on-derived') {
+      const graph = createCausl()
+      const derivedD1 = graph.derived<number>('d1', () => 0)
+      try {
+        graph.commit('set-on-derived', (tx) => {
+          // The typed surface forbids this — cast to bypass for the
+          // runtime guard probe. The engine's runtime check is what
+          // we're exercising; the type-level rejection is its own
+          // (compile-time) gate.
+           
+          tx.set(derivedD1 as unknown as InputNode<number>, 1)
+        })
+      } catch (e) {
+        if (e instanceof NotAnInputNodeError) {
+          return {
+            outcome: {
+              engineModeled: true,
+              changedNodes: [],
+              time: graph.now,
+              intent: null,
+              subscriberTrace: [],
+              disposedContains: null,
+              errorClass: 'NotAnInputNodeError',
+              resourceState: null,
+              pipelineLengthDelta: 0,
+              returnShapeIsTuple: true,
+              phaseStepSequence: [],
+              stateHashStableAcrossRuns: null,
+            },
+            snapshotAfter: graph.snapshot(),
+          }
+        }
+        throw e
+      }
+      throw new Error(
+        'precondition-tx-set-on-derived did not throw NotAnInputNodeError — corpus invariant broken',
+      )
+    }
+
+    // A.2 precondition: tx.set on an unknown id. The TS oracle
+    // fabricates a NodeId (or borrows one from a different graph
+    // instance) and attempts `tx.set` against it; `getEntry()` throws
+    // `UnknownNodeError` at graph.ts:4181 because no entry exists.
+    if (cat.id === 'precondition-unknown-node-id') {
+      const graph = createCausl()
+      // Mint a foreign handle by creating a separate graph and stealing
+      // its input handle. The "foreign" handle has an id that the first
+      // graph has never seen.
+      const foreignGraph = createCausl()
+      const foreignInput = foreignGraph.input('phantom', 0)
+      try {
+        graph.commit('set-on-unknown', (tx) => {
+          tx.set(foreignInput, 1)
+        })
+      } catch (e) {
+        if (e instanceof UnknownNodeError) {
+          return {
+            outcome: {
+              engineModeled: true,
+              changedNodes: [],
+              time: graph.now,
+              intent: null,
+              subscriberTrace: [],
+              disposedContains: null,
+              errorClass: 'UnknownNodeError',
+              resourceState: null,
+              pipelineLengthDelta: 0,
+              returnShapeIsTuple: true,
+              phaseStepSequence: [],
+              stateHashStableAcrossRuns: null,
+            },
+            snapshotAfter: graph.snapshot(),
+          }
+        }
+        throw e
+      }
+      throw new Error(
+        'precondition-unknown-node-id did not throw UnknownNodeError — corpus invariant broken',
+      )
+    }
+
     // Cycle-rejection category: registration itself closes the cycle.
     // Surface as `errorClass: 'RaceClass::CycleDetected'`.
     if (cat.id === 'cycle-rejection-surfaces-race-class') {
@@ -450,6 +578,10 @@ function runOnTsEngine(cat: StubCategory): EngineOutcome {
         outcome = { ...outcome, errorClass: 'CommitInProgressError' }
       } else if (e instanceof StaleTxError) {
         outcome = { ...outcome, errorClass: 'StaleTxError' }
+      } else if (e instanceof UnknownNodeError) {
+        outcome = { ...outcome, errorClass: 'UnknownNodeError' }
+      } else if (e instanceof NotAnInputNodeError) {
+        outcome = { ...outcome, errorClass: 'NotAnInputNodeError' }
       } else {
         // Propagate — an unexpected throw is a corpus or engine bug.
         throw e

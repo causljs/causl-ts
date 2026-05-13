@@ -113,6 +113,8 @@ export interface StubCategory {
       | 'RaceClass::CycleDetected'
       | 'CommitInProgressError'
       | 'StaleTxError'
+      | 'UnknownNodeError'
+      | 'NotAnInputNodeError'
     /**
      * `State::hash` must be byte-identical when the dispatch is
      * replayed against the same seed.
@@ -134,10 +136,11 @@ export interface StubCategory {
 }
 
 /**
- * 22 categories — Phase-0 corpus per PLAN.md §6, extended by A.1
- * (#1338) with two precondition-guard categories that flip RED → GREEN
- * once the validate gate in `tools/engine-rs-core/src/transition/validate.rs`
- * lands.
+ * 25 categories — Phase-0 corpus per PLAN.md §6, extended by A.1
+ * (#1338) with two precondition-guard categories and by A.2 with three
+ * node-resolution-precondition categories. Each flips RED → GREEN once
+ * the corresponding gate in
+ * `tools/engine-rs-core/src/transition/validate.rs` lands.
  *
  * Each id is kebab-case and used verbatim by the Rust-side mirror at
  * `tools/engine-rs-core/tests/stub_corpus_categories.rs` and the
@@ -516,6 +519,71 @@ export const STUB_CORPUS: ReadonlyArray<StubCategory> = [
     setupDeriveds: [],
     oracle: {
       errorClass: 'StaleTxError',
+    },
+  },
+  // 23 — A.2 precondition: node-disposed guard.
+  //
+  // The TS oracle registers an input, disposes it, then re-creates a
+  // new input (which may or may not reuse the slot — irrelevant for
+  // the contract). A `tx.set` on the captured stale handle throws
+  // `NodeDisposedError` (graph.ts:4181 via getEntry). The Rust port
+  // surfaces this as `RaceClass::NodeDisposed { slot }` via the #1151
+  // generational-tag mismatch detected by
+  // `transition/validate.rs::validate_node_handle`.
+  {
+    id: 'precondition-tx-set-on-disposed-input',
+    description:
+      'tx.set on a disposed input throws NodeDisposedError (graph.ts:4181 via getEntry)',
+    action: {
+      kind: 'Commit',
+      payload: { intent: 'set-on-disposed', writes: [{ id: 'a', value: 1 }] },
+    },
+    setupInputs: [{ id: 'a', initial: 0 }],
+    setupDeriveds: [],
+    oracle: {
+      errorClass: 'NodeDisposedError',
+    },
+  },
+  // 24 — A.2 precondition: not-an-input-node guard.
+  //
+  // The TS oracle registers a derived (`d1 = derived(() => 0)`) and
+  // attempts `tx.set(d1, ...)`; the engine throws
+  // `NotAnInputNodeError` (graph.ts:4182 — the `e.kind !== 'input'`
+  // check after `getEntry` resolves). The Rust port surfaces this as
+  // `RaceClass::NotAnInputNode { slot }`.
+  {
+    id: 'precondition-tx-set-on-derived',
+    description:
+      'tx.set on a derived node throws NotAnInputNodeError (graph.ts:4182 — e.kind !== "input")',
+    action: {
+      kind: 'Commit',
+      payload: { intent: 'set-on-derived', writes: [{ id: 'd1', value: 1 }] },
+    },
+    setupInputs: [],
+    setupDeriveds: [{ id: 'd1', depsExpr: 'identity:a' }],
+    oracle: {
+      errorClass: 'NotAnInputNodeError',
+    },
+  },
+  // 25 — A.2 precondition: unknown-node guard.
+  //
+  // The TS oracle attempts `tx.set` against a `NodeId` that was never
+  // registered (a fabricated handle or one returned from a different
+  // graph instance); `getEntry` throws `UnknownNodeError`
+  // (graph.ts:4181). The Rust port surfaces this as
+  // `RaceClass::UnknownNode { slot }`.
+  {
+    id: 'precondition-unknown-node-id',
+    description:
+      'tx.set against an unregistered NodeId throws UnknownNodeError (graph.ts:4181 via getEntry)',
+    action: {
+      kind: 'Commit',
+      payload: { intent: 'set-on-unknown', writes: [{ id: 'phantom', value: 1 }] },
+    },
+    setupInputs: [],
+    setupDeriveds: [],
+    oracle: {
+      errorClass: 'UnknownNodeError',
     },
   },
 ] as const

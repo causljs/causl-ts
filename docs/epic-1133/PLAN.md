@@ -103,7 +103,9 @@ Per TDD cluster, every numeric kill threshold below must appear as a literal `- 
 
 | Gate | Threshold | Where measured | Sub-issue carrying the checkbox |
 |---|---|---|---|
-| Bundle ceiling | serde ≤ 200 KB, gc-classic ≤ 120 KB, gc-builtins ≤ 110 KB | `tools/size-limit/...` | `#1150` (NO-GO blocker, blocks Phase A) |
+| Bundle ceiling | serde ≤ 200 KB, gc-classic ≤ 120 KB, gc-builtins ≤ 110 KB | `tools/size-limit/...` | `#1150` (NO-GO blocker, blocks Phase A) [^1150-closed] |
+
+[^1150-closed]: `#1150` was closed via SPEC amendment + divergence documentation — PR #1161 (MERGED 2026-05-11, Option C disposition) added the §17.6 current-state callout recording the 213 KB raw / 66 KB Brotli measurement against the 200 KB / 80 KB canonical ceiling, and the §19 amendment trail row was added in the post-STOP-VERDICT documentation pass on 2026-05-13. The divergence is now documented rather than silent. Phase A would have re-tightened to 200/80 via Option A (direct `wasm-opt` invocation per PR #1112's design discussion at #1085); with the 2026-05-13 STOP-VERDICT on this epic (A.1 perf-floor probe fired the kill gate by 35×), the re-tightening is deferred to whatever the post-STOP path delivers (DROP / PIVOT to a fundamentally different boundary / DEFER to the next 6-month cadence). The NO-GO-blocker designation in this row is preserved as historical record; it no longer blocks Phase A from claiming (the gate that did block — adopters reading the SPEC seeing a silent over-spec ship — is now closed).
 | ABI shape | by-value or opaque-handle wins ≥ 3× on Criterion 1 | `tools/engine-rs-port-bench/` | `#1160` (Criterion 1) |
 | IC stability | post-Rust IC megamorphic count ≤ baseline × 1.2 | `tools/engine-rs-port-bench/ic-stability.rs` | `#1160` (Criterion 6) + `#1145` |
 | Perf-floor (A.1) | `op-rust-bridge-floor-1k × 10000` median ≤ 0.5 ms | `packages/bench/src/scenarios/op-rust-bridge-floor-1k.ts` | `#1145` (Acceptance 0) |

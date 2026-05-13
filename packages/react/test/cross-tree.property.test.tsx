@@ -805,6 +805,13 @@ describe('cross-tree consistency property suite v0 (#134)', () => {
       // below the once-per-decade-per-PR threshold the §15.2 seam
       // floor implicitly targets. The earlier bump 200 → 1000 was
       // not enough; this bump pins the math.
+      //
+      // Issue #1151 — this file is on the `causl/no-hardcoded-property-
+      // trials` allowlist in `eslint.config.js`. Routing through
+      // `tieredPropertyTrials` would let the default tier drop to 1000
+      // trials and burn CI again on the rare linear-chain shape; the
+      // coverage-math requires the literal here. Do NOT replace with a
+      // tier-resolved count.
       propertyTrials('dag-shape-coverage', { numRuns: 5000 }),
     )
     // Tip-diamond invariant: must hold for every shape, no

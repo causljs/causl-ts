@@ -97,9 +97,22 @@ export interface StubCategory {
     readonly disposedContains?: string
     /**
      * Engine error class the dispatch must produce (cycle rejection,
-     * post-dispose access).
+     * post-dispose access, A.1 precondition guards).
+     *
+     * `CommitInProgressError` / `StaleTxError` are A.1 (#1338) — the
+     * TS-engine surface throws these from `commitInternal` /
+     * `Tx.set`; the Rust port surfaces them as `RaceClass::CommitInProgress`
+     * / `RaceClass::StaleTx` via the precondition gate in
+     * `tools/engine-rs-core/src/transition/validate.rs`. The Rust-side
+     * variant tag and the TS-side class name are recorded here as the
+     * SAME string token so the cross-backend assertion has one
+     * canonical spelling to compare against.
      */
-    readonly errorClass?: 'NodeDisposedError' | 'RaceClass::CycleDetected'
+    readonly errorClass?:
+      | 'NodeDisposedError'
+      | 'RaceClass::CycleDetected'
+      | 'CommitInProgressError'
+      | 'StaleTxError'
     /**
      * `State::hash` must be byte-identical when the dispatch is
      * replayed against the same seed.
@@ -121,10 +134,15 @@ export interface StubCategory {
 }
 
 /**
- * 20 categories — Phase-0 corpus per PLAN.md §6.
+ * 22 categories — Phase-0 corpus per PLAN.md §6, extended by A.1
+ * (#1338) with two precondition-guard categories that flip RED → GREEN
+ * once the validate gate in `tools/engine-rs-core/src/transition/validate.rs`
+ * lands.
  *
  * Each id is kebab-case and used verbatim by the Rust-side mirror at
- * `tools/engine-rs-core/tests/stub_corpus_categories.rs`.
+ * `tools/engine-rs-core/tests/stub_corpus_categories.rs` and the
+ * dedicated Rust-side precondition test at
+ * `tools/engine-rs-core/tests/precondition_guards.rs`.
  */
 export const STUB_CORPUS: ReadonlyArray<StubCategory> = [
   // 1 — A.4, A.5 (slow-path staging + Phase B publish)
@@ -448,6 +466,56 @@ export const STUB_CORPUS: ReadonlyArray<StubCategory> = [
         'StampLastWriteTimeC5',
         'DispatchSubscribersG',
       ],
+    },
+  },
+  // 21 — A.1 (#1338) precondition: re-entrancy guard.
+  //
+  // The TS oracle dispatches a NESTED `graph.commit()` from inside an
+  // outer commit's `run` callback; the engine throws
+  // `CommitInProgressError` (graph.ts:4134). The Rust port surfaces the
+  // same precondition firing as `RaceClass::CommitInProgress` via
+  // `transition/validate.rs::check_precondition`. The stub provably
+  // CANNOT model this firing — its `transition_phased_stub` ignores
+  // state and returns `Commit { changedNodes: [], time: now+1 }` for
+  // any action.
+  //
+  // The runner uses the `errorClass` oracle field to route this
+  // category: when set to `'CommitInProgressError'`, `runOnTsEngine`
+  // dispatches the nested-commit scenario and asserts the engine
+  // throws the named error class.
+  {
+    id: 'precondition-nested-commit',
+    description:
+      'nested graph.commit() inside an outer run callback throws CommitInProgressError (graph.ts:4134)',
+    action: {
+      kind: 'Commit',
+      payload: { intent: 'outer-commit', writes: [{ id: 'a', value: 1 }] },
+    },
+    setupInputs: [{ id: 'a', initial: 0 }],
+    setupDeriveds: [],
+    oracle: {
+      errorClass: 'CommitInProgressError',
+    },
+  },
+  // 22 — A.1 (#1338) precondition: stale-tx guard.
+  //
+  // The TS oracle captures the `tx` reference from inside `run`,
+  // returns from `run`, then calls `tx.set(...)` on the captured
+  // reference; the engine throws `StaleTxError` (graph.ts:4173). The
+  // Rust port surfaces the same precondition firing as
+  // `RaceClass::StaleTx`. The stub provably cannot model this firing.
+  {
+    id: 'precondition-stale-tx-after-run',
+    description:
+      'tx.set called on a captured Tx after run returned throws StaleTxError (graph.ts:4173)',
+    action: {
+      kind: 'Commit',
+      payload: { intent: 'capture-tx', writes: [{ id: 'a', value: 1 }] },
+    },
+    setupInputs: [{ id: 'a', initial: 0 }],
+    setupDeriveds: [],
+    oracle: {
+      errorClass: 'StaleTxError',
     },
   },
 ] as const

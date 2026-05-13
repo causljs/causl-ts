@@ -177,12 +177,14 @@ console.error(`corpus-report: ${breakdown}`)
 
 // Exit code: 0 if the count matches the backend's contract; non-zero
 // to surface drift in CI.
-//   - stub: passing MUST be 0 (PLAN.md §6 acceptance: "all 20 must FAIL")
-//   - ts:   passing MUST be 20
+//   - stub: passing MUST be 0 (PLAN.md §6 acceptance: "all categories
+//     must FAIL" — was 20 in Phase 0; extended to 22 by A.1 / issue
+//     #1338 with the two precondition-guard categories).
+//   - ts:   passing MUST equal total.
 //   - rust: any count is reportable; non-zero exit only on regression
 //     (the regression check is a future CI gate, not this script).
 if (backend === 'stub' && passing !== 0) {
-  console.error(`corpus-report: STUB CONTRACT VIOLATED — expected 0/20 passing, got ${passing}`)
+  console.error(`corpus-report: STUB CONTRACT VIOLATED — expected 0/${total} passing, got ${passing}`)
   process.exit(3)
 }
 if (backend === 'ts' && passing !== total) {

@@ -858,6 +858,32 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
           const isA3ClockAdvance =
             cat.id === 'tx-set-time-advances-by-one-per-commit' ||
             cat.id === 'tick-advances-now-only'
+          // A.5 (#1133 row A.5) flips 4 categories RED → GREEN against
+          // rust-stub. The Rust-side
+          // `tools/engine-rs-core/src/transition/publish.rs::publish_staged_writes`
+          // ports `packages/core/src/graph.ts:4409-4453` — the Phase B
+          // publish loop with `Object.is` cutoff + rollback triple
+          // capture. Post-A.5 the Rust transition's
+          // `CommitRecord.changed_nodes` is the publish-filtered subset
+          // (matching the TS engine's `changedInputIds`); the
+          // `intent` round-trip channel from A.3 is unchanged.
+          //
+          //   - `tx-set-single-input-changed-nodes-nonempty` (A.4, A.5)
+          //   - `tx-set-two-inputs-changed-nodes-stable-order` (A.5)
+          //   - `tx-set-intent-roundtrip`                     (A.4, A.5)
+          //   - `tx-set-equality-cutoff-changed-nodes-empty`  (A.5 Object.is)
+          //
+          // The Rust-side parity is asserted by
+          // `tools/engine-rs-core/tests/publish.rs` (the
+          // `corpus_tx_set_*` integration tests + the
+          // `phase_b_*` seed tests) and by the unit tests in
+          // `src/transition/publish.rs::tests` (the SameValue oracle
+          // proptest covering NaN, ±0, and the BigInt boundary).
+          const isA5PhaseBPublish =
+            cat.id === 'tx-set-single-input-changed-nodes-nonempty' ||
+            cat.id === 'tx-set-two-inputs-changed-nodes-stable-order' ||
+            cat.id === 'tx-set-intent-roundtrip' ||
+            cat.id === 'tx-set-equality-cutoff-changed-nodes-empty'
           if (isA1PreconditionFix) {
             // GREEN — A.1 ported the gate; engine outcome satisfies
             // the oracle. Console-log the rust-stub PASS marker so
@@ -878,6 +904,14 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
             // `intent` satisfy the oracle's `timeAdvanceFromBase` +
             // `intentRoundtrip` fields.
             console.error(`[rust-stub] ${cat.id} PASS (A.3 #1342)`)
+            assertOracle(cat, engineOutcome)
+          } else if (isA5PhaseBPublish) {
+            // GREEN — A.5 ported Phase B publish + Object.is + rollback
+            // arrays into the Rust transition surface. Engine outcome's
+            // `changedNodeIds` matches the publish-filtered subset (the
+            // `Object.is` cutoff drops same-value rows); `intent`
+            // satisfies `intentRoundtrip`.
+            console.error(`[rust-stub] ${cat.id} PASS (A.5 #1133)`)
             assertOracle(cat, engineOutcome)
           } else {
             const stubProj = canonicaliseToProjectionShape(stubOutcome)

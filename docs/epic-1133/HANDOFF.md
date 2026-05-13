@@ -40,18 +40,18 @@ Measurement: serde-wasm-bindgen + `floor_only_transition` (zero engine work) tak
 
 These items have positive value even if the engine port drops:
 
-1. **`#1150` — SPEC §17.6 bundle ceiling violation (213 KB > 200 KB)** — SPEC violation on record; close it via Option A (`wasm-opt` direct invocation) regardless of engine-port verdict.
+1. ~~**`#1150` — SPEC §17.6 bundle ceiling violation (213 KB > 200 KB)** — SPEC violation on record; close it via Option A (`wasm-opt` direct invocation) regardless of engine-port verdict.~~ **CLOSED via Option C (PR #1161, MERGED 2026-05-11)** — the §17.6 current-state callout + §19 amendment trail row document the divergence rather than relax the canonical 200/80 ceiling. Option A (`wasm-opt` direct invocation) is now deferred to the post-STOP-VERDICT path on this epic (DROP / PIVOT / DEFER).
 2. **`#1151` — Hardcoded trial counts** — test-discipline win; tier-system codemod + lint rule.
 3. **SPEC §3 Theorem 2 uninterruptibility amendment** — captures the contract for ANY future native backend (Rust or otherwise). Future-proofing documentation.
 4. **SPEC §5.1 IndexMap container pin amendment** — same: documents the invariant any future backend must honour.
 
-**Recommended next-session claim order**: #1150 → #1151 → SPEC amendments → only THEN revisit the GO/NO-GO/PIVOT decision once Phase 1 prep is complete.
+**Recommended next-session claim order**: ~~#1150~~ (CLOSED via PR #1161 Option C; trail row added 2026-05-13) → #1151 → SPEC amendments → only THEN revisit the GO/NO-GO/PIVOT decision once Phase 1 prep is complete.
 
 ---
 
 ## Kill-criteria status
 
-- [ ] `#1150` bundle ceiling closed — **next-session claim**, standalone value even if engine port drops
+- [x] `#1150` closed via SPEC amendment + divergence documentation (Option C disposition shipped by PR #1161 on 2026-05-11; §19 amendment trail row + this checkbox + PLAN.md kill-criteria footnote landed post-STOP-VERDICT on 2026-05-13). The serde-bridge raw-byte gap (213 KB > 200 KB canonical) is now documented at §17.6 rather than silently shipped; re-tightening to ≤200 KB raw via Option A (`wasm-opt` direct invocation) is deferred to the post-STOP path (DROP / PIVOT / DEFER per the 2026-05-13 verdict).
 - [ ] `#1151` hardcoded trial counts codemod + lint rule — **next-session claim**, standalone value
 - [ ] `#1160` Criteria 6 + 7 re-opened — gated on PIVOT decision (only useful if path 2(a) opaque-handle pursued)
 - [x] **failing_against_stub corpus PR on dev** (PR #1327, commit `ae99a093`; 20/20 stub failures verified red)
@@ -134,7 +134,7 @@ After both ship, Phase 0 is complete and Phase 1 (preconditions: #1150, #1151, S
 3. DEFER — re-evaluate at next 6-month GO/NO-GO review.
 
 **Standalone-value Phase 1 work** (claimable regardless of GO/NO-GO/PIVOT verdict):
-- `#1150` close (bundle ceiling violation — SPEC §17.6 on record)
+- ~~`#1150` close (bundle ceiling violation — SPEC §17.6 on record)~~ — DONE via Option C (PR #1161 MERGED 2026-05-11; §19 trail row + cross-doc updates landed 2026-05-13)
 - `#1151` close (hardcoded trial counts → `resolveCrossBackendFuzzTier()`)
 - SPEC §3 Theorem 2 uninterruptibility amendment draft
 - SPEC §5.1 IndexMap container pin amendment draft

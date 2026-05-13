@@ -25,6 +25,9 @@
     "typecheck:test-d": "pnpm -r --filter './packages/*' --if-present run test:types",
     "docs:api": "typedoc && node tools/docs-postprocess/typedoc-reskin.mjs",
     "docs:api:reskin": "node tools/docs-postprocess/typedoc-reskin.mjs",
+    "corpus:report": "pnpm --filter @causl/core exec vitest run test/properties/failing-against-stub.property.test.ts --reporter=json 2>/dev/null | node scripts/corpus-report.mjs",
+    "corpus:stub-must-fail": "CAUSL_BACKEND=stub pnpm corpus:report",
+    "corpus:ts-must-pass": "CAUSL_BACKEND=ts pnpm corpus:report",
     "prepare": "husky"
   },
   "//size-limit": "Per SPEC.md §14.2 the bundle budget is the 15-30 KB band, with 18 KB as the working target on @causl/core (full import). The ceilings below are CI-gate caps — a PR that crosses one fails `size — bundle-size gate` and must include the §14.2.1 written team consensus or the size-limit bump is rejected. The 4.5 KB / 6 KB / 3 KB ceilings the previous spec defended were retired in PR #458 once the team accepted that the small-bundle promise was costing more in adopter glue (per closed PRs #266, #395, #420, #383, #455, #390, #454) than it was earning in elegance.",

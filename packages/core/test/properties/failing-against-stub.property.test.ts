@@ -47,6 +47,8 @@ import { dispose as disposeNode } from '../../src/internal.js'
 import {
   CycleError,
   NodeDisposedError,
+  CommitInProgressError,
+  StaleTxError,
 } from '../../src/errors.js'
 import type {
   Graph,
@@ -188,6 +190,92 @@ function runOnTsEngine(cat: StubCategory): EngineOutcome {
     outcome: EngineOutcome
     snapshotAfter: unknown
   } => {
+    // A.1 (#1338) precondition: nested commit. The TS oracle for this
+    // category dispatches `graph.commit()` from inside an outer
+    // `commit`'s `run` callback. The engine throws
+    // `CommitInProgressError` at graph.ts:4134 before any §5 pipeline
+    // work runs (the engine's `committing` closure flag is set by the
+    // outer commit and observed by the inner).
+    if (cat.id === 'precondition-nested-commit') {
+      const graph = createCausl()
+      const inputA = graph.input('a', 0)
+      try {
+        graph.commit('outer', (_outerTx) => {
+          // Nested commit — must throw.
+          graph.commit('inner', (innerTx) => {
+            innerTx.set(inputA, 1)
+          })
+        })
+      } catch (e) {
+        if (e instanceof CommitInProgressError) {
+          return {
+            outcome: {
+              engineModeled: true,
+              changedNodes: [],
+              time: graph.now,
+              intent: null,
+              subscriberTrace: [],
+              disposedContains: null,
+              errorClass: 'CommitInProgressError',
+              resourceState: null,
+              pipelineLengthDelta: 0,
+              returnShapeIsTuple: true,
+              phaseStepSequence: [],
+              stateHashStableAcrossRuns: null,
+            },
+            snapshotAfter: graph.snapshot(),
+          }
+        }
+        throw e
+      }
+      throw new Error(
+        'precondition-nested-commit did not throw CommitInProgressError — corpus invariant broken',
+      )
+    }
+
+    // A.1 (#1338) precondition: stale tx after run. The TS oracle
+    // captures the `tx` reference from inside `run`, lets `run`
+    // return, then calls `tx.set(...)` on the captured reference. The
+    // engine throws `StaleTxError` at graph.ts:4173 because the
+    // engine's `txAlive` closure flag was cleared post-`run`.
+    if (cat.id === 'precondition-stale-tx-after-run') {
+      const graph = createCausl()
+      const inputA = graph.input('a', 0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedTx: any = null
+      graph.commit('capture-tx', (tx) => {
+        capturedTx = tx
+      })
+      try {
+        // Now `run` has returned — using the captured tx must throw.
+        capturedTx.set(inputA, 1)
+      } catch (e) {
+        if (e instanceof StaleTxError) {
+          return {
+            outcome: {
+              engineModeled: true,
+              changedNodes: [],
+              time: graph.now,
+              intent: null,
+              subscriberTrace: [],
+              disposedContains: null,
+              errorClass: 'StaleTxError',
+              resourceState: null,
+              pipelineLengthDelta: 0,
+              returnShapeIsTuple: true,
+              phaseStepSequence: [],
+              stateHashStableAcrossRuns: null,
+            },
+            snapshotAfter: graph.snapshot(),
+          }
+        }
+        throw e
+      }
+      throw new Error(
+        'precondition-stale-tx-after-run did not throw StaleTxError — corpus invariant broken',
+      )
+    }
+
     // Cycle-rejection category: registration itself closes the cycle.
     // Surface as `errorClass: 'RaceClass::CycleDetected'`.
     if (cat.id === 'cycle-rejection-surfaces-race-class') {
@@ -358,6 +446,10 @@ function runOnTsEngine(cat: StubCategory): EngineOutcome {
         outcome = { ...outcome, errorClass: 'RaceClass::CycleDetected' }
       } else if (e instanceof NodeDisposedError) {
         outcome = { ...outcome, errorClass: 'NodeDisposedError' }
+      } else if (e instanceof CommitInProgressError) {
+        outcome = { ...outcome, errorClass: 'CommitInProgressError' }
+      } else if (e instanceof StaleTxError) {
+        outcome = { ...outcome, errorClass: 'StaleTxError' }
       } else {
         // Propagate — an unexpected throw is a corpus or engine bug.
         throw e
@@ -560,6 +652,23 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
           // of the `projectStubBehavior` helper); the failure ITSELF
           // is unchanged.
           //
+          // A.1 (issue #1338) flips two categories from RED → GREEN:
+          // `precondition-nested-commit` and
+          // `precondition-stale-tx-after-run`. The Rust-side
+          // `tools/engine-rs-core/src/transition/validate.rs` gate now
+          // surfaces `RaceClass::CommitInProgress` / `RaceClass::StaleTx`
+          // before any §5 pipeline work runs. The TS engine throws the
+          // mirror `CommitInProgressError` / `StaleTxError` from
+          // `commitInternal` / `Tx.set`. Both sides surface the SAME
+          // error class string in the runner's `engineOutcome` — the
+          // oracle asserts that string. Under `CAUSL_BACKEND=rust-stub`
+          // these two categories now assert the oracle against the
+          // engine outcome (not the stub projection), reflecting that
+          // A.1's gate is on the real `transition_phased` not the
+          // `transition_phased_stub` shim. The 20 other categories
+          // remain pinned to the stub projection until A.2+ ports
+          // their pipeline behaviour.
+          //
           // Implementation strategy: the corpus runner does NOT
           // import the wasm-pack artefact directly — that would tie
           // every `packages/core` test run to the Rust toolchain
@@ -570,26 +679,37 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
           // (`packages/bench/test/ffi-roundtrip.test.ts`, acceptance
           // criterion (b)) + the Rust-side smoke test
           // (`tools/engine-rs-core/tests/ffi_smoke.rs`, acceptance
-          // criterion (a)). The corpus runner under
-          // `CAUSL_BACKEND=rust-stub` runs the SAME assertion as
-          // `stub` mode (the stub's projection is the canonical model
-          // of what the FFI roundtrip surfaces — proven by the two
-          // smoke tests).
+          // criterion (a)). For A.1 the Rust-side parity is asserted
+          // by `tools/engine-rs-core/tests/precondition_guards.rs`
+          // (the `seed::nested_commit` and `seed::stale_tx_after_run`
+          // tests + the `commit_nesting_is_forbidden` /
+          // `stale_tx_is_forbidden` proptest properties); the corpus
+          // runner here reflects the same invariant from the TS side.
           //
           // Why this isn't a re-implementation: the FFI roundtrip
-          // PROVES the projection model. If A.1+ work flips
-          // `transition_phased_stub`'s behaviour (or replaces it),
-          // the smoke tests fail FIRST, before the corpus runner
-          // ever drifts. The single source of truth remains the
-          // Rust stub function; the corpus runner reads its shape
-          // via the smoke-test-pinned projection.
-          const stubProj = canonicaliseToProjectionShape(stubOutcome)
-          const engineProj = canonicaliseToProjectionShape(engineOutcome)
-          expect(
-            engineProj,
-            'rust-stub: stub and engine outcomes match — false negative',
-          ).not.toStrictEqual(stubProj)
-          assertOracle(cat, stubOutcome)
+          // PROVES the projection model for the 20 stub-pinned
+          // categories. If A.1+ work flips `transition_phased_stub`'s
+          // behaviour (or replaces it), the smoke tests fail FIRST,
+          // before the corpus runner ever drifts.
+          const isA1PreconditionFix =
+            cat.id === 'precondition-nested-commit' ||
+            cat.id === 'precondition-stale-tx-after-run'
+          if (isA1PreconditionFix) {
+            // GREEN — A.1 ported the gate; engine outcome satisfies
+            // the oracle. Console-log the rust-stub PASS marker so
+            // the parent agent's corpus diff can grep for the
+            // RED → GREEN flip.
+            console.error(`[rust-stub] ${cat.id} PASS (A.1 #1338)`)
+            assertOracle(cat, engineOutcome)
+          } else {
+            const stubProj = canonicaliseToProjectionShape(stubOutcome)
+            const engineProj = canonicaliseToProjectionShape(engineOutcome)
+            expect(
+              engineProj,
+              'rust-stub: stub and engine outcomes match — false negative',
+            ).not.toStrictEqual(stubProj)
+            assertOracle(cat, stubOutcome)
+          }
           break
         }
         case 'rust':

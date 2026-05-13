@@ -3334,9 +3334,64 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // means that responsibility now falls entirely on Phase D.
     const processedThisPass = new Set<NodeId>()
     const changedThisCommit: NodeId[] = []
+    // #1305 (NEW rec #16) — equality-cutoff propagation. When a Phase D
+    // recompute produces an `Object.is`-stable value for derived `e`,
+    // every downstream derived `d` whose entire dep-set is denotationally
+    // unchanged this commit (every dep is either an unaffected node, or
+    // a `cutoffStable` derived) must also produce a stable value: the
+    // user's compute is a pure function of its deps (SPEC §15.1), so
+    // identical inputs yield an identical output under `Object.is`. We
+    // can skip `d`'s `computeDerived` call entirely; SPEC §3 Theorem 2
+    // (glitch-freedom) is preserved by construction because the skipped
+    // recompute is denotationally identical to running it.
+    //
+    // Salvaged subset of the dropped 3-state lazy-validation rec (the
+    // failed precedent: PR #946 reverted 28 invariant breaks). This
+    // change is intra-commit only — by the time the commit publishes,
+    // every derived's value is its true post-commit value; the published
+    // `Commit.changedNodes` is unaffected because a skipped derived
+    // wouldn't have changed value anyway. Rollback map is unaffected
+    // because skipped deriveds have no mutated state to restore.
+    //
+    // The Set lives in this closure and is freed at function exit.
+    // Commits where the cutoff never fires (every dep changes) leave it
+    // empty — worst-case memory delta is ~50 bytes for the Set header.
+    const cutoffStable = new Set<NodeId>()
     for (const id of ordered) {
       const e = entries.get(id)
       if (!e || e.kind !== 'derived') continue
+      // Cutoff propagation gate: every dep is denotationally unchanged
+      // this commit iff
+      //   - it is NOT a seed-changed input, AND
+      //   - it is NOT an affected derived OR it is in `cutoffStable`.
+      // The fused `indegree` Map (post-#1306) plays the dual role
+      // `affected: Set` used to: `indegree.has(dp)` answers "is `dp`
+      // an affected derived this commit?" We additionally require
+      // `e.computed` so a never-yet-computed derived still runs its
+      // first compute (no prior value to claim stability against).
+      if (e.computed) {
+        let allStable = true
+        for (const dp of e.deps) {
+          if (seedChanged.has(dp)) {
+            allStable = false
+            break
+          }
+          if (indegree.has(dp) && !cutoffStable.has(dp)) {
+            allStable = false
+            break
+          }
+        }
+        if (allStable) {
+          // Skip recompute. `e.value`, `e.deps`, `e.computed` are all
+          // unchanged; `e.lastTime` deliberately stays at the prior
+          // commit's time because the value was NOT recomputed —
+          // mirroring Phase C.5's `lastWriteTime` discipline (inputs
+          // whose value collapsed under `Object.is` are not re-stamped).
+          // No rollback entry needed: nothing mutated.
+          cutoffStable.add(id)
+          continue
+        }
+      }
       const before = e.value
       const wasComputed = e.computed
       // #703 Win 3 — `setDeps` swaps `e.deps` by reference (it never
@@ -3410,6 +3465,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // Equality cutoff: only propagate "changed" if the new value differs from the prior.
       if (!wasComputed || !Object.is(before, e.value)) {
         changedThisCommit.push(id)
+      } else {
+        // Recompute fired but value is `Object.is`-stable. Tag this
+        // derived as `cutoffStable` so subsequent topo-order iterations
+        // that depend ONLY on `e` (and other stable upstreams) can skip
+        // their recompute entirely. The propagation chain is bounded by
+        // the affected sub-graph — once any dep on the chain genuinely
+        // changes value, the downstream derived falls out of the
+        // `allStable` gate and the chain breaks.
+        cutoffStable.add(id)
       }
     }
     return changedThisCommit

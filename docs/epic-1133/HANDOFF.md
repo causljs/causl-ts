@@ -8,11 +8,11 @@
 
 **Last session**: 2026-05-13 (Phase 0 — preconditions land)
 
-**dev branch HEAD**: _(updated by the final commit of the session)_
+**dev branch HEAD**: `149d0817` (after PR #1324 merged) + this handoff-update PR.
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: 0 (Preconditions)
+**Phase**: 0 (Preconditions) — **partially complete**. Planning + announcement artifacts shipped; 2 code PRs deferred to next session.
 
 ---
 
@@ -37,10 +37,10 @@
 - [ ] `#1150` bundle ceiling closed
 - [ ] `#1151` hardcoded trial counts codemod + lint rule
 - [ ] `#1160` Criteria 6 + 7 re-opened (IC stability + per-call decomposition)
-- [ ] failing_against_stub corpus PR on dev
-- [ ] A.1 perf-floor probe PR on dev
-- [ ] Epic body amended with comment-link to `docs/epic-1133/PLAN.md`
-- [ ] `#1147` body amended with A.0–A.12 micro-ticket table
+- [ ] failing_against_stub corpus PR on dev (deferred this session — design complete in `PLAN.md` §6)
+- [ ] A.1 perf-floor probe PR on dev (deferred this session — design complete in `PLAN.md` §7)
+- [x] Epic body amended with comment-link to `docs/epic-1133/PLAN.md` (comment 4438329762)
+- [x] `#1147` body amended with A.0–A.12 micro-ticket table (comment 4438334059)
 - [ ] SPEC §3 Theorem 2 uninterruptibility amendment drafted
 - [ ] SPEC §5.1 IndexMap container pin amendment drafted
 
@@ -53,13 +53,30 @@
 **Goal**: land Phase 0 preconditions. NO Rust engine code; only planning artifacts + the two probe PRs.
 
 **Landed on `dev`**:
-- _(filled in as PRs merge)_
+- `dev` branch created off `main@117941ac` (preserves main stability while the Rust port stabilises).
+- PR **#1324** — `docs/epic-1133/PLAN.md` (canonical plan, folds all 17 team-review comments) + `docs/epic-1133/HANDOFF.md` (this file) merged to dev at commit **`149d0817`**.
+- Status comment posted on **#1133** ([comment 4438329762](https://github.com/iasbuilt/causl/issues/1133#issuecomment-4438329762)) — supersedes-pointer with plan link + Phase 0 status + corrections list.
+- Decomposition comment posted on **#1147** ([comment 4438334059](https://github.com/iasbuilt/causl/issues/1147#issuecomment-4438334059)) — full A.0–A.12 micro-ticket table with file:line anchors.
 
-**Open work at session end**:
-- _(filled in by closing handoff)_
+**Open work at session end (NEXT-SESSION QUEUE)**:
+
+Phase 0 has 2 code PRs deferred (designs are complete and live in `PLAN.md`; implementation is mechanical):
+
+1. **PR: `failing_against_stub` corpus extraction → `dev`** (~250 LoC TS + Rust integration test).
+   - Files to create: `packages/core/test/properties/failing-against-stub.property.test.ts`, `packages/core/test/properties/failing-against-stub-fixtures.ts`, `tools/engine-rs-core/tests/stub_corpus_categories.rs`.
+   - Acceptance: with `CAUSL_BACKEND=stub` (default), all 20 categories MUST FAIL today; CI parses `[stub] <id> FAIL` and asserts count == 20.
+   - Spec source: `PLAN.md` §6 + parallel research agent output preserved in this session's task list (#23).
+
+2. **PR: A.1 perf-floor probe scaffolding → `dev`** (~20 LoC Rust + scenario row + per-lib case + hypothesis row).
+   - Files to modify: `tools/engine-rs-bridge-serde/Cargo.toml` (add `floor-only` feature), `tools/engine-rs-bridge-serde/src/lib.rs` (gated `floor_only_transition`), `tools/wasm-build/build.mjs` (second invocation), `packages/bench/src/wasm-stub-loader.ts` (sibling `floorBridgeCommit`), `packages/bench/src/scenario.ts` (new `op-rust-bridge-floor-1k` row), `packages/bench/src/libraries/causl.ts` (case branch), `packages/bench/src/hypotheses/causl-hypotheses.ts` (new row).
+   - Acceptance: PR reports measured median ns/op × 10k and lands in GO (≤0.3 ms) / AMBER (0.3-0.5 ms, rerun against gc bridge) / STOP (≥0.5 ms, file STOP-verdict on #1133).
+   - Spec source: `PLAN.md` §7 + parallel research agent output (#25).
+
+After both ship, Phase 0 is complete and Phase 1 (preconditions: #1150, #1151, SPEC §3/§5.1 amendments, #1160 re-open with Criteria 6+7) becomes claimable.
 
 **Quota status at session end**:
-- _(filled in if usage cap hits before session goal complete)_
+- Session productive throughout; no quota wall hit. Background-agent quota refreshed today (was hit earlier in prior session at 11:10pm America/Vancouver per task notifications).
+- The two deferred PRs were sized as ~1-2 hours each. Sequencing for next session: claim the corpus PR first (it's the design-pressure surface — every Phase A micro-ticket gates on a corpus slice turning green).
 
 **Surprises / honest findings**:
 - Comment synthesis surfaced **49 distinct diff entries across 11 issues** — 16 sub-issues have ZERO team-review comments and stay as-is unless they receive a folded upstream change.

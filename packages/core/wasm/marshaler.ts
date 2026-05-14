@@ -1,7 +1,5 @@
 /**
- * F-marshal scaffold (epic #1133, sub-epic #1457, ticket #1463).
- *
- * Typestate scaffold for the JS↔Rust state marshaler.
+ * F-marshal — JS-side state mirror (epic #1133, sub-epic #1457).
  *
  * Per Decision 1 of {@link https://github.com/iasbuilt/causl/issues/1457#issuecomment-4454257401 #1457 design pin}
  * the canonical-state location is **hybrid**:
@@ -20,17 +18,12 @@
  *
  * Per Decision 4 disposed cells are WASM-side authoritative. The JS-side
  * dictionary mirrors live slots only; `dispose()` marshals
- * `Action::Dispose` and drops the slot. No tombstones JS-side.
+ * `Action::Dispose` and drops the slot. No tombstones JS-side; stale
+ * reads surface as {@link NodeDisposedError}.
  *
- * This file is the F-marshal.0 typestate scaffold — methods are
- * declared but unimplemented (each throws `'not yet implemented'`).
- * Filled in by:
- *   - F-marshal.1 (#1464) — `WasmStateMirror` class body, slot
- *     dictionary CRUD, stale-id `NodeDisposedError`.
- *   - F-marshal.2 (#1465) — `marshalCommitEnvelope`.
- *   - F-marshal.3 (#1466) — `applyBridgeResult`.
- *   - F-marshal.4 (#1467) — `allocateSlot` (calls into bridge
- *     `wasm_create_input` / `wasm_create_derived`).
+ * Filled in across F-marshal.1 → F-marshal.7. F-marshal.1 (this slice)
+ * lands the slot dictionary CRUD and stale-id detection. F-marshal.2 /
+ * F-marshal.3 add the JS→Rust / Rust→JS commit envelope marshal pair.
  *
  * @internal
  */
@@ -44,7 +37,7 @@ import type { GraphTime, NodeId } from '../src/types.js'
  * (the wire-format projection of {@link NodeId}). The `gen` field is the
  * generation tag the cell carried when this handle was minted; a stale
  * `Slot` (one whose `gen` no longer matches the cell's `generation`)
- * surfaces as `NodeDisposedError` on read.
+ * surfaces as {@link NodeDisposedError} on read.
  */
 export interface Slot {
   readonly idx: number
@@ -70,14 +63,22 @@ export type JsonValue =
 
 /**
  * Thrown when a `NodeId` whose slot has been disposed (generational
- * mismatch) is read or written. The marshaler surfaces this rather than
- * silently returning `undefined` so adopters can catch use-after-dispose
- * bugs deterministically.
+ * mismatch, or no entry in the dictionary at all) is read or written.
+ *
+ * Surfaces deterministically rather than silently returning `undefined`
+ * so adopters can catch use-after-dispose bugs at the right seam. The
+ * Rust-side mirror returns the same error shape via the bridge's
+ * `commit()` failure path (`NodeDisposedError` is the engine core's
+ * generational-mismatch signal).
  */
 export class NodeDisposedError extends Error {
+  /** The offending NodeId. Exposed so adopters can introspect. */
+  readonly nodeId: NodeId
+
   constructor(nodeId: NodeId) {
     super(`NodeId '${nodeId}' refers to a disposed slot`)
     this.name = 'NodeDisposedError'
+    this.nodeId = nodeId
   }
 }
 
@@ -86,62 +87,114 @@ export class NodeDisposedError extends Error {
  *
  * Holds the dictionary that translates adopter-facing string `NodeId`s
  * to engine-internal `Slot` handles, the JS-side input cell mirror
- * (`Map<Slot, JsonValue>`), and the current `GraphTime`.
+ * (`Map<number, JsonValue>` keyed by slot `idx`), and the current
+ * `GraphTime`.
  *
- * F-marshal.0 stub: methods declared, bodies throw. F-marshal.1 fills
- * in the slot dictionary CRUD; F-marshal.2 / F-marshal.3 add the
- * commit envelope marshal pair.
+ * F-marshal.1 scope: slot dictionary CRUD + stale-id detection. The
+ * commit-envelope marshal pair (F-marshal.2 / F-marshal.3) and the
+ * bridge entrypoints (F-marshal.4) plug in around this surface in
+ * later cascade tickets.
  */
 export class WasmStateMirror {
-  /** Dictionary: adopter NodeId → engine-internal Slot handle. */
+  /**
+   * Adopter NodeId → engine-internal Slot. Only live slots; disposal
+   * removes the entry (Decision 4 — no JS-side tombstones).
+   */
   readonly dictionary: Map<NodeId, Slot> = new Map()
 
-  /** JS-side input cell mirror — keyed by slot `idx`. */
+  /**
+   * JS-side input cell mirror, keyed by slot `idx`. The adopter-facing
+   * input write path stages values here; the marshal builder
+   * (F-marshal.2) rebuilds `Vec<InputCell>` from this map on commit.
+   *
+   * Note: keyed by `idx` (not `Slot` object) so re-registration after
+   * dispose+recycle of a slot evicts the prior generation's value
+   * automatically.
+   */
   readonly inputs: Map<number, JsonValue> = new Map()
 
   /** Current `GraphTime` — mirrors WASM-side `state.now`. */
   now: GraphTime = 0 as GraphTime
 
   /**
-   * Register an input slot in the dictionary. Called after
-   * `wasm_create_input()` returns a fresh slot integer.
+   * Register a fresh slot in the dictionary. Called by the marshaler
+   * after `wasm_create_input()` (F-marshal.4) returns a slot integer.
    *
-   * F-marshal.0: stub. Filled in by F-marshal.1.
+   * Idempotent on `(nodeId, slot)` re-registration: replaces the
+   * existing dictionary entry. Adopters that recycle a NodeId after
+   * dispose+create get a fresh generation tag; the prior `Slot` value
+   * they held becomes stale and reads through it throw
+   * {@link NodeDisposedError}.
+   *
+   * @param nodeId - Adopter-facing string NodeId.
+   * @param slot - Engine-internal slot handle returned by the bridge.
    */
-  registerInput(_nodeId: NodeId, _slot: Slot): void {
-    throw new Error('WasmStateMirror.registerInput: not yet implemented')
+  registerInput(nodeId: NodeId, slot: Slot): void {
+    this.dictionary.set(nodeId, slot)
+    // Initialise the input cell mirror with a null sentinel so the
+    // marshal-builder sees a fully-populated `Vec<InputCell>` shape.
+    // Adopters that subsequently write through `tx.set()` overwrite
+    // this; adopters that read before writing get the null value
+    // (matching the TS engine's `g.input(undefined)` shape).
+    if (!this.inputs.has(slot.idx)) {
+      this.inputs.set(slot.idx, { kind: 'null' })
+    }
   }
 
   /**
-   * Dispose an input slot. Marshals `Action::Dispose { node }` to the
-   * bridge and drops the slot from the dictionary.
+   * Dispose an input slot. Removes the dictionary entry and the JS-side
+   * input cell mirror so stale `Slot` handles that other code might be
+   * holding fail their generation check.
    *
-   * F-marshal.0: stub. Filled in by F-marshal.1 / F-marshal.4.
+   * F-marshal.1 scope: dictionary mutation only. F-marshal.4 wires this
+   * up to the bridge's `wasm_dispose(slot)` so the WASM-side
+   * `state.disposed: BTreeSet<NodeId>` stays authoritative.
+   *
+   * Silently no-ops on a NodeId that's already been disposed or never
+   * registered — matches the TS engine's `g.dispose()` idempotency.
+   *
+   * @param nodeId - Adopter-facing string NodeId.
    */
-  dispose(_nodeId: NodeId): void {
-    throw new Error('WasmStateMirror.dispose: not yet implemented')
+  dispose(nodeId: NodeId): void {
+    const slot = this.dictionary.get(nodeId)
+    if (slot === undefined) return
+    this.dictionary.delete(nodeId)
+    this.inputs.delete(slot.idx)
   }
 
   /**
-   * Read the latest known value for a NodeId. Returns the JS-side
-   * mirror's input value for inputs; derived reads pay a cross-boundary
-   * fetch (Decision 1). Throws {@link NodeDisposedError} if the slot
-   * generation no longer matches.
+   * Read the JS-side mirrored input value for a NodeId. Returns the
+   * `JsonValue` mirror of the input cell; throws
+   * {@link NodeDisposedError} if the NodeId is unknown (never registered
+   * or already disposed).
    *
-   * F-marshal.0: stub. Filled in by F-marshal.1.
+   * Derived reads pay a cross-boundary fetch (Decision 1 — deriveds
+   * live WASM-side); the F-marshal cascade adds that path in
+   * F-marshal.7. F-marshal.1 only resolves inputs.
+   *
+   * @param nodeId - Adopter-facing string NodeId.
+   * @throws {NodeDisposedError} if the NodeId has no live slot.
    */
-  read(_nodeId: NodeId): JsonValue | undefined {
-    throw new Error('WasmStateMirror.read: not yet implemented')
+  read(nodeId: NodeId): JsonValue | undefined {
+    const slot = this.dictionary.get(nodeId)
+    if (slot === undefined) {
+      throw new NodeDisposedError(nodeId)
+    }
+    return this.inputs.get(slot.idx)
   }
 
   /**
-   * Translate adopter-facing NodeId → engine-internal Slot handle.
-   * Returns `undefined` if the NodeId is unknown (never registered)
-   * or has been disposed.
+   * Translate adopter-facing NodeId → engine-internal Slot. Returns
+   * `undefined` if the NodeId has no live entry (never registered or
+   * already disposed).
    *
-   * F-marshal.0: stub. Filled in by F-marshal.1.
+   * Used by F-marshal.2's commit-envelope builder to project an
+   * adopter-supplied `Map<NodeId, value>` of writes to the bare-slot-
+   * integer wire shape the engine consumes.
+   *
+   * @param nodeId - Adopter-facing string NodeId.
    */
-  getSlotForNodeId(_nodeId: NodeId): Slot | undefined {
-    throw new Error('WasmStateMirror.getSlotForNodeId: not yet implemented')
+  getSlotForNodeId(nodeId: NodeId): Slot | undefined {
+    return this.dictionary.get(nodeId)
   }
 }

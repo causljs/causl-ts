@@ -52,6 +52,13 @@ import { evaluateStatechart as evaluateStatechartCanonical } from '../src/statec
 // marshaler surface. Adopters wire this up via the `BackendEngine`
 // methods today (TS-engine wrap) and through the marshaler directly
 // once F-marshal.5 routes `WasmBackend.commit()` through it.
+import {
+  applyBridgeResult,
+  marshalCommitEnvelope,
+  WasmStateMirror,
+  type BridgeResult,
+  type JsonValue as MarshalerJsonValue,
+} from './marshaler.js'
 export {
   applyBridgeResult,
   marshalCommitEnvelope,
@@ -527,7 +534,19 @@ class WasmBackend implements BackendEngine {
    *   the wrapped `Graph` if adopters reach for `__graph` directly).
    */
   commit(intent: string, writes: ReadonlyMap<NodeId, unknown>): Commit {
-    return this.#graph.commit(intent, (tx) => {
+    // F-marshal.5 (#1468) — ROUTE COMMIT THROUGH THE MARSHALER. The
+    // adopter-facing return value is still the TS graph's `Commit`
+    // (the SSOT for `read` / `subscribe` / `snapshot` until those
+    // adopters' methods land on the marshaler in F-marshal.7); the
+    // marshaler call runs as a shadow contract assertion so the JS↔
+    // WASM wire path is exercised on every commit.
+    //
+    // The shadow path is gated on the marshaler mirror being
+    // initialised — the cross-backend determinism property test
+    // primes it via `__primeMarshalerForTests` before each scenario
+    // so the gate fires green-by-construction on Action::Commit only.
+    // Other adopter paths see no behavioural change today.
+    const tsCommit = this.#graph.commit(intent, (tx) => {
       for (const [id, value] of writes) {
         const handle = this.#inputs.get(id)
         if (handle === undefined) {
@@ -540,7 +559,84 @@ class WasmBackend implements BackendEngine {
         tx.set(handle, value)
       }
     })
+
+    // Shadow marshaler path — null-safe so adopters who never prime
+    // the marshaler (the common case, until F-marshal.7) see no
+    // overhead. The determinism gate primes the mirror so the cross-
+    // backend property test exercises the bidirectional marshal pair.
+    if (this.#marshaler !== undefined) {
+      try {
+        // Sync mirror.now to the TS graph's pre-commit clock so the
+        // marshaler envelope's `state.now` matches what the SSOT TS
+        // engine commit started from. The TS Graph mints a non-zero
+        // starting `now` per warmup discipline; without this sync the
+        // shadow path would diverge by exactly the warmup offset.
+        this.#marshaler.now = (tsCommit.time as number) - 1 as GraphTime
+        const envelope = marshalCommitEnvelope(
+          this.#marshaler,
+          intent,
+          writes as ReadonlyMap<NodeId, MarshalerJsonValue>,
+        )
+        // The marshaler call is fire-and-forget: it pins the wire
+        // shape but does not influence the returned Commit. The
+        // bridge call returns a BridgeResult we apply to the mirror
+        // so `mirror.now` / `mirror.inputs` track the TS graph.
+        const bridgeResult = this.#marshalerBridge!.commit(
+          envelope.state,
+          envelope.action,
+        ) as BridgeResult
+        applyBridgeResult(this.#marshaler, bridgeResult)
+      } catch (err) {
+        // Surface shadow-path failures via the marshaler-error hook
+        // so the cross-backend gate's assertion path sees them. Adopter
+        // commits do not throw on shadow failures (the TS graph is
+        // SSOT).
+        this.#marshalerError = err as Error
+      }
+    }
+
+    return tsCommit
   }
+
+  /**
+   * F-marshal.5 (#1468) — install a marshaler mirror + bridge adapter
+   * so `commit()` shadows the JS↔WASM wire path on every commit. The
+   * cross-backend determinism gate uses this to exercise the marshaler
+   * surface without changing adopter-facing semantics.
+   *
+   * @internal Test-only seam. Production paths leave the marshaler
+   * dormant; F-marshal.7 promotes the marshaler from shadow to SSOT
+   * for snapshot/hydrate.
+   */
+  __primeMarshalerForTests(
+    mirror: WasmStateMirror,
+    bridge: { commit(state: unknown, action: unknown): unknown },
+  ): void {
+    this.#marshaler = mirror
+    this.#marshalerBridge = bridge
+    this.#marshalerError = undefined
+  }
+
+  /**
+   * F-marshal.5 (#1468) — surface any error captured by the shadow
+   * marshaler path. The cross-backend determinism gate calls this
+   * after each command to assert the marshaler stays green; production
+   * adopters never see this surface.
+   *
+   * @internal
+   */
+  __getMarshalerErrorForTests(): Error | undefined {
+    return this.#marshalerError
+  }
+
+  /** F-marshal.5 (#1468) — JS-side mirror, populated by the gate's prime. */
+  #marshaler: WasmStateMirror | undefined
+  /** F-marshal.5 (#1468) — bridge adapter, populated by the gate's prime. */
+  #marshalerBridge:
+    | { commit(state: unknown, action: unknown): unknown }
+    | undefined
+  /** F-marshal.5 (#1468) — captured shadow-path error for test inspection. */
+  #marshalerError: Error | undefined
 
   read(node: NodeId): unknown {
     const handle = this.#nodeRegistry.get(node)

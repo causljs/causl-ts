@@ -30,17 +30,17 @@ describe('WasmStateMirror — F-marshal.1 slot dictionary CRUD', () => {
     const m = new WasmStateMirror()
     const id = 'a' as NodeId
     m.registerInput(id, { idx: 7, gen: 0 })
-    expect(m.inputs.get(7)).toEqual({ kind: 'null' })
+    expect(m.inputs.get(7)).toEqual(null)
   })
 
   it('registerInput does not clobber an existing value on re-register at same slot', () => {
     const m = new WasmStateMirror()
     const id = 'a' as NodeId
     m.registerInput(id, { idx: 0, gen: 0 })
-    m.inputs.set(0, { kind: 'number', value: 42 })
+    m.inputs.set(0, 42)
     // Re-register the SAME slot — should not reset the value.
     m.registerInput(id, { idx: 0, gen: 0 })
-    expect(m.inputs.get(0)).toEqual({ kind: 'number', value: 42 })
+    expect(m.inputs.get(0)).toBe(42)
   })
 
   it('getSlotForNodeId returns the live slot', () => {
@@ -60,7 +60,7 @@ describe('WasmStateMirror — F-marshal.1 slot dictionary CRUD', () => {
     const m = new WasmStateMirror()
     const id = 'c' as NodeId
     m.registerInput(id, { idx: 5, gen: 0 })
-    m.inputs.set(5, { kind: 'string', value: 'hello' })
+    m.inputs.set(5, 'hello')
     m.dispose(id)
     expect(m.dictionary.has(id)).toBe(false)
     expect(m.inputs.has(5)).toBe(false)
@@ -83,8 +83,8 @@ describe('WasmStateMirror — F-marshal.1 slot dictionary CRUD', () => {
     const m = new WasmStateMirror()
     const id = 'e' as NodeId
     m.registerInput(id, { idx: 2, gen: 0 })
-    m.inputs.set(2, { kind: 'bool', value: true })
-    expect(m.read(id)).toEqual({ kind: 'bool', value: true })
+    m.inputs.set(2, true)
+    expect(m.read(id)).toBe(true)
   })
 
   it('read throws NodeDisposedError on stale id (never registered)', () => {
@@ -115,12 +115,12 @@ describe('WasmStateMirror — F-marshal.1 slot dictionary CRUD', () => {
     const m = new WasmStateMirror()
     const id = 'g' as NodeId
     m.registerInput(id, { idx: 0, gen: 0 })
-    m.inputs.set(0, { kind: 'number', value: 1 })
+    m.inputs.set(0, 1)
     // Slot recycled at a new generation after dispose.
     m.dispose(id)
     m.registerInput(id, { idx: 0, gen: 1 })
     // Fresh null sentinel, NOT the prior value:
-    expect(m.read(id)).toEqual({ kind: 'null' })
+    expect(m.read(id)).toBeNull()
     // And the dictionary reflects the new generation:
     expect(m.getSlotForNodeId(id)).toEqual({ idx: 0, gen: 1 })
   })

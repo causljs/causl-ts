@@ -45,21 +45,28 @@ export interface Slot {
 }
 
 /**
- * `JsonValue` shape mirroring the Rust-side tagged-union value tree
- * (`tools/engine-rs-core/src/json_value.rs`). The marshaler converts
- * adopter-supplied JS values to this shape on commit and reads them
- * back on read.
+ * `JsonValue` wire shape. The Rust-side `JsonValue`
+ * (`tools/engine-rs-core/src/json_value.rs`) carries a custom Serialize
+ * impl that emits **plain JSON values** (not a tagged-union envelope):
+ *   - `JsonValue::Null` → JS `null`
+ *   - `JsonValue::Bool(b)` → JS `boolean`
+ *   - `JsonValue::Number(n)` → JS `number` (integer-shaped f64 → bare
+ *     int; non-finite → `null` per `JSON.stringify` rules)
+ *   - `JsonValue::String(s)` → JS `string`
+ *   - `JsonValue::Array(v)` → JS array
+ *   - `JsonValue::Object(o)` → JS object with sorted-by-key iteration
+ *
+ * The marshaler therefore passes plain JS values through `serde-wasm-
+ * bindgen` directly — the Rust `Deserialize` visitor accepts every JSON
+ * scalar kind and reconstructs the tagged enum on the Rust side.
  */
 export type JsonValue =
-  | { readonly kind: 'null' }
-  | { readonly kind: 'bool'; readonly value: boolean }
-  | { readonly kind: 'number'; readonly value: number }
-  | { readonly kind: 'string'; readonly value: string }
-  | { readonly kind: 'array'; readonly value: readonly JsonValue[] }
-  | {
-      readonly kind: 'object'
-      readonly value: Readonly<Record<string, JsonValue>>
-    }
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue }
 
 /**
  * Thrown when a `NodeId` whose slot has been disposed (generational
@@ -137,7 +144,7 @@ export class WasmStateMirror {
     // this; adopters that read before writing get the null value
     // (matching the TS engine's `g.input(undefined)` shape).
     if (!this.inputs.has(slot.idx)) {
-      this.inputs.set(slot.idx, { kind: 'null' })
+      this.inputs.set(slot.idx, null)
     }
   }
 
@@ -196,5 +203,153 @@ export class WasmStateMirror {
    */
   getSlotForNodeId(nodeId: NodeId): Slot | undefined {
     return this.dictionary.get(nodeId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// F-marshal.2 (#1465) — JS→Rust envelope builder for `Action::Commit`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire shape of an `InputCell` per `tools/engine-rs-core/src/cell.rs`:
+ * `{ id, value, last_write_time }` (the transient `generation`,
+ * `last_staged_at`, `last_staged_row`, `has_dependents` fields all
+ * carry `#[serde(skip)]` — they reconstitute on the Rust side).
+ *
+ * `id` is the bare slot integer per the `NodeId` serde projection
+ * (`tools/engine-rs-core/src/state.rs:243` — serialises as `u32`).
+ */
+export interface InputCellWire {
+  readonly id: number
+  readonly value: JsonValue
+  readonly last_write_time: number
+}
+
+/**
+ * Wire shape of `State` per `tools/engine-rs-core/src/state.rs` —
+ * the container has `#[serde(default)]` so any subset of fields
+ * suffices. F-marshal.2 only populates `now` and `inputs`; the
+ * remaining ten fields default to empty on the Rust side.
+ *
+ * F-marshal.7 (#1470) extends this to cover the snapshot/hydrate
+ * round-trip (deriveds, commit_log, retention, etc.).
+ */
+export interface BridgeState {
+  readonly now: number
+  readonly inputs: readonly InputCellWire[]
+}
+
+/**
+ * Wire shape of `Action::Commit` per `tools/engine-rs-core/src/action.rs`:
+ * internally tagged `#[serde(tag = "action", rename_all = "kebab-case")]`.
+ * `writes` is a `Vec<NodeId>` of bare slot integers.
+ */
+export interface BridgeCommitAction {
+  readonly action: 'commit'
+  readonly intent: string
+  readonly writes: readonly number[]
+}
+
+/**
+ * Marshaled commit envelope — the `(state, action)` pair the bridge's
+ * `commit(state, action)` extern consumes.
+ */
+export interface CommitEnvelope {
+  readonly state: BridgeState
+  readonly action: BridgeCommitAction
+}
+
+/**
+ * Build the JS→Rust commit envelope from the mirror's live slot set +
+ * an adopter-supplied write map.
+ *
+ * Per Decision 1 of #1457 the JS-side mirror is the SSOT for inputs.
+ * This builder walks the mirror's `dictionary` in stable insertion
+ * order (`Map` iteration preserves insertion order in JS) and emits a
+ * `Vec<InputCell>` rebuilt from the live entries. Writes from the
+ * adopter map are applied IN PLACE — the corresponding cell's `value`
+ * is overwritten and `last_write_time` is stamped at `mirror.now + 1`
+ * (the tick the commit advances to).
+ *
+ * Any write whose NodeId is not in the dictionary throws
+ * {@link NodeDisposedError} — same surface the JS-side `read()` uses.
+ *
+ * The resulting `writes` array carries the bare slot integers in
+ * deterministic order (sorted ascending by slot id) so the cross-
+ * backend determinism gate sees a stable wire shape.
+ *
+ * @param mirror - JS-side state mirror.
+ * @param intent - Adopter-supplied commit intent label.
+ * @param writes - Map of NodeId → new value (`JsonValue` plain shape).
+ */
+export function marshalCommitEnvelope(
+  mirror: WasmStateMirror,
+  intent: string,
+  writes: ReadonlyMap<NodeId, JsonValue>,
+): CommitEnvelope {
+  // Pre-resolve every write's NodeId → Slot. Failing fast lets the
+  // adopter see the offending id before the commit envelope ships
+  // across the FFI.
+  const resolvedWrites = new Map<number, JsonValue>()
+  for (const [nodeId, value] of writes) {
+    const slot = mirror.dictionary.get(nodeId)
+    if (slot === undefined) {
+      throw new NodeDisposedError(nodeId)
+    }
+    resolvedWrites.set(slot.idx, value)
+  }
+
+  // The commit advances `now` by one tick. Stamping `last_write_time`
+  // with this value mirrors what `transition_phased`'s
+  // `Action::Commit` body does (`state.rs:State::commit`).
+  const nextTime = (mirror.now as unknown as number) + 1
+
+  // Rebuild `inputs: Vec<InputCell>` from the mirror's live slot set.
+  // Collect every live slot from the dictionary, dedup by `idx` (a
+  // disposed-then-reused slot only has the live generation in the
+  // dictionary post-Decision 4), and walk in sorted-by-slot order so
+  // the wire bytes are deterministic regardless of NodeId hashing.
+  const slotsByIdx = new Map<number, { slot: Slot; lastWriteTime: number }>()
+  for (const slot of mirror.dictionary.values()) {
+    if (slotsByIdx.has(slot.idx)) continue
+    slotsByIdx.set(slot.idx, {
+      slot,
+      // Default last_write_time = 0 for previously-untouched cells.
+      // Adopter rewrites will bump this below.
+      lastWriteTime: 0,
+    })
+  }
+
+  const sortedIdxs = Array.from(slotsByIdx.keys()).sort((a, b) => a - b)
+  const inputs: InputCellWire[] = sortedIdxs.map((idx) => {
+    const entry = slotsByIdx.get(idx)
+    // Safe — idx came from slotsByIdx.keys():
+    if (entry === undefined) throw new Error('marshalCommitEnvelope: invariant')
+    const writeValue = resolvedWrites.get(idx)
+    const value =
+      writeValue !== undefined ? writeValue : mirror.inputs.get(idx) ?? null
+    const lastWriteTime =
+      writeValue !== undefined ? nextTime : entry.lastWriteTime
+    return { id: idx, value, last_write_time: lastWriteTime }
+  })
+
+  // Stable ascending order on `writes` so the bridge sees a
+  // deterministic wire shape per commit (the TS engine's
+  // `Commit.changedNodes` is registration-ordered today; the Rust
+  // engine's `transition_phased` for `Action::Commit` sorts the
+  // changed set into `commit.changed_nodes` so the cross-backend
+  // gate keys on a stable order on both sides).
+  const writeSlots = Array.from(resolvedWrites.keys()).sort((a, b) => a - b)
+
+  return {
+    state: {
+      now: mirror.now as unknown as number,
+      inputs,
+    },
+    action: {
+      action: 'commit',
+      intent,
+      writes: writeSlots,
+    },
   }
 }

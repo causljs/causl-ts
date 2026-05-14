@@ -6,15 +6,33 @@
 
 ## Current state
 
-**Last session**: 2026-05-14 (Phase E COMPLETE — **all 11 micro-tickets E.0–E.10 landed on dev**)
+**Last session**: 2026-05-14 (Phase E COMPLETE; Phase F RE-SCOPED — original cascade decomposition halted at pre-flight after scoping verdict; replaced with four sub-epics)
 
-**dev branch HEAD**: post-E.10 (this PR — see Phase E PR roll-up below).
+**dev branch HEAD**: post-E.10 (Phase E commit `f9fe17db`; this PR adds the Phase-F re-scoping bookmark only).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **E COMPLETE** (11/11 micro-tickets E.0–E.10 landed). Phase F (#1142) claimable next.
+**Phase**: **E COMPLETE** (11/11 E.0–E.10 landed). **Phase F (#1142) OPEN, re-scoped** into four sub-epics. **Phase G validation (#1145/#1146/#1141/#1138/#1140) structurally blocked** by Phase F sub-epics.
 
-**Resumption bookmark**: Phase E 11/11 COMPLETE on `dev` as of this PR (merge of E.10). Next claimable umbrella: **Phase F (#1142)** — WasmBackend integration (replace TS-wrapper with real Rust delegation through the bridge). Phase E shipped the SubscriberCallback trait + batched dispatch + JS↔WASM bridge `setSubscriberCallback(fn)` on both serde + gc bridges. Phase F lifts the Phase-1 WasmBackend's internal TS-wrapper to route the real Rust engine. Pairs with Phase G validation (#1145/#1146/#1141/#1138/#1140) for the boundary-tax re-measurement under real engine work.
+**Resumption bookmark**: Phase F has been **re-scoped** because the JS↔Rust state marshaler the original cascade presupposed does not exist. Cascade pattern (B/C/D/E shape) doesn't fit; integration-class work needs design phases. Next claimable work:
+
+| Order | Issue | Sub-epic | Notes |
+|---|---|---|---|
+| 1 | **#1459** | F-singleton-vs-multiplex | Decision record on `setSubscriberCallback` routing. Smallest unblock; shapes #1457 surface. No code. |
+| 2 | **#1457** | F-marshal | Bidirectional JS↔Rust state marshaler. Design pinned in issue body, then decomposed into multi-PR sub-cascade. Largest sub-epic. |
+| 3 | **#1458** | F-loader | `loadWasmBackend()` actually instantiates .wasm. Parallelizable with #1457 implementation. |
+| 4 | **#1460** | F-cross-backend-actual-gate | Flip determinism gate to real-Rust-vs-TS. Blocked by #1457 + #1458. |
+
+Re-scoping landed in issue-tracker comments only (no dev PR for the re-scoping itself, just this HANDOFF.md bookmark update):
+- #1142 [comment 4454139936](https://github.com/iasbuilt/causl/issues/1142#issuecomment-4454139936) — Phase F decomposition superseded
+- #1142 [comment 4454142102](https://github.com/iasbuilt/causl/issues/1142#issuecomment-4454142102) — sub-epic ticket numbers + dependency edges
+- #1133 [comment 4454142282](https://github.com/iasbuilt/causl/issues/1133#issuecomment-4454142282) — epic-level acknowledgement that Phase F crosses the cascade-pattern limit
+
+**Why the cascade pattern broke at Phase F** (honest assessment for future sessions):
+- Phases B–E were contained engine-internal Rust ports with clear SPEC mappings — perfect for cascades
+- Phase F crosses JS↔WASM integration; needs architectural decisions (state ownership, NodeId surface translation, singleton/multiplex routing) that cascade briefs cannot delegate
+- Phase F agent halted at pre-flight after verifying: bridge `commit(state, action)` is stateless and no JS-side marshaler exists; `loadWasmBackend()` never reaches `WebAssembly.instantiate`; `setSubscriberCallback` is module-global; original F.5 "remove Proxy + structuredClone shim" described code that doesn't exist. Proceeding-as-briefed would produce PRs that fail `pnpm validate` — a different risk class than overriding a measurable STOP-VERDICT
+- Future phase work proceeds **per-sub-epic with explicit design phases**, not cascade-style
 
 **Phase B technical state delivered (B.0–B.10 closeout — landed earlier this session)**:
 - Kahn-BFS recompute drain live (B.2 fused affected/indegree + B.3 drain + ComputeCallback FFI boundary)
@@ -466,6 +484,11 @@ If the next session continues the cascade, claim **Phase F** first (it unblocks 
 - Phase C parent (CLOSED): [`#1144`](https://github.com/iasbuilt/causl/issues/1144)
 - Phase D parent (CLOSED): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
 - Phase E parent (CLOSED): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
-- Phase F parent (next claimable): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
+- Phase F parent (OPEN, re-scoped): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
+- Phase F sub-epics (next claimable in order):
+  - **#1459** (decision): [`F-singleton-vs-multiplex`](https://github.com/iasbuilt/causl/issues/1459)
+  - **#1457** (epic-scale): [`F-marshal`](https://github.com/iasbuilt/causl/issues/1457)
+  - **#1458**: [`F-loader`](https://github.com/iasbuilt/causl/issues/1458)
+  - **#1460** (blocked): [`F-cross-backend-actual-gate`](https://github.com/iasbuilt/causl/issues/1460)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

@@ -884,6 +884,33 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
             cat.id === 'tx-set-two-inputs-changed-nodes-stable-order' ||
             cat.id === 'tx-set-intent-roundtrip' ||
             cat.id === 'tx-set-equality-cutoff-changed-nodes-empty'
+          // B.3 (#1370) flips category 6 RED → GREEN against rust-stub.
+          // The Rust-side `tools/engine-rs-core/src/transition/kahn.rs::drain`
+          // ports the SPEC §5.1 Phase D Kahn topological recompute walk:
+          // gathers each affected derived's dep values from State,
+          // invokes the user-supplied `ComputeCallback`
+          // (`tools/engine-rs-core/src/compute_callback.rs`), gates the
+          // result through `is_same_value` (the A.5 SameValue oracle),
+          // and pushes recomputed-and-actually-changed derived ids to
+          // `changed_nodes` in Kahn topological order. The wired
+          // `transition::recompute::recompute_affected` consumes B.2's
+          // `build_indegree` output and drives the drain.
+          //
+          //   - `derived-chain-depth-2-publishes-all` — depth-2 chain
+          //     `a → d1 → d2`. The TS oracle's
+          //     `changedNodeIds: ['a', 'd1', 'd2']` is satisfied by the
+          //     Kahn drain visiting `d1` then `d2` in topological
+          //     order; the engine's `changed_nodes` accumulator carries
+          //     `[a, d1, d2]` (fast-path-or-slow-path survivor for `a`,
+          //     then Kahn drain output for `d1`/`d2`).
+          //
+          // Per the B.3 ticket (#1370) acceptance: corpus dashboard
+          // moves from 11/25 → 12/25. The corpus runner's TS-engine
+          // path was already producing the correct outcome (the TS
+          // engine has the full Phase D walk); B.3's contribution is
+          // the parity assertion at the rust-stub boundary.
+          const isB3KahnDrain =
+            cat.id === 'derived-chain-depth-2-publishes-all'
           if (isA1PreconditionFix) {
             // GREEN — A.1 ported the gate; engine outcome satisfies
             // the oracle. Console-log the rust-stub PASS marker so
@@ -912,6 +939,14 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
             // `Object.is` cutoff drops same-value rows); `intent`
             // satisfies `intentRoundtrip`.
             console.error(`[rust-stub] ${cat.id} PASS (A.5 #1133)`)
+            assertOracle(cat, engineOutcome)
+          } else if (isB3KahnDrain) {
+            // GREEN — B.3 ported the SPEC §5.1 Phase D Kahn drain +
+            // `ComputeCallback` FFI boundary. Engine outcome's
+            // `changedNodeIds: ['a', 'd1', 'd2']` is satisfied by the
+            // depth-2 chain recompute walk. Per the B.3 ticket #1370
+            // first corpus flip — dashboard 11/25 → 12/25.
+            console.error(`[rust-stub] ${cat.id} PASS (B.3 #1370)`)
             assertOracle(cat, engineOutcome)
           } else {
             const stubProj = canonicaliseToProjectionShape(stubOutcome)

@@ -6,15 +6,15 @@
 
 ## Current state
 
-**Last session**: 2026-05-13 (Phase C COMPLETE — **all 11 micro-tickets C.0–C.10 landed on dev**; same session-continuation also landed C.-1 harness fix + Phase B closeout)
+**Last session**: 2026-05-14 (Phase D COMPLETE — **all 11 micro-tickets D.0–D.10 landed on dev**; same session-continuation also landed D.-1 dual-surface refactor)
 
-**dev branch HEAD**: post-C.10 (PR #1410 merge SHA — see Phase C PR roll-up below).
+**dev branch HEAD**: post-D.10 (PR #1434 merge SHA — see Phase D PR roll-up below).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **C COMPLETE** (11/11 micro-tickets C.0–C.10 landed). Phase D (#1136) claimable next.
+**Phase**: **D COMPLETE** (11/11 micro-tickets D.0–D.10 landed; D.-1 dual-surface refactor preceded). Phase E (#1135) claimable next.
 
-**Resumption bookmark**: Phase C 11/11 COMPLETE on `dev` as of PR #1410 (merge of C.10). Next claimable umbrella: **Phase D (#1136)** — Phase G/H per-node subscriber dispatch + transient dispose drain. Independent of Phase E (#1135) / F (#1142) / G validation (#1145/#1146/#1141/#1138/#1140) / H (#1148/#1143/#1137/#1139) — those can be interleaved per PLAN §3.
+**Resumption bookmark**: Phase D 11/11 COMPLETE on `dev` as of PR #1434 (merge of D.10). Next claimable umbrella: **Phase E (#1135)** — Subscriber callback bridge JS↔WASM. Phase D shipped the engine-internal Rust scaffolding with a no-op `fn(NodeId, &JsonValue) {}` hook; Phase E wires the real JS↔WASM callback at the FFI boundary. Independent of Phase F (#1142) / G validation (#1145/#1146/#1141/#1138/#1140) / H (#1148/#1143/#1137/#1139) — those can be interleaved per PLAN §3.
 
 **Phase B technical state delivered (B.0–B.10 closeout — landed earlier this session)**:
 - Kahn-BFS recompute drain live (B.2 fused affected/indegree + B.3 drain + ComputeCallback FFI boundary)
@@ -345,19 +345,58 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 
 ---
 
+### Session 2026-05-14 — Phase D COMPLETE (continuation, all 11 micro-tickets, + 1 prep PR)
+
+**Goal**: per user-override of STOP-VERDICT (2026-05-13), auto-chain Phase D D.0 → D.10. Phase D implements **SPEC §5.1 Phases G + H** (per-node subscriber dispatch with fire-once invariant + transient-drop drain + commit-level observer dispatch).
+
+**Project-owner direction**: GO with full epic per #1133 comment 4444516666 (carried forward from Phase C). Phase D decomposition table posted on #1136 ([comment 4448289113](https://github.com/iasbuilt/causl/issues/1136#issuecomment-4448289113)) — 11 tickets D.0–D.10. Panel S16+S17 sequencing directive: Phase D ships engine-internal Rust scaffolding with a no-op subscriber hook; the real JS↔WASM callback bridge belongs to Phase E (#1135), a separate umbrella. This eliminates the circular dependency.
+
+**Landed on `dev`** (Phase D entirety, 11 micro-tickets, 11 PRs + 1 prep PR D.-1):
+- D.-1 (#1412, PR #1413, `0a9fe03e`) — Pre-Phase-D refactor: one-shot `transition` now wraps `transition_phased` (3-line delegation). Eliminates dual-surface drift class; byte-identity between one-shot and phased surfaces is now true by construction. Closed the pre-existing `phased_and_one_shot_agree_post_a5_for_partial_publish` regression that surfaced during the prior Phase D attempt.
+- D.0 (#1411, PR #1414, `1c80fce7`) — PhaseG + PhaseH typestate markers; `finish()` moves from PhaseF6 to PhaseH. 2 new compile_fail doctests pin skip-PhaseG / skip-PhaseH contracts. Per C.0 precedent.
+- D.1 (#1415, PR #1416, `a7585a91`) — Public registration API on State: `observer_id_counter: u32` + `next_observer_id() -> ObserverId` (saturating-add mint); refined `register_subscriber -> Result<(), RaceClass>` with NodeDisposed gate on resident-tombstoned slots; refined `unregister_subscriber -> bool`. Out-of-range / future slots accepted on subscribe (panel S16 — future-slot subscription allowed).
+- D.2 (#1417, PR #1418, `5bd01deb`) — New `transition/dispatch.rs` module hosting `dispatch_per_node_subscribers(state, changed_nodes, hook)`; wired into PhaseG body with no-op hook (real bridge is Phase E #1135). `&State` borrow only — no state mutation; `State::hash()` byte-identity preserved.
+- D.3 (#1419, PR #1420, `5ae2c0c4`) — Fire-once-per-commit invariant: `SmallVec<[ObserverId; 8]>` fired-set on Phase G entry; observer subscribed to N changed nodes fires EXACTLY ONCE per commit (firing node = first changed node whose bucket lists the observer).
+- D.4 (#1421, PR #1422, `622254f7`) — `pending_transient_drops: Vec<NodeId>` State field per panel S14 (NOT VecDeque); `mark_transient_drop(node)` push API. Serde-skipped engine-internal bookkeeping.
+- D.5 (#1423, PR #1424, `14c0dc31`) — `drain_pending_transient_drops() -> usize` (FIFO via `Vec::drain(..)`); wired into PhaseH body; idempotent on stale / out-of-range ids.
+- D.6 (#1425, PR #1426, `faa201e7`) — `commit_observers: SmallVec<[ObserverId; 4]>` State field per panel S15 + register/unregister/dispatch APIs; wired into PhaseH body AFTER the D.5 transient-drop drain.
+- D.7 (#1427, PR #1428, `2d25dfcb`) — Byte-identity test for Phase H drain order: 5 canonical seeds (empty queue, single input drop, single derived drop, mixed interleave, duplicate-id idempotence) + 1 cross-run determinism test.
+- D.8 (#1429, PR #1430, `32fb91f8`) — Property test for subscriber-fire ordering H6 stability across permuted trigger order: fire SET / COUNT / per-observer-once invariants. Default tier 32 cases via `CAUSL_RUST_FUZZ_TIER`.
+- D.9 (#1431, PR #1432, `cd81e29e`) — Property test for transient-drop drain idempotence + 3 stress tests at scale: 10k observers on one node, 10k observers × 100 nodes, 1 shared observer × 100 nodes (D.3 fire-once at scale).
+- D.10 (#1433, PR #1434, this PR) — Phase D parent close + Phase E handoff bookmark; pure docs (HANDOFF.md). `(closes #1433, closes #1136)`
+
+**Issues closed (manual fallback pattern — auto-close indexing-lag streak continues; manual `gh issue close` is the workaround)**:
+- Phase D prep: #1412
+- Phase D children: #1411, #1415, #1417, #1419, #1421, #1423, #1425, #1427, #1429, #1431, #1433
+- Phase D parent: **#1136**
+
+**Total session PR count across epic to date**: 21 (Phase 0/1/A) + 11 (Phase B) + 1 (C.-1 prep) + 11 (Phase C) + 1 (D.-1 prep) + 11 (Phase D) = **56 PRs merged to dev**.
+
+**Corpus state post-Phase D**: corpus aggregator re-audit deferred (recommended as a standalone PR before Phase E claim, OR at Phase E entry). Phase D expected to flip cats 10, 16, 19, 21, 22, 24 (subscriber-fire-related). Pre-Phase-D baseline: **13/25 GREEN** (Phase C corpus refresh was also deferred; aggregate refresh recommended now).
+
+**Honest standing-state (Phase D closeout)**:
+- **Phase D is structurally complete** — SPEC §5.1 Phases G + H all live in `tools/engine-rs-core/src/transition/{dispatch,typestate}.rs` + `state.rs` (subscribers_by_node, observer_id_counter, pending_transient_drops, commit_observers fields + their register/unregister/dispatch surfaces). Cargo tests pass including the 10k subscriber stress + 32-case proptest. `State::hash()` byte-identity preserved (Phase G dispatch is `&State` only; the only Phase D state mutation is D.5's drain which is observable via the existing dispose machinery).
+- **B.10 `--no-verify` precedent was NOT repeated**: NO `--no-verify` flags used across the Phase D cascade. Every PR merged with the pre-commit hook running cleanly (occasional flaky bench tests required a single retry but always cleared on second run).
+- **STOP-VERDICTs unchanged**: still A.1 + B.3 on record. No new perf probe fired during Phase D (subscriber dispatch is engine-internal Rust; no new JS↔WASM boundary crossings until Phase E lands the callback bridge). Real-Rust arithmetic verdict still pending at Phase G validation (#1145).
+- **Cross-bridge byte-identity gate (#1071)** unaffected — Phase D's new State fields (`subscribers_by_node`, `commit_observers`, `pending_transient_drops`, `observer_id_counter`) are all `#[serde(skip)]` — engine-internal bookkeeping not part of the cross-bridge wire envelope.
+- **CI status**: GitHub Actions org-billing failure persists; load-bearing gates remain local `pnpm validate` + `cargo test -p causl-engine-core`.
+- **Pre-existing flaky bench tests** (`jotai-stochastic-overflow`, `input-pretenuring`) — V8/GC-internals; pass cleanly in final runs but flap on individual runs. Pre-existing, not Phase D scope. Documented as known flaky; not filed as bugs.
+- **Panel S16+S17 sequencing directive**: the no-op `fn(NodeId, &JsonValue)` subscriber hook + the no-op commit-observer hook are the canonical placeholders for the Phase E JS↔WASM bridge to overwrite. The dispatch surfaces (`dispatch_per_node_subscribers`, `dispatch_commit_observers`) accept `impl FnMut`-style hook parameters so Phase E can supply real closures without API churn.
+
+---
+
 ## Next-session claim
 
-**Phase D (#1136)** is the next claimable umbrella per PLAN.md §3 phase decomposition — SPEC §5.1 Phases G + H per-node subscriber dispatch + transient dispose drain. Consumes Phase B's `changedNodes` output (now part of Phase C's Commit envelope). Pair with Phase E (#1135 subscriber callback bridge JS↔WASM). Estimated ~1-2 weeks single-developer at micro-ticket-per-session pace.
+**Phase E (#1135)** is the next claimable umbrella per PLAN.md §3 phase decomposition — Subscriber callback bridge JS↔WASM. Phase D shipped the engine-internal Rust scaffolding (per-node subscriber dispatch with fire-once invariant; transient-drop drain; commit-level observer dispatch); Phase E wires the JS↔WASM FFI bridge so adopter callbacks fire on real subscriber events. Pair with Phase F (#1142 WasmBackend integration) for the end-to-end subscriber-fire path.
 
 Alternative umbrellas (interleavable, any order):
-- **Phase E** (#1135) — Subscriber callback bridge (JS↔WASM per-node notification). Pair with Phase D for end-to-end subscriber-fire path.
-- **Phase F** (#1142) — WasmBackend integration (replace TS-wrapper with real Rust delegation). Becomes claimable once Phase D + E provide the subscriber surface.
+- **Phase F** (#1142) — WasmBackend integration (replace TS-wrapper with real Rust delegation). Pairs with Phase E for the full end-to-end Rust engine path.
 - **Phase G validation** (#1145/#1146/#1141/#1138/#1140) — Cross-backend determinism + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. **This is where the STOP-VERDICT arithmetic verdict materializes.**
 - **Phase H** (#1148/#1143/#1137/#1139) — Production readout (bundle ceiling, bench scenario, hydrate/serialize ports, observability).
 
-If the next session continues the cascade, claim **Phase D** first (subscriber dispatch unblocks Phase E callback bridge, which unblocks Phase F WasmBackend integration, which unblocks Phase G validation arithmetic).
+If the next session continues the cascade, claim **Phase E** first (the callback bridge unblocks Phase F WasmBackend integration, which unblocks Phase G validation arithmetic).
 
-**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase C is complete and Phase D is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
+**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase D is complete and Phase E is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
 
 ---
 ## Cross-session protocol
@@ -387,6 +426,7 @@ If the next session continues the cascade, claim **Phase D** first (subscriber d
 - Phase A parent (CLOSED): [`#1147`](https://github.com/iasbuilt/causl/issues/1147)
 - Phase B parent (CLOSED): [`#1134`](https://github.com/iasbuilt/causl/issues/1134)
 - Phase C parent (CLOSED): [`#1144`](https://github.com/iasbuilt/causl/issues/1144)
-- Phase D parent (next claimable): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
+- Phase D parent (CLOSED): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
+- Phase E parent (next claimable): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

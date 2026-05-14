@@ -499,6 +499,49 @@ function projectSeedToActions(seedId: string): ReadonlyArray<unknown> {
   }
 }
 
+/**
+ * Build the `State.inputs` Vec prefix needed for an `Action` sequence
+ * to satisfy the post-A.2 (#1133) node-resolution gate. Walks every
+ * `Action::Commit { writes }` and `Action::Dispose { node }` /
+ * `Action::Subscribe { node }` in the sequence, computes the highest
+ * slot index referenced, and emits a dense `InputCell` prefix from
+ * slot 0 through that ceiling.
+ *
+ * The cells are minimal: `id = slot`, `value = null` (JsonValue::Null),
+ * `last_write_time = 0`. The `generation` / `last_staged_*` /
+ * `has_dependents` fields are `#[serde(skip)]` on the Rust side and
+ * default to `0`/`false` — the same generation a wire `NodeId(slot)`
+ * carries (`NodeId::from_index` ⇒ `gen: 0`) — so the validator's
+ * `cell.generation == id.gen` check passes by construction.
+ *
+ * Returns `[]` when no slot is referenced — keeps the wire envelope
+ * minimal for `tick`-only sequences.
+ */
+function buildInputsForActions(
+  actions: ReadonlyArray<unknown>,
+): ReadonlyArray<{ id: number; value: null; last_write_time: number }> {
+  let maxSlot = -1
+  for (const action of actions) {
+    const a = action as Record<string, unknown>
+    if (a.action === 'commit' && Array.isArray(a.writes)) {
+      for (const w of a.writes as ReadonlyArray<number>) {
+        if (typeof w === 'number' && w > maxSlot) maxSlot = w
+      }
+    } else if (
+      (a.action === 'dispose' || a.action === 'subscribe' || a.action === 'unsubscribe') &&
+      typeof a.node === 'number'
+    ) {
+      if (a.node > maxSlot) maxSlot = a.node
+    }
+  }
+  if (maxSlot < 0) return []
+  const cells: Array<{ id: number; value: null; last_write_time: number }> = []
+  for (let slot = 0; slot <= maxSlot; slot++) {
+    cells.push({ id: slot, value: null, last_write_time: 0 })
+  }
+  return cells
+}
+
 // ---------------------------------------------------------------------------
 // Property suite.
 // ---------------------------------------------------------------------------
@@ -558,20 +601,36 @@ describe('cross-bridge Commit byte-identity (#1071)', () => {
           return
         }
         const actions = projectSeedToActions(seed.id)
-        // Each action runs against a fresh `{now: 0}` envelope so
-        // the seed's trace is hermetic. The `time` field of the
-        // result advances per action; we don't thread the post-state
-        // back through because the bridges' canonical-commit contract
-        // is per-action, not per-trace. A future suite that pins
-        // post-state byte-identity (when both bridges return a
-        // post-state in identical form) layers on top of this one
-        // without changing the per-action assertion.
+        // Pre-Phase-C (#1133 A.2) introduced the generational-NodeId
+        // node-resolution gate: `Action::Commit { writes }` now requires
+        // every write target to resolve to a *live* `InputCell` on the
+        // state side. A bare `{now: 0}` envelope has an empty `inputs`
+        // Vec, so writes against slot 0 surface as
+        // `RaceClass::UnknownNode { slot: 0 }` rather than reaching the
+        // commit pipeline. This pre-provisions the smallest `inputs`
+        // prefix the seed's writes touch so the byte-identity contract
+        // exercises the real commit path on both bridges.
+        //
+        // The `generation` field is `#[serde(skip)]` and re-defaults to
+        // `0` on the Rust side — the same generation a bare wire
+        // `NodeId(slot)` carries (`NodeId::from_index` ⇒ `gen: 0`) — so
+        // a freshly-decoded `InputCell { id: slot, value: null,
+        // last_write_time: 0 }` matches the write target by construction.
+        const inputs = buildInputsForActions(actions)
+        // Each action runs against a fresh envelope so the seed's
+        // trace is hermetic. The `time` field of the result advances
+        // per action; we don't thread the post-state back through
+        // because the bridges' canonical-commit contract is per-
+        // action, not per-trace. A future suite that pins post-state
+        // byte-identity (when both bridges return a post-state in
+        // identical form) layers on top of this one without changing
+        // the per-action assertion.
         let nowSnapshot = 0
         for (const action of actions) {
           expectByteEqualCommitAcrossBridges(
             probe.serde,
             probe.gc,
-            { now: nowSnapshot },
+            { now: nowSnapshot, inputs },
             action,
             `seed '${seed.id}' action ${JSON.stringify(action)}`,
           )

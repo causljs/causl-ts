@@ -6,15 +6,15 @@
 
 ## Current state
 
-**Last session**: 2026-05-14 (Phase D COMPLETE — **all 11 micro-tickets D.0–D.10 landed on dev**; same session-continuation also landed D.-1 dual-surface refactor)
+**Last session**: 2026-05-14 (Phase E COMPLETE — **all 11 micro-tickets E.0–E.10 landed on dev**)
 
-**dev branch HEAD**: post-D.10 (PR #1434 merge SHA — see Phase D PR roll-up below).
+**dev branch HEAD**: post-E.10 (this PR — see Phase E PR roll-up below).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **D COMPLETE** (11/11 micro-tickets D.0–D.10 landed; D.-1 dual-surface refactor preceded). Phase E (#1135) claimable next.
+**Phase**: **E COMPLETE** (11/11 micro-tickets E.0–E.10 landed). Phase F (#1142) claimable next.
 
-**Resumption bookmark**: Phase D 11/11 COMPLETE on `dev` as of PR #1434 (merge of D.10). Next claimable umbrella: **Phase E (#1135)** — Subscriber callback bridge JS↔WASM. Phase D shipped the engine-internal Rust scaffolding with a no-op `fn(NodeId, &JsonValue) {}` hook; Phase E wires the real JS↔WASM callback at the FFI boundary. Independent of Phase F (#1142) / G validation (#1145/#1146/#1141/#1138/#1140) / H (#1148/#1143/#1137/#1139) — those can be interleaved per PLAN §3.
+**Resumption bookmark**: Phase E 11/11 COMPLETE on `dev` as of this PR (merge of E.10). Next claimable umbrella: **Phase F (#1142)** — WasmBackend integration (replace TS-wrapper with real Rust delegation through the bridge). Phase E shipped the SubscriberCallback trait + batched dispatch + JS↔WASM bridge `setSubscriberCallback(fn)` on both serde + gc bridges. Phase F lifts the Phase-1 WasmBackend's internal TS-wrapper to route the real Rust engine. Pairs with Phase G validation (#1145/#1146/#1141/#1138/#1140) for the boundary-tax re-measurement under real engine work.
 
 **Phase B technical state delivered (B.0–B.10 closeout — landed earlier this session)**:
 - Kahn-BFS recompute drain live (B.2 fused affected/indegree + B.3 drain + ComputeCallback FFI boundary)
@@ -387,16 +387,54 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 
 ## Next-session claim
 
-**Phase E (#1135)** is the next claimable umbrella per PLAN.md §3 phase decomposition — Subscriber callback bridge JS↔WASM. Phase D shipped the engine-internal Rust scaffolding (per-node subscriber dispatch with fire-once invariant; transient-drop drain; commit-level observer dispatch); Phase E wires the JS↔WASM FFI bridge so adopter callbacks fire on real subscriber events. Pair with Phase F (#1142 WasmBackend integration) for the end-to-end subscriber-fire path.
+**Phase F (#1142)** is the next claimable umbrella per PLAN.md §3 phase decomposition — WasmBackend integration. Phase E shipped the SubscriberCallback trait + JS↔WASM bridge surface; Phase F lifts the Phase-1 `WasmBackend`'s internal TS-wrapper to route the real Rust engine through the bridge's `commit()` entry point. The same adopter-facing surface (`backend.subscribe`, `backend.commit`, `backend.read`) is preserved.
 
 Alternative umbrellas (interleavable, any order):
-- **Phase F** (#1142) — WasmBackend integration (replace TS-wrapper with real Rust delegation). Pairs with Phase E for the full end-to-end Rust engine path.
-- **Phase G validation** (#1145/#1146/#1141/#1138/#1140) — Cross-backend determinism + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. **This is where the STOP-VERDICT arithmetic verdict materializes.**
+- **Phase G validation** (#1145/#1146/#1141/#1138/#1140) — Cross-backend determinism + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. **This is where the STOP-VERDICT arithmetic verdict materializes.** Phase F unblocks the real-Rust commit path Phase G measures against.
 - **Phase H** (#1148/#1143/#1137/#1139) — Production readout (bundle ceiling, bench scenario, hydrate/serialize ports, observability).
 
-If the next session continues the cascade, claim **Phase E** first (the callback bridge unblocks Phase F WasmBackend integration, which unblocks Phase G validation arithmetic).
+If the next session continues the cascade, claim **Phase F** first (it unblocks Phase G validation arithmetic).
 
-**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase D is complete and Phase E is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
+**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase E is complete and Phase F is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
+
+---
+
+### Session 2026-05-14 — Phase E COMPLETE (continuation, all 11 micro-tickets)
+
+**Goal**: per user-override of STOP-VERDICT (2026-05-13), auto-chain Phase E E.0 → E.10. Phase E implements **SPEC §15.3** subscriber callback semantics over the JS↔WASM bridge — replaces D.2's no-op `fn(NodeId, &JsonValue) {}` hook with a real `SubscriberCallback` trait surface marshalled across both bridge crates (serde + gc).
+
+**Project-owner direction**: GO with full epic per #1133 comment 4444516666 (carried forward from Phase D). Phase E decomposition table posted on #1135 ([comment 4452712881](https://github.com/iasbuilt/causl/issues/1135#issuecomment-4452712881)) — 11 tickets E.0–E.10. Panel directive on Phase E: single bridge crossing per commit (batched dispatch) to mitigate the A.1 / B.3 boundary tax. Whether the mitigation closes the gap to <0.5 ms is empirically TBD; the structural property test in E.3 pins the single-crossing contract without a wall-time gate.
+
+**Landed on `dev`** (Phase E entirety, 11 micro-tickets, 11 PRs):
+- E.0 (#1435, PR #1436) — `SubscriberCallback` trait + `NullSubscriber` default (mirrors B.3 `ComputeCallback` shape). Replaces D.2's no-op closure hook with `&dyn SubscriberCallback`. Added `ClosureSubscriber<F>` adapter for test ergonomics.
+- E.1 (#1437, PR #1438) — `SubscriptionHandle { node, observer }` newtype per panel directive "per-subscription slot handles, not single-entry shape". `register_subscriber` now returns `Result<SubscriptionHandle, RaceClass>`. Added `subscribers_by_observer: FxHashMap<ObserverId, SmallVec<[NodeId; 2]>>` inverse-lookup map + `unregister_subscription` / `unregister_observer_all` APIs (O(node-fanout) retract).
+- E.2 (#1439, PR #1440) — `SubscriberFiring { node, observer, value }` struct + batched dispatch. Trait widened to `fire_batch(&[SubscriberFiring])` invoked EXACTLY ONCE per commit per panel directive (single bridge crossing). Added `RecordingSubscriber` + scale test: 100×10=1000 firings → 1 batch call.
+- E.3 (#1441, PR #1442) — Bridge crates wire `setSubscriberCallback(fn)`. New `transition_phased_with_callbacks(s, a, compute_cb, subscriber_cb)`. Typestate Phase G: `dispatch_subscribers_with_callback(&dyn SubscriberCallback)`. Both bridges (serde + gc) implement `JsSubscriberCallback` that marshals the batched Vec via `serde_wasm_bindgen::to_value` and invokes the JS function once.
+- E.4 (#1443, PR #1444) — Synchronous dispatch contract: 6 tests pinning `fire_batch` invoked BEFORE `transition_phased` returns (not deferred to microtask). Coverage includes per-batch-call count, value visibility, post-commit `now` advance synchronisation, zero-observer/Tick negative cases.
+- E.5 (#1445, PR #1446) — Observer-throw routing: `ObserverError { node, observer, message }` struct; trait widened to return `Vec<ObserverError>`. New `dispatch_per_node_subscribers_with_error_hook(..., on_observer_error: &dyn Fn)`. Both bridges interpret the JS callback's optional return value as a `Vec<ObserverError>`; uncaught JS throws synthesise a single error on the first firing. Continuation invariant: every firing still runs.
+- E.6 (#1447, PR #1448) — Re-entrant commit option (a) pinned: 3 contract tests confirming the A.1 precondition gate fires `Err(CommitInProgress)` when a subscriber callback attempts an inner `transition_phased(Commit{...})`. Negative test: Tick still allowed.
+- E.7 (#1449, PR #1450) — Deterministic fire-order spec: 6 tests pinning across-nodes/within-node/D.3-fire-once axes. Reference walker re-implements the spec independently; proptest fuzz (tier-gated via `CAUSL_RUST_FUZZ_TIER`) verifies engine ≡ reference for every shape.
+- E.8 (#1451, PR #1452) — Bench harness wiring: 3 e2e roundtrip tests via `WasmBackend.subscribe(node, observer)` + `commit()` on the Phase-1 wrapper. Added `@causl/core/wasm` alias to `packages/bench/vitest.config.ts`. Pure adopter-side integration.
+- E.9 (#1453, PR #1454) — Cross-backend fire-order gate (TS half): 6 tests pinning TS engine's fire-order on 5 canonical seeds + permutation property test. Documented TS vs Rust shared-observer-id divergence (TS fires per-`SubscriptionEntry`; Rust D.3 dedups by `ObserverId`; bridge resolves by minting fresh ids per `subscribe()` call).
+- E.10 (#1455, this PR) — Phase E parent close + Phase F handoff bookmark; pure docs (HANDOFF.md). `(closes #1455, closes #1135)`
+
+**Issues closed (manual fallback pattern)**:
+- Phase E children: #1435, #1437, #1439, #1441, #1443, #1445, #1447, #1449, #1451, #1453, #1455
+- Phase E parent: **#1135**
+
+**Total session PR count across epic to date**: 21 (Phase 0/1/A) + 11 (Phase B) + 1 (C.-1 prep) + 11 (Phase C) + 1 (D.-1 prep) + 11 (Phase D) + 11 (Phase E) = **67 PRs merged to dev**.
+
+**Corpus state post-Phase E**: corpus aggregator re-audit deferred to Phase F entry or its own corpus-refresh PR. Phase E expected to flip subscriber-fire-related cats (10, 16, 19, 21, 22, 24) that Phase D left flagged pending the real bridge. Pre-Phase-E baseline: still **13/25 GREEN**.
+
+**Honest standing-state (Phase E closeout)**:
+- **Phase E is structurally complete** — `tools/engine-rs-core/src/subscriber_callback.rs` hosts the trait + `SubscriberFiring` + `ObserverError` + `NullSubscriber` + `ClosureSubscriber` + `RecordingSubscriber`. `transition_phased_with_callbacks` is the new dual-callback entry point. Both bridge crates (`engine-rs-bridge-serde`, `engine-rs-bridge-gc`) expose `setSubscriberCallback(fn)` and route `commit()` through `transition_phased_with_callbacks(..., &NullCompute, &JsSubscriberCallback)`. `cargo test -p causl-engine-core` passes full suite on every PR; `pnpm validate` passed (with one V8 tenuring flake on unrelated `input-pretenuring.test.ts` requiring 1-2 retries on 3 of the 11 PRs).
+- **NO `--no-verify` used across Phase E**. Every PR merged with the pre-commit hook running cleanly.
+- **STOP-VERDICTs unchanged**: still A.1 + B.3 on record. **No new perf probe fired during Phase E** — the panel-mandated batched-dispatch mitigation is structurally verified (E.2 + E.3 property tests pin 1 fire_batch call per commit) but the wall-time measurement is deferred to E.8's bench harness + Phase G validation. The cascade brief's "optional perf probe" was not implemented because the structural contract is the canonical E.3 gate; a wall-time probe under real engine work belongs to Phase G arithmetic.
+- **Cross-bridge byte-identity gate (#1071)** preserved — the new `SubscriberFiring` / `ObserverError` types are `Serialize + Deserialize` with stable shapes; both bridges marshal the same Vec through the same serde shape. The cross-bridge property test continues to fire byte-equal.
+- **CI status**: GitHub Actions org-billing failure persists; load-bearing gates remain local `pnpm validate` + `cargo test -p causl-engine-core`.
+- **Pre-existing flaky bench tests** (`jotai-stochastic-overflow`, `input-pretenuring`) — V8 tenuring-deopt counter; flapped 3 times during the cascade, retry passed each time. Pre-existing, not Phase E scope.
+- **Bridge-crate behaviour discrepancies**: NONE observed. Both serde + gc bridges implement `JsSubscriberCallback` with the same shape (same `thread_local!` slot pattern, same `serde_wasm_bindgen::to_value` marshalling, same JS-return-value-as-`Vec<ObserverError>` interpretation). The gc bridge's `js-string-builtins` feature was tested separately (`cargo build --features js-string-builtins`) and built cleanly.
+- **Engine-internal `committing` flag gap documented in E.6** — the Rust port's typestate does NOT currently set `state.committing = true` mid-pipeline, so the option-(a) re-entrant-commit gate fires only when the adopter threads the flag through (which the bridge will do once Phase F wires the WasmBackend). E.6 explicitly tested by setting `committing=true` on the State the inner call receives. Wiring this through the typestate is left to Phase F if it surfaces as a JS-side need.
 
 ---
 ## Cross-session protocol
@@ -427,6 +465,7 @@ If the next session continues the cascade, claim **Phase E** first (the callback
 - Phase B parent (CLOSED): [`#1134`](https://github.com/iasbuilt/causl/issues/1134)
 - Phase C parent (CLOSED): [`#1144`](https://github.com/iasbuilt/causl/issues/1144)
 - Phase D parent (CLOSED): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
-- Phase E parent (next claimable): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
+- Phase E parent (CLOSED): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
+- Phase F parent (next claimable): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

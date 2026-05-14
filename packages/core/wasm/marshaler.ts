@@ -28,7 +28,7 @@
  * @internal
  */
 
-import type { GraphTime, NodeId } from '../src/types.js'
+import type { Commit, GraphTime, NodeId } from '../src/types.js'
 
 /**
  * Slot handle — the JS-side mirror of a WASM-side `NodeId { slot, gen }`.
@@ -351,5 +351,114 @@ export function marshalCommitEnvelope(
       intent,
       writes: writeSlots,
     },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// F-marshal.3 (#1466) — Rust→JS application of BridgeResult.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire shape of `CommitRecord` per `tools/engine-rs-core/src/state.rs`
+ * (`pub struct CommitRecord { time, intent, changed_nodes }`). Note
+ * the `changedNodes` camelCase rename matches the rest of the engine's
+ * camelCase JSON surface (the Rust `Serialize` derive maps `changed_nodes`
+ * → `changedNodes` via `#[serde(rename_all = "camelCase")]`).
+ *
+ * `changedNodes` carries bare slot integers (the `NodeId` serde
+ * projection); the JS-side `applyBridgeResult` reverse-translates them
+ * via the mirror's dictionary into adopter-facing string NodeIds.
+ */
+export interface BridgeCommitRecord {
+  readonly time: number
+  readonly intent: string
+  readonly changedNodes: readonly number[]
+}
+
+/**
+ * Wire shape of `BridgeResult` per
+ * `tools/engine-rs-bridge-serde/src/lib.rs:321-326`. The bridge's
+ * `commit()` extern emits this triple on every successful call.
+ */
+export interface BridgeResult {
+  readonly state: {
+    readonly now: number
+    readonly inputs: readonly InputCellWire[]
+    // Other fields (deriveds, commit_log, observers, ...) are present
+    // on the wire but ignored by F-marshal.3 — F-marshal.7 extends to
+    // the full snapshot/hydrate shape.
+    readonly [k: string]: unknown
+  }
+  readonly commit: BridgeCommitRecord
+  readonly events: readonly unknown[]
+}
+
+/**
+ * Apply the bridge's `BridgeResult` to the JS-side mirror and project
+ * the commit envelope into the JS-shape {@link Commit} adopters consume.
+ *
+ * Per Decision 1 of #1457 the JS-side mirror is the SSOT for input
+ * cells; this function refreshes `mirror.inputs` from the post-state
+ * the bridge returned (every input cell's `value`) and stamps
+ * `mirror.now` from the post-state's clock.
+ *
+ * The `changedNodes` slot integers in the bridge's `CommitRecord` are
+ * reverse-translated to adopter-facing string NodeIds via the mirror's
+ * dictionary. Slot ids absent from the dictionary (would indicate a
+ * disposed cell still being touched by the engine — should not happen
+ * post Decision 4) are silently dropped to keep the gate green.
+ *
+ * The returned {@link Commit}'s `originatedAt` is `undefined` — this
+ * function never produces hydrate-replay records (#1470 covers
+ * snapshot/hydrate).
+ *
+ * @param mirror - Live JS-side state mirror to update in place.
+ * @param result - The `BridgeResult` returned by the bridge's
+ *   `commit(state, action)` extern.
+ */
+export function applyBridgeResult(
+  mirror: WasmStateMirror,
+  result: BridgeResult,
+): Commit {
+  // Refresh `mirror.now` from the post-state clock.
+  mirror.now = result.state.now as unknown as GraphTime
+
+  // Refresh the input cell mirror from the post-state's inputs. The
+  // bridge returns every input slot's value; we overwrite the mirror's
+  // entry for each. We do NOT remove entries that are absent from the
+  // post-state — Decision 4 keeps the JS-side dictionary mirroring
+  // live slots only, and the dispose path drops those entries
+  // explicitly via `WasmStateMirror.dispose()`.
+  for (const cell of result.state.inputs) {
+    mirror.inputs.set(cell.id, cell.value)
+  }
+
+  // Reverse-translate the bridge's slot-integer `changedNodes` to
+  // adopter-facing string NodeIds via the mirror's dictionary. We walk
+  // the dictionary once and build an `idx → NodeId` index so the
+  // changedNodes mapping is O(N + M); a per-id linear scan would be
+  // O(N · M) on a wide commit.
+  const idxToNodeId = new Map<number, NodeId>()
+  for (const [nodeId, slot] of mirror.dictionary) {
+    idxToNodeId.set(slot.idx, nodeId)
+  }
+
+  const changedNodes: NodeId[] = []
+  for (const slot of result.commit.changedNodes) {
+    const nodeId = idxToNodeId.get(slot)
+    if (nodeId !== undefined) {
+      changedNodes.push(nodeId)
+    }
+    // Else: slot is not in the live JS-side dictionary. This can
+    // happen on a dispose race (the engine's commit walk touched a
+    // slot the JS-side has since dropped). Drop silently — the
+    // adopter-facing Commit only carries live NodeIds.
+  }
+
+  return {
+    time: result.commit.time as unknown as GraphTime,
+    intent: result.commit.intent,
+    changedNodes,
+    originatedAt: undefined,
   }
 }

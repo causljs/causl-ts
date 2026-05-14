@@ -53,12 +53,15 @@ import { evaluateStatechart as evaluateStatechartCanonical } from '../src/statec
 // methods today (TS-engine wrap) and through the marshaler directly
 // once F-marshal.5 routes `WasmBackend.commit()` through it.
 export {
+  applyBridgeResult,
   marshalCommitEnvelope,
   NodeDisposedError,
   WasmStateMirror,
 } from './marshaler.js'
 export type {
   BridgeCommitAction,
+  BridgeCommitRecord,
+  BridgeResult,
   BridgeState,
   CommitEnvelope,
   InputCellWire,

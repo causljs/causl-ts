@@ -1899,4 +1899,82 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
       return n
     }
   })
+
+  // ---------------------------------------------------------------
+  // B.8 (#1380) — Bisimulation sextuple byte-identity gate.
+  //
+  // Engine-semantics cluster G3 on #1134 (parent of Phase B): the
+  // `PhaseStep::RecomputeAffected` variant on the Rust side
+  // (`tools/engine-rs-core/src/phase_step.rs`) is now a per-iteration
+  // sextuple
+  //
+  //   (step_index, node_id, value_before, value_after, deps_added,
+  //    deps_removed)
+  //
+  // emitted once per Kahn drain iteration (including cutoff-skipped
+  // derivations, which emit `value_before == value_after` with empty
+  // deps deltas). The cross-bridge byte-identity gate must compare
+  // the FULL sextuple, not just the value column — Rust impls that
+  // produce identical values but diverge on the post-commit dep graph
+  // (the B.5 dynamic-dep flip behaviour) would otherwise sneak past.
+  //
+  // The TS side does NOT yet emit a corresponding per-iteration
+  // sextuple trace today: `packages/hypothesis/src/types.ts`'s
+  // `PhaseStep` is the coarse 7-name commit/msg vocabulary, not the
+  // fine SPEC §16.4.1 12-arm enum the Rust crate ships. Wiring a
+  // TS-side G3 emitter is a follow-up tracked alongside #687's
+  // migration round-trip — it lands when the JS-side Graph facade can
+  // surface the Phase D Kahn-drain trace as a structured
+  // `Array<RecomputeAffectedRow>` for consumers of the cross-bridge
+  // gate.
+  //
+  // For B.8 this `describe.skip` row pins the contract literally so:
+  //
+  //   1. The decomposition tracking issue (#1146) has a stable
+  //      grep-target — a CI greppable line that names the future
+  //      gate's identity.
+  //   2. The moment the TS-side emitter ships, this block flips from
+  //      `describe.skip` to `describe`, the body fills in the
+  //      `expect(jsTrace).toEqual(rustTrace)` assertion, and the
+  //      sextuple gate fires automatically.
+  //   3. The Rust-side emission (this PR) is the load-bearing source
+  //      of truth today — the engine-rs-core
+  //      `tests/sextuple_emission.rs` suite pins the five canonical
+  //      shapes (empty Phase D, single recompute, dynamic-dep flip,
+  //      cutoff-skipped, SmallVec spill-boundary serde). The
+  //      cross-backend gate composes those Rust-side guarantees with
+  //      a TS-side mirror once it exists.
+  // ---------------------------------------------------------------
+  describe.skip(
+    'B.8 RecomputeAffected sextuple byte-identity (closes #1146 — dormant)',
+    () => {
+      it('per-Kahn-iteration sextuple trace is byte-identical across TS and Rust (gates on TS-side G3 emitter)', () => {
+        // Future-facing assertion shape, pinned literally so the
+        // moment the TS emitter lands the body is a one-line swap:
+        //
+        //   const rustTrace = await collectRustPhaseDTrace(seed, intent, writes)
+        //   const tsTrace   = await collectTsPhaseDTrace(seed, intent, writes)
+        //   expect(canonicalize(rustTrace)).toBe(canonicalize(tsTrace))
+        //
+        // `canonicalize` projects each `RecomputeAffected` row to its
+        // sextuple { step_index, node_id, value_before, value_after,
+        // deps_added, deps_removed } and stringifies via
+        // `JSON.stringify` with sorted keys. The cross-bridge gate
+        // (#1146) keys on the byte-identical projection — the same
+        // discipline the existing `expectByteEqualIR` oracle uses for
+        // the IR surface.
+        //
+        // Catches Rust impls that produce identical values but
+        // diverge on the post-commit dep graph (B.5 dynamic-dep flip
+        // behaviour) — the divergence the `value_before` /
+        // `value_after` column alone would miss.
+        expect.fail(
+          'B.8 cross-backend sextuple gate is dormant — see the describe.skip ' +
+            'rationale above. The Rust-side emission is live and pinned by ' +
+            'tools/engine-rs-core/tests/sextuple_emission.rs; the TS-side ' +
+            'emitter ships alongside #687.',
+        )
+      })
+    },
+  )
 })

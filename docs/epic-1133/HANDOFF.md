@@ -6,13 +6,27 @@
 
 ## Current state
 
-**Last session**: 2026-05-13 (Phase A kickoff — **A.0 walking-skeleton FFI roundtrip shipped under STOP-VERDICT override**)
+**Last session**: 2026-05-13 (Phase B COMPLETE — **all 11 micro-tickets B.0–B.10 landed on dev under STOP-VERDICT override**)
 
-**dev branch HEAD**: `0706d19a` after Phase A complete + this handoff.
+**dev branch HEAD**: post-B.10 (PR #1385 merge SHA — see Phase B PR roll-up below).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **A COMPLETE** (13/13 micro-tickets A.0-A.12 landed). Phase B (#1134) claimable next.
+**Phase**: **B COMPLETE** (11/11 micro-tickets B.0–B.10 landed). Phase C (#1144) claimable next.
+
+**Resumption bookmark**: Phase B 11/11 COMPLETE on `dev` as of PR #1385 (merge of B.10). Next claimable umbrella: **Phase C (#1144)** — Phase E/F/F.4-F.6 commit assembly + commitLog + retention. Independent of Phase D (#1136) / E (#1135) / F (#1142) / G validation (#1145/#1146/#1141/#1138/#1140) / H (#1148/#1143/#1137/#1139) — those can be interleaved per PLAN §3.
+
+**Phase B technical state delivered (B.0–B.9 + B.10 closeout)**:
+- Kahn-BFS recompute drain live (B.2 fused affected/indegree + B.3 drain + ComputeCallback FFI boundary)
+- SameValue/`Object.is` cutoff threaded into the drain (B.4 derived-side propagation)
+- Dynamic dep tracking with deps_added/deps_removed reported per step (B.5)
+- Cycle rejection via Tarjan + path-recovery to RaceClass::CycleClosed (B.6)
+- Mid-Phase-D read atomicity (G1) — Reader::read returns pre-Phase-D snapshot (B.7)
+- Bisimulation sextuple per SPEC §17 — `(stepIndex, nodeId, before, after, depsAdded, depsRemoved)` (B.8)
+- Glitch-freedom validated against `oracle_phase_d`: 6 properties × 1000 trials × **0 counter-examples** (B.9)
+- Phase B parent close + Phase C handoff bookmark (B.10, this commit)
+
+**Corpus state post-Phase B**: **13/25 GREEN** against `CAUSL_BACKEND=rust-stub` (was 11/25 post-Phase A; B.3 flipped cat 6 / depth-2 indegree, B.6 flipped cat 18 / cycle-rejection). Remaining 12 categories flip as Phase C (commit assembly), Phase D (#1136 subscriber dispatch), Phase E (#1135 callback bridge), and Phase F (#1142) land.
 
 **EPIC STATUS**: 🟢 **Project-owner GO-with-override on STOP-VERDICT** (comment 4444516666 on #1133): "GO with implementing all aspects of EPIC". A.0 is PIVOT-variant-independent — the walking-skeleton roundtrip is a precondition for any boundary architecture (serde / opaque-handle / batched / GC bridge), so the override applies cleanly to A.0. The 35×-over-threshold serde measurement (PR #1329) remains on record at `#1133` comment 4442925169; A.0 reuses the serde marshal pattern per the user brief (the ABI bench at `docs/abi-ab-bench.md` records opaque-handle winning ≥3.0× — a future PR can re-litigate the ABI choice if the epic pivots).
 
@@ -242,17 +256,57 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 - **STOP-VERDICT still on record**: A.1 perf-floor probe measured 35× over kill threshold (boundary tax alone consumes 25× of the projected savings ceiling). User-overridden; full EPIC proceeds. Real-Rust measurement against `equality-cutoff × 10000` lands at Phase G validation (#1145) — that's where the arithmetic verdict materializes.
 - **Cross-bridge byte-identity gate (#1071)** unaffected — Phase A's wire format stayed byte-identical throughout.
 
+---
+
+### Session 2026-05-13 — Phase B COMPLETE (continuation, all 11 micro-tickets)
+
+**Goal**: per user-override of STOP-VERDICT (2026-05-13), auto-chain Phase B B.0 → B.10. Phase B implements **SPEC §5.1 Phase D recompute** (the hardest single piece of the port — Kahn topological recompute + glitch-freedom invariant).
+
+**Project-owner direction**: GO with full epic per #1133 comment 4444516666. Auto-chain B.0 → B.10 authorized per Phase B decomposition comment 4445977066 on #1134.
+
+**Landed on `dev`** (Phase B entirety, 11 micro-tickets, 11 PRs across this session-continuation):
+- B.0 (#1364, PR #1365, `5359c693`) — PhaseD typestate marker + recompute entry-point scaffold
+- B.1 (#1366, PR #1367, `d44a4c41`) — Dependents reverse-adjacency + G2 BTreeMap container pin
+- B.2 (#1368, PR #1369, `7fac049b`) — Fused affected/indegree BFS over dependents
+- B.3 (#1370, PR #1371, `6cad8db0`) — Kahn drain + ComputeCallback FFI boundary (DECISION TICKET — Option (a) trait dispatch chosen; corpus cat 6 GREEN; fresh STOP-VERDICT filed at #1133 comment 4446221188 — synthetic boundary tax measured 1.154 ms / 10k, 2.3× over kill threshold; user-overridden a second time)
+- B.4 (#1372, PR #1373, `07275a19`) — `Object.is` / SameValue cutoff + downstream propagation (bundled fix for pre-existing enumerator-crate breakage)
+- B.5 (#1374, PR #1375, `e6014786`) — Dynamic dep flip + dependents-map fixup
+- B.6 (#1376, PR #1377, `9418c500`) — Cycle detection (Tarjan + path-recovery → RaceClass::CycleClosed); corpus cat 18 GREEN; A.6 rollback walker integration verified
+- B.7 (#1378, PR #1379, `0085860c`) — Mid-Phase-D read atomicity (G1); 1000-trial property × 0 mid-walk reads
+- B.8 (#1380, PR #1381, `3aa3ae76`) — Bisimulation sextuple extension per SPEC §17 (depsAdded/depsRemoved); SmallVec spill-boundary serde stability pinned; PhaseStep no longer derives Hash (f64 IEEE-754 incompatibility)
+- B.9 (#1382, PR #1383, `6c28a25b`) — Glitch-freedom property test crown: **6 properties × 1000 trials × 0 counter-examples** against `oracle_phase_d`. Subtle finding: oracle initially didn't mirror engine's pre-compute SameValue cutoff → aligned per SPEC §15.1. Runtime 0.24s debug / 0.02s release.
+- B.10 (#1384, PR #1385, this PR) — Phase B parent close + Phase C handoff bookmark; pure docs (HANDOFF.md). `(closes #1384, closes #1134)`
+
+**Issues closed (manual fallback pattern — auto-close indexing-lag streak now 29/29 across this whole epic)**:
+- Phase B children: #1364, #1366, #1368, #1370, #1372, #1374, #1376, #1378, #1380, #1382, #1384
+- Phase B parent: **#1134**
+
+**Total session PR count across epic to date**: 21 (Phase 0/1/A) + 11 (Phase B) = **32 PRs merged to dev**.
+
+**Corpus state post-Phase B**: **13/25 GREEN** against `CAUSL_BACKEND=rust-stub` (was 11/25 post-Phase A). Categories flipped during Phase B: cat 6 (depth-2 indegree, B.3) and cat 18 (cycle rejection, B.6). Remaining 12 categories flip as Phase C/D/E/F land.
+
+**Honest standing-state**:
+- **Phase B is structurally complete** — SPEC §5.1 Phase D recompute lives in `tools/engine-rs-core/src/transition/{recompute,kahn,cutoff,cycle,atomicity}.rs` + the bisimulation sextuple in `phase_step.rs`. Cargo tests pass; glitch-freedom proptest 6×1000 green with zero counter-examples.
+- **Two STOP-VERDICTs now on record**: A.1 (#1329) measured 17.5 ms boundary tax / 10k (35× over kill threshold); B.3 (#1133 comment 4446221188) measured 1.154 ms / 10k ComputeCallback synthetic tax (2.3× over kill threshold; real FFI marshal would compound). User has overridden both. Real-Rust arithmetic verdict against `equality-cutoff × 10000` lands at Phase G validation (#1145).
+- **Cross-bridge byte-identity gate (#1071)** unaffected — Phase B wire format stayed byte-identical (`dependents` is a hydrate-time derived view; not hashed).
+- **CI status**: GitHub Actions org-billing failure persists across the cascade; load-bearing gates are local `pnpm validate` + `cargo test -p causl-engine-core` per user override.
+
+---
+
 ## Next-session claim
 
-Phase B (#1134) is the next claimable umbrella per PLAN.md §3 phase decomposition. It's the **hardest single phase** of the port (Phase D Kahn topological recompute + glitch-freedom invariant). Estimated 1-3 weeks calendar single-developer; at micro-ticket-per-session pace and per the Phase A precedent, **~6-10 Claude sessions** to land.
+**Phase C (#1144)** is the next claimable umbrella per PLAN.md §3 phase decomposition — Phase E/F/F.4-F.6 commit assembly + `commitHistory` + `commitLog` + retention. Independent of Phase B/D; can land in parallel with Phase D (#1136 subscriber dispatch), Phase E (#1135 callback bridge), Phase F (#1142). Estimated ~1-2 weeks single-developer at micro-ticket-per-session pace.
 
-Alternative umbrellas (interleavable):
-- **Phase E** (#1135) — Subscriber callback bridge (JS↔WASM per-node notification). Can start anytime; doesn't require Phase B/C/D.
-- **Phase C** (#1144) — Phase E/F/F.4-F.6 commit assembly + log + retention. Independent of Phase B/D.
+Alternative umbrellas (interleavable, any order):
+- **Phase D** (#1136) — Subscriber dispatch (`phaseG_dispatchPerNodeSubscribers`). Consumes Phase B's `changedNodes` output.
+- **Phase E** (#1135) — Subscriber callback bridge (JS↔WASM per-node notification). Pair with Phase D.
+- **Phase F** (#1142) — Backend trait full surface (Reader + Persister real impls).
+- **Phase G validation** (#1145/#1146/#1141/#1138/#1140) — Cross-backend determinism + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. **This is where the STOP-VERDICT arithmetic verdict materializes.**
+- **Phase H** (#1148/#1143/#1137/#1139) — Production readout (bundle ceiling, bench scenario, hydrate/serialize ports, observability).
 
-If the next session continues the cascade, claim **Phase B** first (it unblocks the most downstream work).
+If the next session continues the cascade, claim **Phase C** first (commit assembly unblocks Phase G validation arithmetic).
 
-**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase A is complete and Phase B is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
+**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase B is complete and Phase C is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
 
 ---
 ## Cross-session protocol
@@ -279,6 +333,8 @@ If the next session continues the cascade, claim **Phase B** first (it unblocks 
 
 - Plan: [`PLAN.md`](./PLAN.md)
 - Epic: [`#1133`](https://github.com/iasbuilt/causl/issues/1133)
-- Phase A parent: [`#1147`](https://github.com/iasbuilt/causl/issues/1147)
+- Phase A parent (CLOSED): [`#1147`](https://github.com/iasbuilt/causl/issues/1147)
+- Phase B parent (CLOSED): [`#1134`](https://github.com/iasbuilt/causl/issues/1134)
+- Phase C parent (next claimable): [`#1144`](https://github.com/iasbuilt/causl/issues/1144)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

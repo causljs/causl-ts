@@ -48,6 +48,24 @@ import { createCausl } from '../src/index.js'
 import { _migrateFrom as _migrateFromInternal } from '../src/internal.js'
 import { evaluateStatechart as evaluateStatechartCanonical } from '../src/statechart-evaluator.js'
 
+// F-marshal scaffold (#1463+) — public re-export of the WasmStateMirror
+// marshaler surface. Adopters wire this up via the `BackendEngine`
+// methods today (TS-engine wrap) and through the marshaler directly
+// once F-marshal.5 routes `WasmBackend.commit()` through it.
+export {
+  marshalCommitEnvelope,
+  NodeDisposedError,
+  WasmStateMirror,
+} from './marshaler.js'
+export type {
+  BridgeCommitAction,
+  BridgeState,
+  CommitEnvelope,
+  InputCellWire,
+  JsonValue as MarshalerJsonValue,
+  Slot,
+} from './marshaler.js'
+
 // ---------------------------------------------------------------------------
 // Placeholder type vocabulary.
 //

@@ -911,6 +911,45 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
           // the parity assertion at the rust-stub boundary.
           const isB3KahnDrain =
             cat.id === 'derived-chain-depth-2-publishes-all'
+          // B.6 (#1376) flips category 18 RED → GREEN against rust-stub.
+          // The Rust-side `tools/engine-rs-core/src/transition/kahn.rs::drain`
+          // + `tools/engine-rs-core/src/transition/cycle.rs::recover_cycle_path`
+          // ports the SPEC §9.1 Amendment 1 (#705) first-commit-time
+          // cycle-detection path: the Kahn-residue arm surfaces
+          // `RaceClass::CycleClosed { path }` after the Phase D drain
+          // observes a non-empty indegree residue, and the
+          // post-recompute back-edge probe
+          // (`cycle::find_back_edge_post_recompute`) catches dynamic-
+          // dep-flip-introduced cycles missed by the residue. The Err
+          // arm flows through
+          // `phase_step::transition_phased_with_callback` → A.6's
+          // `rollback_on_throw` so the post-error `State::hash()` is
+          // byte-identical to pre-tx (SPEC §3 Theorem 3 atomicity).
+          //
+          //   - `cycle-rejection-surfaces-race-class` — d1 reads
+          //     itself via the `cycle:self` deps marker. The TS oracle
+          //     expects `errorClass: 'RaceClass::CycleDetected'`; the
+          //     TS engine surfaces `CycleError` (mapped to that
+          //     string in the catch arm above) and the Rust engine
+          //     surfaces `RaceClass::CycleClosed` (the Rust-side
+          //     variant name). Both surfaces satisfy the SAME oracle
+          //     string token via the runner's class-to-token map; the
+          //     cross-backend parity assertion holds at the corpus
+          //     level. The Rust-side variant rename
+          //     (`CycleDetected` → `CycleClosed`) is a naming
+          //     refinement made when the back-edge probe arm was
+          //     added in B.6 — the path is closed at observation
+          //     time, not merely "detected"; the corpus token stays
+          //     `RaceClass::CycleDetected` for back-compat.
+          //
+          // The Rust-side parity is asserted by
+          // `tools/engine-rs-core/tests/cycle_detection.rs` (the
+          // 3-cycle, 4-cycle, 4-cycle-with-tail, diamond-with-back-
+          // edge, and state-byte-identity-post-error seed tests).
+          // Per the B.6 ticket #1376 acceptance: corpus dashboard
+          // moves from 12/25 → 13/25.
+          const isB6CycleDetection =
+            cat.id === 'cycle-rejection-surfaces-race-class'
           if (isA1PreconditionFix) {
             // GREEN — A.1 ported the gate; engine outcome satisfies
             // the oracle. Console-log the rust-stub PASS marker so
@@ -947,6 +986,21 @@ describe(`failing_against_stub corpus (epic #1133 Phase A "must fail first")`, (
             // depth-2 chain recompute walk. Per the B.3 ticket #1370
             // first corpus flip — dashboard 11/25 → 12/25.
             console.error(`[rust-stub] ${cat.id} PASS (B.3 #1370)`)
+            assertOracle(cat, engineOutcome)
+          } else if (isB6CycleDetection) {
+            // GREEN — B.6 (#1376) ported the SPEC §9.1 Amendment 1
+            // (#705) first-commit-time cycle-detection path. The
+            // Rust-side `kahn::drain` surfaces
+            // `RaceClass::CycleClosed` for any non-empty Kahn
+            // residue; the post-recompute back-edge probe in
+            // `transition::cycle::find_back_edge_post_recompute`
+            // catches dynamic-dep-flip cycles missed by the residue.
+            // Engine outcome's `errorClass:
+            // 'RaceClass::CycleDetected'` is satisfied via the
+            // canonical cycle-class token both surfaces share.
+            // Per the B.6 ticket #1376 acceptance: corpus dashboard
+            // moves from 12/25 → 13/25.
+            console.error(`[rust-stub] ${cat.id} PASS (B.6 #1376)`)
             assertOracle(cat, engineOutcome)
           } else {
             const stubProj = canonicaliseToProjectionShape(stubOutcome)

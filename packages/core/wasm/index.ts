@@ -59,6 +59,7 @@ export {
   WasmStateMirror,
 } from './marshaler.js'
 export type {
+  BridgeAllocator,
   BridgeCommitAction,
   BridgeCommitRecord,
   BridgeResult,

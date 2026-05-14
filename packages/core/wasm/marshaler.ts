@@ -204,6 +204,115 @@ export class WasmStateMirror {
   getSlotForNodeId(nodeId: NodeId): Slot | undefined {
     return this.dictionary.get(nodeId)
   }
+
+  /**
+   * F-marshal.4 (#1467) — allocate a fresh input slot via the bridge
+   * and register the resulting `Slot` under `nodeId` in the dictionary.
+   *
+   * The {@link BridgeAllocator} adapter is supplied by the caller —
+   * production paths plug in the bridge's `wasmCreateInput` /
+   * `wasmDispose` exports; tests can supply a mock allocator to exercise
+   * the dictionary's invariants without the wasm bundle.
+   *
+   * Per Decision 2 of #1457 the engine core's NodeId allocator
+   * (`state.rs:create_input`) drives the slot integer + generation tag.
+   * The JS-side just stores the returned `Slot`.
+   */
+  allocateSlot(nodeId: NodeId, allocator: BridgeAllocator): Slot {
+    const packed = allocator.wasmCreateInput()
+    const slot = unpackSlot(packed)
+    this.registerInput(nodeId, slot)
+    return slot
+  }
+
+  /**
+   * F-marshal.4 (#1467) — allocate a fresh derived slot via the bridge.
+   * Same shape as {@link allocateSlot} but routes through
+   * `wasmCreateDerived` for the engine's `Vec<DerivedCell>` allocator.
+   *
+   * Deriveds and inputs index separate Vecs in the engine, so a slot
+   * integer returned from `wasmCreateDerived` may collide numerically
+   * with a slot integer from `wasmCreateInput` — the dictionary keys on
+   * adopter NodeId so this is safe; the engine's read path
+   * disambiguates by which Vec it indexes.
+   */
+  allocateDerivedSlot(nodeId: NodeId, allocator: BridgeAllocator): Slot {
+    const packed = allocator.wasmCreateDerived()
+    const slot = unpackSlot(packed)
+    this.registerInput(nodeId, slot)
+    return slot
+  }
+
+  /**
+   * F-marshal.4 (#1467) — dispose a slot via the bridge.
+   *
+   * Drops the dictionary entry first (so a stale read in flight sees
+   * `NodeDisposedError` immediately), then calls into the bridge's
+   * `wasmDispose` so the WASM-side `state.disposed` set carries the
+   * authoritative marker (Decision 4). The engine bumps the cell's
+   * generation tag so any stale `NodeId` referencing this slot
+   * surfaces as `NodeDisposedError::Disposed`.
+   *
+   * Idempotent: silently no-ops if `nodeId` has no live entry. The
+   * bridge call is short-circuited in that case so the engine never
+   * sees a stale-generation `Action::Dispose`.
+   */
+  disposeSlot(nodeId: NodeId, allocator: BridgeAllocator): void {
+    const slot = this.dictionary.get(nodeId)
+    if (slot === undefined) return
+    // Drop JS-side mirror first.
+    this.dispose(nodeId)
+    // Engine-side dispose. Pack the (slot, gen) back into the u64 the
+    // bridge expects.
+    allocator.wasmDispose(packSlot(slot))
+  }
+}
+
+/**
+ * Bridge allocator adapter. The serde / gc bridges export
+ * `wasmCreateInput` / `wasmCreateDerived` / `wasmDispose` (F-marshal.4
+ * — `tools/engine-rs-bridge-serde/src/lib.rs` and
+ * `tools/engine-rs-bridge-gc/src/lib.rs`); this interface abstracts the
+ * concrete bridge type so the marshaler can target either one (and so
+ * tests can supply mock allocators).
+ *
+ * All three methods are synchronous — the wasm module compile happens
+ * at load time; the allocator calls are cheap thread-local State
+ * mutations.
+ */
+export interface BridgeAllocator {
+  /**
+   * Allocate a fresh input slot. Returns the packed `(slot, gen)` u64
+   * as a JS `bigint` (the wasm-pack `u64 → bigint` projection).
+   */
+  wasmCreateInput(): bigint
+  /** Allocate a fresh derived slot. Returns the packed `(slot, gen)`. */
+  wasmCreateDerived(): bigint
+  /**
+   * Dispose a slot. Throws on stale generation or out-of-range slot —
+   * the engine's `dispose_input` returns `NodeDisposedError` for those
+   * cases and the bridge propagates as a JS throw.
+   */
+  wasmDispose(packed: bigint): void
+}
+
+/**
+ * Unpack a `bigint` from the bridge's `wasmCreateInput` /
+ * `wasmCreateDerived` return shape: low 32 bits → `idx`, high 32 bits
+ * → `gen`.
+ */
+function unpackSlot(packed: bigint): Slot {
+  const idx = Number(packed & 0xffff_ffffn)
+  const gen = Number((packed >> 32n) & 0xffff_ffffn)
+  return { idx, gen }
+}
+
+/**
+ * Inverse of {@link unpackSlot} — pack `(idx, gen)` back into a
+ * `bigint` for the bridge's `wasmDispose` argument.
+ */
+function packSlot(slot: Slot): bigint {
+  return (BigInt(slot.gen) << 32n) | BigInt(slot.idx)
 }
 
 // ---------------------------------------------------------------------------

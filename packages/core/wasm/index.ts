@@ -62,12 +62,15 @@ import {
 export {
   applyBridgeResult,
   hydrate,
+  marshalBatchEnvelope,
   marshalCommitEnvelope,
   NodeDisposedError,
   snapshot,
   WasmStateMirror,
 } from './marshaler.js'
 export type {
+  BatchCommitInput,
+  BatchEnvelope,
   BridgeAllocator,
   BridgeCommitAction,
   BridgeCommitRecord,

@@ -13,6 +13,8 @@ import { describe, it, expect } from 'vitest'
 import type { GraphSnapshot, GraphTime, NodeId } from '../src/types.js'
 import {
   hydrate,
+  marshalBatchEnvelope,
+  marshalCommitEnvelope,
   NodeDisposedError,
   snapshot,
   WasmStateMirror,
@@ -386,5 +388,147 @@ describe('snapshot()/hydrate() — F-marshal.7 round-trip', () => {
     expect(restored.dictionary.size).toBe(0)
     expect(restored.inputs.size).toBe(0)
     expect(restored.now).toBe(7)
+  })
+})
+
+describe('marshalBatchEnvelope() — C.2 (#1498) JS→Rust batch builder', () => {
+  // Option (c) batched-commit boundary scaffolding (epic #1493). The
+  // batch envelope is the (state, actions: Vec<Action>) pair the C.1
+  // commit_batch(state, actions) extern (PR #1496/#1497) consumes.
+  //
+  // NOTE: option (c) delivers ZERO adopter perf at v1.x — the JS engine
+  // remains SSOT; only the wire crossing is batched. These tests assert
+  // the marshal shape is correct scaffolding, NOT a perf win.
+
+  it('empty batch produces an empty actions list and the current input snapshot', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    m.inputs.set(0, 42)
+    const env = marshalBatchEnvelope(m, [])
+    expect(env.actions).toEqual([])
+    expect(env.state.inputs).toEqual([
+      { id: 0, value: 42, last_write_time: 0 },
+    ])
+  })
+
+  it('N=1 batch action is byte-identical to marshalCommitEnvelope', () => {
+    // The option-c doc §7 "N=1 byte-identical" invariant at the JS
+    // marshal boundary: a single-commit batch's action and state must
+    // equal what the single-commit builder emits for the same input.
+    const m = new WasmStateMirror()
+    m.registerInput('x' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('y' as NodeId, { idx: 1, gen: 0 })
+    ;(m as { now: number }).now = 3
+
+    const writes = new Map<NodeId, number>([
+      ['x' as NodeId, 99],
+      ['y' as NodeId, 7],
+    ])
+    const single = marshalCommitEnvelope(
+      m,
+      'edit',
+      writes as ReadonlyMap<NodeId, number>,
+    )
+    const batch = marshalBatchEnvelope(m, [{ intent: 'edit', writes }])
+
+    expect(batch.actions).toHaveLength(1)
+    expect(batch.actions[0]).toEqual(single.action)
+    expect(batch.state).toEqual(single.state)
+  })
+
+  it('emits one BridgeCommitAction per commit, in order', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('b' as NodeId, { idx: 1, gen: 0 })
+
+    const env = marshalBatchEnvelope(m, [
+      { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
+      { intent: 'c1', writes: new Map([['b' as NodeId, 2]]) },
+      {
+        intent: 'c2',
+        writes: new Map([
+          ['a' as NodeId, 3],
+          ['b' as NodeId, 4],
+        ]),
+      },
+    ])
+    expect(env.actions).toEqual([
+      { action: 'commit', intent: 'c0', writes: [0] },
+      { action: 'commit', intent: 'c1', writes: [1] },
+      { action: 'commit', intent: 'c2', writes: [0, 1] },
+    ])
+  })
+
+  it('only the FIRST commit writes land in the input snapshot (Rust threads the rest)', () => {
+    // The single `state` carries the pre-batch input snapshot with
+    // commit #0's writes applied; commits 1..N-1 ride the per-action
+    // `writes` slot list and are applied by the Rust extern as it
+    // threads the post-state. Pre-applying them here would double-count
+    // commit #0's effect on the wire.
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    m.inputs.set(0, 'initial')
+    ;(m as { now: number }).now = 5
+
+    const env = marshalBatchEnvelope(m, [
+      { intent: 'c0', writes: new Map([['a' as NodeId, 'first']]) },
+      { intent: 'c1', writes: new Map([['a' as NodeId, 'second']]) },
+    ])
+    // Input block reflects commit #0's write ('first'), stamped at
+    // now+1; commit #1's 'second' is NOT pre-applied.
+    expect(env.state.inputs).toEqual([
+      { id: 0, value: 'first', last_write_time: 6 },
+    ])
+    expect(env.actions[1]).toEqual({
+      action: 'commit',
+      intent: 'c1',
+      writes: [0],
+    })
+  })
+
+  it('writes are sorted ascending per action (deterministic wire shape)', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 2, gen: 0 })
+    m.registerInput('b' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('c' as NodeId, { idx: 1, gen: 0 })
+
+    const env = marshalBatchEnvelope(m, [
+      {
+        intent: 'wide',
+        writes: new Map([
+          ['a' as NodeId, 1],
+          ['b' as NodeId, 2],
+          ['c' as NodeId, 3],
+        ]),
+      },
+    ])
+    expect(env.actions[0]?.writes).toEqual([0, 1, 2])
+  })
+
+  it('throws NodeDisposedError on a write to an unregistered NodeId (fail-fast before wire)', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    expect(() =>
+      marshalBatchEnvelope(m, [
+        { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
+        { intent: 'c1', writes: new Map([['missing' as NodeId, 2]]) },
+      ]),
+    ).toThrow(NodeDisposedError)
+  })
+
+  it('input block is the full live slot set in sorted-by-slot order', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 5, gen: 0 })
+    m.registerInput('b' as NodeId, { idx: 1, gen: 0 })
+    m.inputs.set(5, 'five')
+    m.inputs.set(1, 'one')
+
+    const env = marshalBatchEnvelope(m, [
+      { intent: 'c0', writes: new Map() },
+    ])
+    expect(env.state.inputs).toEqual([
+      { id: 1, value: 'one', last_write_time: 0 },
+      { id: 5, value: 'five', last_write_time: 0 },
+    ])
   })
 })

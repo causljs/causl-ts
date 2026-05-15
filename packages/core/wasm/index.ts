@@ -984,6 +984,32 @@ class WasmBackend implements BackendEngine {
   }
 
   /**
+   * C.3 PR 3 (#1501) — IMPLICIT flush. Any path that needs the
+   * WASM-side state to reflect committed work forces a synchronous
+   * flush of the buffered shadow window before it reads
+   * (option-c doc §2.2 "Implicit (snapshot / read-from-WASM /
+   * dispose)" row). Idempotent and null-safe: a no-op when no queue
+   * is installed or the buffer is empty. Also cancels any armed time
+   * trigger so a stale timer cannot re-flush an already-drained
+   * window after the implicit flush already reconciled it.
+   *
+   * Under Answer C the JS engine is SSOT, so reads / subscriber
+   * dispatch / `Commit` returns do NOT require a flush — only paths
+   * that surface the WASM-side state (`snapshot()` shadows through the
+   * marshaler per F-marshal.7; `dispose()` mutates the WASM-side
+   * allocator) need the buffered window on the wire first
+   * (option-c doc §2.2 final paragraph).
+   */
+  #implicitFlush(): void {
+    // `BatchedFlush.flush()` cancels the pending time trigger
+    // UNCONDITIONALLY (including on the buffer-empty early-return
+    // path), so an implicit flush both drains the buffered window and
+    // disarms any stale timer in one call. No-op + null-safe when no
+    // queue is installed.
+    this.#batchedFlush?.flush()
+  }
+
+  /**
    * F-marshal.5 (#1468) — install a marshaler mirror + bridge adapter
    * so `commit()` shadows the JS↔WASM wire path on every commit. The
    * cross-backend determinism gate uses this to exercise the marshaler
@@ -1048,6 +1074,15 @@ class WasmBackend implements BackendEngine {
   }
 
   snapshot(): GraphSnapshot {
+    // C.3 PR 3 (#1501) — implicit flush: snapshot() shadows through
+    // the marshaler (F-marshal.7), so the buffered shadow window must
+    // land on the WASM-side wire BEFORE the snapshot reads, or the
+    // mirror would lag behind the TS graph by the un-flushed window
+    // (option-c doc §2.2). The adopter-facing snapshot is still the TS
+    // graph's (Answer C — TS engine is SSOT); the implicit flush only
+    // reconciles the WASM-side mirror so a subsequent marshaler-routed
+    // snapshot/hydrate sees committed work.
+    this.#implicitFlush()
     return this.#graph.snapshot()
   }
 
@@ -1100,6 +1135,14 @@ class WasmBackend implements BackendEngine {
   dispose(node: NodeId): void {
     const handle = this.#nodeRegistry.get(node)
     if (handle === undefined) return
+    // C.3 PR 3 (#1501) — implicit flush BEFORE disposal: dispose()
+    // mutates the WASM-side allocator (Decision 4 — WASM-side
+    // authoritative on disposed cells). A buffered shadow window that
+    // still references this slot must land on the wire before the
+    // slot is freed, or the deferred batch would marshal a write
+    // against a slot the engine has since disposed
+    // (option-c doc §2.2). The implicit flush drains the window first.
+    this.#implicitFlush()
     // Disposal flows through the internal-dispatch registry on the
     // wrapped Graph; surfacing it here keeps the seam intact and
     // matches the `BackendEngine` interface shape.

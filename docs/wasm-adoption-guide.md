@@ -387,7 +387,105 @@ The `backend: 'js'` short-circuit never imports `@causl/core/wasm`
 at all — adopters who pin the TS engine pay zero bundle cost for
 the WASM entry stub.
 
-## 4. Where to read the host-tier matrix
+## 4. Batched-flush opt-in (`createCausl({ batchedFlush })`)
+
+> **Read this framing first. `batchedFlush` delivers ZERO
+> adopter-visible performance change at v1.x.** It is *scaffolding*
+> for a possible future v2.x cutover, not a speed knob you turn on
+> today. If you are looking for "make causl faster", this option is
+> not it — the JS engine remains the single source of truth for
+> every read, subscribe, and `commit()` return regardless of this
+> setting. Turning it on changes only *when the WASM-side shadow wire
+> crossing happens*, which is invisible to your application code.
+
+### What it is
+
+Epic #1493 (the #1483 re-architecture decision's option-c
+implementation) added a per-graph opt-in that buffers the WASM-side
+shadow commit-wire crossing and flushes it as one batched envelope
+instead of one envelope per commit:
+
+```ts
+import { loadWasmBackend } from '@causl/core/wasm'
+
+const backend = await loadWasmBackend({
+  batchedFlush: { afterN: 100, intervalMs: 16 },
+})
+```
+
+…or, on the `backend: 'auto'` path:
+
+```ts
+import { createCausl } from '@causl/core'
+
+const graph = createCausl({
+  backend: 'auto',
+  batchedFlush: { afterN: 100 }, // forwarded to loadWasmBackend on migration
+})
+```
+
+- **`afterN`** (default `1`) — flush after this many buffered commits.
+  `1` flushes every commit, which is **byte-identical to omitting the
+  option entirely** (and to pre-#1493 dev). Set `100` for the
+  "production-grade" batch window or `312` for the
+  `docs/epic-1483/option-c-batched-boundary.md` §1 kill-threshold
+  window.
+- **`intervalMs`** (default `16` — one 60 Hz frame) — flush after this
+  many ms even if `afterN` is not reached, so a low commit rate does
+  not strand buffered work. `0` disables the time trigger.
+- **Manual flush** — `backend.flush()` forces any buffered window
+  across the wire NOW (before navigation, before `snapshot()`, in
+  tests).
+- **Implicit flush** — `snapshot()` and `dispose()` flush
+  automatically so the WASM-side state reflects committed work.
+
+### What does NOT change (the contract you can rely on)
+
+`createCausl({ batchedFlush })` preserves every adopter-facing
+contract verbatim (SPEC §17.6 "Option (c) batched-commit boundary
+scaffolding" callout; option-c doc §2.1 Answer C):
+
+- **`commit()` still returns a frozen `Commit` synchronously.** Phases
+  A–H run in the JS engine on the same tick; there is no `Promise`,
+  no deferred apply, no codemod.
+- **`graph.now` still advances by exactly one tick per commit**, always
+  (SPEC §3 Theorem 4).
+- **Per-node and `subscribeCommits` subscribers still fire per-commit,
+  synchronously**, in the same call stack as `commit()`'s return
+  (SPEC §15.3 — subscriber fires are NOT batched; option (c) pins
+  this deliberately).
+- **`read()` returns the JS engine's authoritative value** — no FFI
+  round-trip on the read path.
+- **Default behaviour is byte-identical to not passing the option.**
+  This is a load-bearing acceptance test (epic #1493 phase C.4):
+  default-config `commit`/`read`/`subscribe`/`exportModel`/`now` is
+  byte-identical to a bare pure-TS `createCausl()` graph.
+
+The opt-in is **per-graph** (not a global flag) and **additive** (no
+deprecation cycle, no lint, no RC track). Multi-graph adopters
+(`@causl/sync`, embedded use-cases) opt in per graph without
+cross-graph coupling.
+
+### Why turn it on at all, then?
+
+You generally should **not**, at v1.x. The batched-flush capability
+exists so a *future* v2.x cutover that moves the single source of
+truth into the WASM/Rust engine can do so without re-paying the
+per-commit FFI boundary tax — the wire is already batched. The C.6
+`op-rust-batch-boundary` measurement confirms the boundary tax
+amortises exactly `15.64 / N` μs per the option-c doc §1 arithmetic
+(crossing the ≤50 ns floor at N≥312), but under the v1.x "JS engine
+SSOT" architecture that amortisation buys *no adopter-visible perf* —
+it is the ceiling a future SSOT swap would obtain, not today's cost.
+The #1133 boundary-tax falsification is **not** refuted by this
+capability; epic #1493 ships the plumbing, not the perf.
+
+If you have a specific reason to exercise the batched wire path early
+(e.g. you are validating the v2.x cutover in a staging harness), set
+`afterN` to your target window and use `backend.flush()` at
+quiescence boundaries. Otherwise, leave it unset.
+
+## 5. Where to read the host-tier matrix
 
 The authoritative host-tier compatibility matrix lives in two
 places, both maintained in lockstep:

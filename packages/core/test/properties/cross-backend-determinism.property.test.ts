@@ -84,6 +84,7 @@ import * as fc from 'fast-check'
 import { tieredPropertyTrials } from '@causl/core-testing-internal'
 
 import { createCausl, type Graph } from '../../src/index.js'
+import type { Commit, GraphTime, NodeId } from '../../src/types.js'
 import type { BackendEngine } from '../../wasm/index.js'
 import {
   __createWasmBackendSyncForTests,
@@ -2151,6 +2152,301 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
           expect(mirrorGraph.now).toBe(ssot.now)
         }
       }, /* 1000 trials × N commits × 2 graphs */ 120_000)
+    }
+  })
+
+  // ===================================================================
+  // 🚦 V2.4 (#1534) — LOAD-BEARING promote GO/NO-GO (the F-marshal.5
+  // analog). Epic #1515 decomposition #1516; predecessors V2.1 #1522,
+  // V2.2 #1530, V2.3 #1532.
+  //
+  // This is the C.5 per-flush determinism gate run **WITH PROMOTION
+  // ACTIVE** — `engine: 'rust-ssot'` flips the V2.2 compare-and-
+  // DISCARD guard to compare-and-PROMOTE (V2-DESIGN §1.3 / Decision
+  // 6 tier 1). The GO/NO-GO is the tripwire axis T3 (V2-DESIGN §3.1):
+  //
+  //   GO   = 1000 trials × 0 byte differences with Rust PROMOTED
+  //          (every flush promotes; divergedFlushCount === 0).
+  //   NO-GO = ANY byte divergence in the 1000-trial promoted run
+  //          (divergedFlushCount > 0) → a true determinism
+  //          correctness bug → HALT (do NOT promote, do NOT merge).
+  //
+  // Distinct from V2.3's EXPECTED ~85× perf regression (designed-for,
+  // never a STOP). A byte-divergence here is a true correctness STOP.
+  //
+  // The default `js-ssot` invariant is asserted in a sibling cell:
+  // the V2.1 #1522 / V2.2 #1530 byte-identity property still holds and
+  // promotion is rust-ssot-only (it never leaks into the default).
+  // ===================================================================
+  describe('🚦 V2.4 (#1534) — promote GO/NO-GO: C.5 gate with Rust PROMOTED', () => {
+    /** The load-bearing 1000-trial × 0-byte-difference T3 floor. */
+    const TRIALS = 1000
+
+    /** The C.1 batch sizes (option-c doc §6 acceptance axes). */
+    const N_AXES = [1, 10, 100, 312] as const
+
+    for (const N of N_AXES) {
+      it(`PROMOTED flush at N=${N} — 1000 trials × 0 byte differences (GO) with the Rust post-state promoted canonical`, async () => {
+        const { WasmStateMirror, BatchedFlush } = await import(
+          '../../wasm/index.js'
+        )
+
+        let totalPromoted = 0
+        for (let trial = 0; trial < TRIALS; trial++) {
+          // ---- JS-engine SSOT: per-commit, the authoritative side. --
+          const ssot = createCausl({ name: `v24:n${N}:t${trial}` })
+          const aSsot = ssot.input('a', 0)
+          const bSsot = ssot.input('b', 0)
+
+          // ---- WASM-mirror analog: a SECOND TS graph the
+          // commit_batch bridge replays the batch through, updated
+          // ONCE per flush (the Phase-1 WASM-side analog). ------------
+          const mirrorGraph = createCausl({
+            name: `v24:n${N}:t${trial}`, // same graphId — #685 discipline
+          })
+          const aMirror = mirrorGraph.input('a', 0)
+          const bMirror = mirrorGraph.input('b', 0)
+
+          const ssotWrites: { a: number; b: number }[] = []
+
+          // Honest commit_batch bridge: replays each buffered action
+          // through the mirror graph (no record corruption — this is
+          // the GO path; a divergence would be a real correctness
+          // bug the gate exists to catch).
+          const bridge = {
+            commit(_s: unknown, _a: unknown): unknown {
+              throw new Error('V2.4 cell uses the batched extern only')
+            },
+            commit_batch(state: unknown, actions: unknown): unknown {
+              const s = state as { now: number }
+              const acts = actions as {
+                intent: string
+                writes: number[]
+              }[]
+              const commits: {
+                time: number
+                intent: string
+                changedNodes: number[]
+              }[] = []
+              acts.forEach((act, i) => {
+                mirrorGraph.commit(act.intent, (tx) => {
+                  if (act.writes.includes(0)) tx.set(aMirror, ssotWrites[i]!.a)
+                  if (act.writes.includes(1)) tx.set(bMirror, ssotWrites[i]!.b)
+                })
+                commits.push({
+                  time: s.now + i + 1,
+                  intent: act.intent,
+                  changedNodes: act.writes,
+                })
+              })
+              return {
+                state: { now: s.now + acts.length, inputs: [] },
+                commit:
+                  commits[commits.length - 1] ??
+                  { time: s.now, intent: 'batch-empty', changedNodes: [] },
+                commits,
+                events: [],
+              }
+            },
+          }
+
+          const mirror = new WasmStateMirror()
+          mirror.registerInput('a' as never, { idx: 0, gen: 0 })
+          mirror.registerInput('b' as never, { idx: 1, gen: 0 })
+          // 6th positional arg = 'rust-ssot' → PROMOTION ACTIVE (the
+          // V2.4 flip). This is the C.5 gate with the load-bearing
+          // promote path armed.
+          const queue = new BatchedFlush(
+            mirror,
+            bridge,
+            N,
+            0,
+            undefined,
+            'rust-ssot',
+          )
+
+          for (let i = 0; i < N; i++) {
+            const av = (trial + i) % 97
+            const bv = (trial * 2 + i) % 89
+            ssotWrites.push({ a: av, b: bv })
+            // JS SSOT — per-commit (the authoritative tick).
+            ssot.commit(`c${i}`, (tx) => {
+              tx.set(aSsot, av)
+              if (i % 3 === 0) tx.set(bSsot, bv)
+            })
+            // The JS-engine canonical Commit the production
+            // `WasmBackend.commit()` would feed `enqueue` under
+            // rust-ssot: the byte-compare diffs the Rust projection
+            // (`applyBatchBridgeResult` shape) against THIS. Its
+            // `changedNodes` are the dictionary-reverse-mapped NodeIds
+            // in slot order ('a'=0, 'b'=1) — exactly what the
+            // projection produces for an undisturbed record.
+            const writesThisCommit =
+              i % 3 === 0
+                ? new Map<never, never>([
+                    ['a', av],
+                    ['b', bv],
+                  ] as never)
+                : new Map<never, never>([['a', av]] as never)
+            const jsCanonicalCommit: Commit = {
+              time: (i + 1) as unknown as GraphTime,
+              intent: `c${i}`,
+              changedNodes: (i % 3 === 0
+                ? ['a', 'b']
+                : ['a']) as unknown as NodeId[],
+              originatedAt: undefined,
+            }
+            queue.enqueue(
+              { intent: `c${i}`, writes: writesThisCommit },
+              i, // base clock for the first buffered commit
+              jsCanonicalCommit,
+            )
+          }
+
+          // The queue MUST have flushed exactly at the count threshold.
+          expect(queue.pending).toBe(0)
+
+          // ===== THE LOAD-BEARING GO/NO-GO ASSERTION =====
+          // With promotion ACTIVE: every flush must PROMOTE (byte-
+          // match) and ZERO flushes may diverge. A single divergence
+          // across 1000 trials is a NO-GO (HALT).
+          expect(queue.divergedFlushCount).toBe(0)
+          expect(queue.error).toBeUndefined()
+          // N commits at afterN=N ⇒ exactly one flush per trial; that
+          // flush must have promoted.
+          expect(queue.promotedFlushCount).toBe(1)
+          expect(queue.shadowCompareCount).toBe(1)
+          totalPromoted += queue.promotedFlushCount
+
+          // The PROMOTED mirror post-state is byte-identical to the
+          // per-commit JS-engine SSOT (the determinism property under
+          // promotion, not just shadow).
+          expect(ir(mirrorGraph)).toBe(ir(ssot))
+          expect(mirrorGraph.now).toBe(ssot.now)
+          expect(mirror.now).toBe(ssot.now as unknown as number)
+        }
+
+        // Every one of the 1000 trials promoted exactly once.
+        expect(totalPromoted).toBe(TRIALS)
+      }, /* 1000 trials × N commits × 2 graphs, promoted */ 180_000)
+    }
+  })
+
+  // ===================================================================
+  // V2.4 (#1534) — the load-bearing DEFAULT-OFF invariant: with the
+  // promote path SHIPPED, default `engine: 'js-ssot'` must remain
+  // byte-identical (the V2.1 #1522 / V2.2 #1530 acceptance property).
+  // Promotion is rust-ssot-only; it must NEVER leak into the default.
+  // A divergent bridge under js-ssot must be INERT (no compare, no
+  // promote, no rollback, no error) — proving the flag truly gates it.
+  // ===================================================================
+  describe('V2.4 (#1534) — default js-ssot byte-identity preserved (promotion is rust-ssot-only)', () => {
+    const TRIALS = 1000
+    const N_AXES = [1, 10, 100, 312] as const
+
+    for (const N of N_AXES) {
+      it(`default js-ssot at N=${N} — 1000 trials byte-identical, promotion path NEVER entered (even with a divergent bridge)`, async () => {
+        const { WasmStateMirror, BatchedFlush } = await import(
+          '../../wasm/index.js'
+        )
+
+        for (let trial = 0; trial < TRIALS; trial++) {
+          const ssot = createCausl({ name: `v24def:n${N}:t${trial}` })
+          const aSsot = ssot.input('a', 0)
+          const bSsot = ssot.input('b', 0)
+          const mirrorGraph = createCausl({ name: `v24def:n${N}:t${trial}` })
+          const aMirror = mirrorGraph.input('a', 0)
+          const bMirror = mirrorGraph.input('b', 0)
+          const ssotWrites: { a: number; b: number }[] = []
+
+          // A bridge that WOULD corrupt record 0's intent. Under
+          // js-ssot the compare/promote path is never entered, so the
+          // corruption is invisible (the queue still replays the
+          // honest writes into mirrorGraph — the C.3 shadow wiring is
+          // unchanged) and the queue stays byte-clean. This proves
+          // promotion is rust-ssot-only and never leaks into default.
+          const bridge = {
+            commit(_s: unknown, _a: unknown): unknown {
+              throw new Error('V2.4 default cell uses the batched extern only')
+            },
+            commit_batch(state: unknown, actions: unknown): unknown {
+              const s = state as { now: number }
+              const acts = actions as {
+                intent: string
+                writes: number[]
+              }[]
+              const commits: {
+                time: number
+                intent: string
+                changedNodes: number[]
+              }[] = []
+              acts.forEach((act, i) => {
+                mirrorGraph.commit(act.intent, (tx) => {
+                  if (act.writes.includes(0)) tx.set(aMirror, ssotWrites[i]!.a)
+                  if (act.writes.includes(1)) tx.set(bMirror, ssotWrites[i]!.b)
+                })
+                commits.push({
+                  time: s.now + i + 1,
+                  // Corrupt record 0 — js-ssot must IGNORE this (no
+                  // compare ⇒ the divergence is never observed).
+                  intent: i === 0 ? `${act.intent}__WOULD_DIVERGE__` : act.intent,
+                  changedNodes: act.writes,
+                })
+              })
+              return {
+                state: { now: s.now + acts.length, inputs: [] },
+                commit:
+                  commits[commits.length - 1] ??
+                  { time: s.now, intent: 'batch-empty', changedNodes: [] },
+                commits,
+                events: [],
+              }
+            },
+          }
+
+          const mirror = new WasmStateMirror()
+          mirror.registerInput('a' as never, { idx: 0, gen: 0 })
+          mirror.registerInput('b' as never, { idx: 1, gen: 0 })
+          // NO 6th arg ⇒ engineMode defaults to 'js-ssot'.
+          const queue = new BatchedFlush(mirror, bridge, N, 0)
+
+          for (let i = 0; i < N; i++) {
+            const av = (trial + i) % 97
+            const bv = (trial * 2 + i) % 89
+            ssotWrites.push({ a: av, b: bv })
+            ssot.commit(`c${i}`, (tx) => {
+              tx.set(aSsot, av)
+              if (i % 3 === 0) tx.set(bSsot, bv)
+            })
+            queue.enqueue(
+              {
+                intent: `c${i}`,
+                writes: new Map<never, never>(
+                  (i % 3 === 0
+                    ? [
+                        ['a', av],
+                        ['b', bv],
+                      ]
+                    : [['a', av]]) as never,
+                ),
+              },
+              i,
+            )
+          }
+
+          expect(queue.pending).toBe(0)
+          // THE load-bearing default-off assertions: the promote /
+          // compare path was NEVER entered even though the bridge
+          // WOULD have diverged. Byte-identical to V2.1 #1522 / V2.2.
+          expect(queue.shadowCompareCount).toBe(0)
+          expect(queue.promotedFlushCount).toBe(0)
+          expect(queue.divergedFlushCount).toBe(0)
+          expect(queue.error).toBeUndefined()
+          // Default path still byte-identical at the flush boundary.
+          expect(ir(mirrorGraph)).toBe(ir(ssot))
+          expect(mirrorGraph.now).toBe(ssot.now)
+        }
+      }, /* 1000 trials × N commits × 2 graphs, default-off */ 180_000)
     }
   })
 })

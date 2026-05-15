@@ -1,32 +1,43 @@
 /**
- * V2.2 (#1530) — per-flush shadow byte-compare guard tests.
+ * V2.2 (#1530) → V2.4 (#1534) — per-flush byte-compare guard tests.
  *
- * Implements ticket V2.2 of the v2.x epic #1515 cascade (decomposition
- * #1516; predecessor V2.1 #1522 `2b7e7ea5`). The guard is
- * **compare-and-DISCARD**: under `engine: 'rust-ssot'` every
+ * V2.2 landed the guard as **compare-and-DISCARD**. V2.4 (the
+ * F-marshal.5 analog, epic #1515 decomposition #1516; predecessors
+ * V2.1 #1522, V2.2 #1530, V2.3 #1532) **FLIPS** it to
+ * **compare-and-PROMOTE**: under `engine: 'rust-ssot'` every
  * `commit_batch` flush byte-compares the Rust projection against the
- * JS-engine canonical `Commit[]` and records divergence via the
- * existing #1493 C.5 `BatchedFlush.#error` seam — but the JS engine
- * stays SSOT and the Rust post-state is NEVER promoted (promotion is
- * the gated load-bearing job of V2.4).
+ * JS-engine canonical `Commit[]` and, on a byte-MATCH, the Rust
+ * post-state is PROMOTED as canonical for the WASM-side mirror; on a
+ * byte-DIVERGENCE it is NOT promoted (the mirror is rolled back to the
+ * JS-engine-equivalent post-state — Decision 6 tier 1) and the
+ * labelled divergence is recorded into the #1493 C.5
+ * `BatchedFlush.#error` seam.
  *
- * The two load-bearing properties this file pins:
+ * The load-bearing properties this file pins (now under V2.4):
  *
- *   1. **Compare RUNS under rust-ssot.** A flush increments the
- *      `shadowCompareCount` dev-test seam, on byte-match leaves
- *      `error` undefined, and on divergence routes the labelled error
- *      into the C.5 `error` seam — WITHOUT changing the returned
- *      result (no promotion; the JS-engine SSOT Commit is what the
- *      adopter already got synchronously).
+ *   1. **Compare RUNS + PROMOTES under rust-ssot.** A flush
+ *      increments `shadowCompareCount`; on byte-match it increments
+ *      `promotedFlushCount`, leaves `error` undefined, and leaves
+ *      `divergedFlushCount === 0`.
  *
- *   2. **Default `js-ssot` is byte-for-byte UNCHANGED.** The compare
- *      path is never entered (`shadowCompareCount === 0`), the queue
- *      buffers no JS commits, and flush output is identical to a
- *      js-ssot queue — the load-bearing V2.1 #1522 invariant holds.
+ *   2. **Divergence DOES NOT PROMOTE.** On a corrupt Rust record the
+ *      flush increments `divergedFlushCount` (NOT `promotedFlushCount`),
+ *      routes the labelled `V2.4 promote byte-compare DIVERGED` error
+ *      into the C.5 `error` seam WITHOUT throwing to the adopter, and
+ *      rolls the mirror back so the divergent Rust post-state is not
+ *      promoted.
+ *
+ *   3. **Default `js-ssot` is byte-for-byte UNCHANGED.** The
+ *      compare/promote path is never entered (`shadowCompareCount ===
+ *      0`, `promotedFlushCount === 0`), the queue buffers no JS
+ *      commits, and flush output is identical to a js-ssot queue — the
+ *      load-bearing V2.1 #1522 invariant holds. Promotion is
+ *      rust-ssot-only and never leaks into the default.
  *
  * NOTE: v2.x delivers ZERO adopter perf at current WASM maturity and
- * does NOT refute the #1133 falsification. V2.2 is non-destructive
- * shadow infrastructure toward V2.4's gated promotion, not a perf win.
+ * does NOT refute the #1133 falsification. V2.4 is the gated promotion
+ * GO/NO-GO; the value prop is large-tree GC-survival (#1525), not a
+ * perf win.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -37,7 +48,7 @@ import { BatchedFlush, type BatchedFlushBridge } from '../wasm/index.js'
 
 /**
  * Recording `commit_batch` bridge. `divergeAt` (when set) corrupts the
- * `intent` of the record at that index so the V2.2 compare sees a
+ * `intent` of the record at that index so the V2.4 compare sees a
  * byte-difference vs the JS-engine canonical Commit fed via `enqueue`.
  */
 function batchBridge(divergeAt?: number): BatchedFlushBridge & {
@@ -101,14 +112,15 @@ function jsCommit(time: number, intent: string): Commit {
   }
 }
 
-describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () => {
-  it('the compare RUNS on every commit_batch flush (shadowCompareCount increments)', () => {
+describe('V2.4 (#1534) — per-flush compare-and-PROMOTE under rust-ssot', () => {
+  it('the compare RUNS + PROMOTES on every commit_batch flush (byte-match)', () => {
     const m = mirrorWith('a')
     const bridge = batchBridge()
     // 6th positional arg = engineMode (rust-ssot arms the guard).
     const q = new BatchedFlush(m, bridge, 1, 16, undefined, 'rust-ssot')
 
     expect(q.shadowCompareCount).toBe(0)
+    expect(q.promotedFlushCount).toBe(0)
     q.enqueue(
       { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
       0,
@@ -116,6 +128,9 @@ describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () =>
     )
     expect(bridge.batchCalls).toBe(1)
     expect(q.shadowCompareCount).toBe(1)
+    // V2.4 — byte-match ⇒ Rust post-state PROMOTED.
+    expect(q.promotedFlushCount).toBe(1)
+    expect(q.divergedFlushCount).toBe(0)
 
     q.enqueue(
       { intent: 'c1', writes: new Map([['a' as NodeId, 2]]) },
@@ -123,9 +138,11 @@ describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () =>
       jsCommit(2, 'c1'),
     )
     expect(q.shadowCompareCount).toBe(2)
+    expect(q.promotedFlushCount).toBe(2)
+    expect(q.divergedFlushCount).toBe(0)
   })
 
-  it('byte-MATCH leaves the C.5 error seam undefined (no false divergence)', () => {
+  it('byte-MATCH promotes the Rust post-state into the mirror and leaves the C.5 error seam undefined', () => {
     const m = mirrorWith('a')
     const q = new BatchedFlush(m, batchBridge(), 3, 0, undefined, 'rust-ssot')
 
@@ -144,18 +161,24 @@ describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () =>
       2,
       jsCommit(3, 'c2'),
     )
-    // afterN=3 ⇒ one batched flush of 3 ⇒ exactly one compare.
+    // afterN=3 ⇒ one batched flush of 3 ⇒ exactly one compare+promote.
     expect(q.shadowCompareCount).toBe(1)
+    expect(q.promotedFlushCount).toBe(1)
+    expect(q.divergedFlushCount).toBe(0)
     expect(q.error).toBeUndefined()
+    // The Rust post-state was promoted: mirror.now advanced to the
+    // post-batch clock (base 0 + 3 actions).
+    expect(m.now).toBe(3 as unknown as GraphTime)
   })
 
-  it('byte-DIVERGENCE routes the labelled error into the C.5 #error seam (compare-and-discard, NOT a throw to the adopter)', () => {
+  it('byte-DIVERGENCE does NOT promote: routes the labelled error into the C.5 #error seam, rolls the mirror back, NO throw to the adopter (the V2.4 NO-GO halt mechanism)', () => {
     const m = mirrorWith('a')
     // Bridge corrupts record index 1's intent.
     const q = new BatchedFlush(m, batchBridge(1), 3, 0, undefined, 'rust-ssot')
 
     // The flush must NOT throw to the caller — the divergence is
-    // captured into `#error` exactly as a shadow marshal failure is.
+    // captured into `#error` (the JS engine is SSOT and already
+    // returned its Commit synchronously).
     expect(() => {
       q.enqueue(
         { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
@@ -175,22 +198,26 @@ describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () =>
     }).not.toThrow()
 
     expect(q.shadowCompareCount).toBe(1)
+    // V2.4 — divergence ⇒ NOT promoted.
+    expect(q.promotedFlushCount).toBe(0)
+    expect(q.divergedFlushCount).toBe(1)
     expect(q.error).toBeInstanceOf(Error)
-    expect(q.error?.message).toContain('V2.2 shadow byte-compare diverged')
-    // Honest framing pinned in the error: result discarded, JS SSOT,
-    // promotion gated to V2.4.
-    expect(q.error?.message).toContain('result DISCARDED')
-    expect(q.error?.message).toContain('gated to V2.4')
+    expect(q.error?.message).toContain('V2.4 promote byte-compare DIVERGED')
+    expect(q.error?.message).toContain('was NOT promoted')
+    expect(q.error?.message).toContain('rolled back')
+    expect(q.error?.message).toContain('NO-GO')
+    // Mirror rolled back to the pre-flush JS-engine-equivalent
+    // post-state (Decision 6 tier 1): the divergent Rust post-state
+    // (which would have advanced now to 3) was NOT promoted.
+    expect(m.now).toBe(0 as unknown as GraphTime)
   })
 
-  it('the returned Commit[] is the Rust projection but the JS engine remains SSOT (NO promotion in V2.2)', () => {
-    // `flush()` returns its projected `commits` for the C.3 implicit-
-    // flush callers exactly as it did in V2.1 — V2.2 does NOT change
-    // the return contract. The adopter-facing SSOT Commit was already
-    // returned synchronously by `WasmBackend.commit()` (the JS engine);
-    // V2.2 only adds the compare side-effect. The byte-MATCH case
-    // proves the projection equals the JS commit, so a match is
-    // non-destructive; the contract itself is unchanged from V2.1.
+  it('the returned Commit[] is the promoted Rust projection on a match, empty on a divergence', () => {
+    // On a byte-match the projected `commits` are returned for the
+    // C.3 implicit-flush callers (and the mirror is promoted). On a
+    // divergence the return is empty (nothing promoted) — the JS
+    // engine already returned the adopter-facing SSOT Commit
+    // synchronously from `WasmBackend.commit()` (Decision 1.2).
     const m = mirrorWith('a')
     const q = new BatchedFlush(m, batchBridge(), 1, 16, undefined, 'rust-ssot')
     q.enqueue(
@@ -200,15 +227,14 @@ describe('V2.2 (#1530) — per-flush shadow byte-compare under rust-ssot', () =>
     )
     const out = q.flush() // buffer already drained by afterN=1; no-op
     expect(out).toEqual([])
-    // The compare ran on the auto-flush; the JS engine stayed SSOT
-    // (no exception escaped, error seam clean on a match).
     expect(q.shadowCompareCount).toBe(1)
+    expect(q.promotedFlushCount).toBe(1)
     expect(q.error).toBeUndefined()
   })
 })
 
-describe('V2.2 (#1530) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #1522 invariant)', () => {
-  it('the compare path is NEVER invoked under default js-ssot (shadowCompareCount stays 0)', () => {
+describe('V2.4 (#1534) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #1522 invariant; promotion never leaks into the default)', () => {
+  it('the compare/promote path is NEVER invoked under default js-ssot (shadowCompareCount + promotedFlushCount stay 0)', () => {
     const m = mirrorWith('a')
     const bridge = batchBridge()
     // No 6th arg ⇒ engineMode defaults to 'js-ssot'.
@@ -218,7 +244,7 @@ describe('V2.2 (#1530) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #152
       { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
       0,
       // Even if a JS commit is (defensively) passed, js-ssot must
-      // ignore it entirely — no buffering, no compare.
+      // ignore it entirely — no buffering, no compare, no promote.
       jsCommit(1, 'c0'),
     )
     q.enqueue(
@@ -228,12 +254,14 @@ describe('V2.2 (#1530) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #152
     )
 
     expect(bridge.batchCalls).toBe(2)
-    // THE load-bearing default-off assertion: zero compare overhead.
+    // THE load-bearing default-off assertion: zero compare/promote.
     expect(q.shadowCompareCount).toBe(0)
+    expect(q.promotedFlushCount).toBe(0)
+    expect(q.divergedFlushCount).toBe(0)
     expect(q.error).toBeUndefined()
   })
 
-  it('an explicit js-ssot engineMode is identical to the default (no compare, no error)', () => {
+  it('an explicit js-ssot engineMode is identical to the default (no compare, no promote, no error)', () => {
     const m = mirrorWith('a')
     const q = new BatchedFlush(m, batchBridge(), 1, 16, undefined, 'js-ssot')
     q.enqueue(
@@ -242,14 +270,16 @@ describe('V2.2 (#1530) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #152
       jsCommit(1, 'c0'),
     )
     expect(q.shadowCompareCount).toBe(0)
+    expect(q.promotedFlushCount).toBe(0)
+    expect(q.divergedFlushCount).toBe(0)
     expect(q.error).toBeUndefined()
   })
 
-  it('a divergent bridge under js-ssot does NOT fire the guard (inert — proves the flag truly gates it)', () => {
+  it('a divergent bridge under js-ssot does NOT fire the guard (inert — proves promotion is flag-gated, never leaks into the default)', () => {
     const m = mirrorWith('a')
-    // Bridge WOULD diverge at index 0, but js-ssot never compares so
-    // the error seam must stay clean — the guard is flag-gated, not
-    // unconditional.
+    // Bridge WOULD diverge at index 0, but js-ssot never compares /
+    // promotes so the error seam must stay clean — the guard is
+    // flag-gated, not unconditional.
     const q = new BatchedFlush(m, batchBridge(0), 1, 16, undefined, 'js-ssot')
     q.enqueue(
       { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
@@ -257,6 +287,8 @@ describe('V2.2 (#1530) — default js-ssot is byte-for-byte UNCHANGED (V2.1 #152
       jsCommit(1, 'c0'),
     )
     expect(q.shadowCompareCount).toBe(0)
+    expect(q.promotedFlushCount).toBe(0)
+    expect(q.divergedFlushCount).toBe(0)
     expect(q.error).toBeUndefined()
   })
 })

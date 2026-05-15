@@ -725,45 +725,47 @@ const HOST_FLUSH_TIMER: FlushTimer = {
 }
 
 /**
- * V2.2 (#1530) — the per-flush shadow byte-compare oracle.
+ * V2.4 (#1534) — the per-flush byte-compare oracle (the F-marshal.5
+ * analog; supersedes the V2.2 #1530 compare-and-DISCARD form).
  *
  * Reuses the #1493 C.5 cross-backend determinism gate's compare
  * discipline VERBATIM (`replay-determinism.test.ts:434`
- * `expectByteEqualIR`): `JSON.stringify` is the byte-equality channel,
- * and a string-inequality is a determinism violation that throws a
- * single labelled `Error` carrying both sides. We do NOT reinvent a
- * structural diff — the `Commit` shape has stable key order
- * (`time` / `intent` / `changedNodes` / `originatedAt`, set in
- * `applyBridgeResult` / `applyBatchBridgeResult`) so the stringify
- * channel is the faithful reuse of the C.5 oracle.
+ * `expectByteEqualIR`): `JSON.stringify` is the byte-equality channel.
+ * We do NOT reinvent a structural diff — the `Commit` shape has stable
+ * key order (`time` / `intent` / `changedNodes` / `originatedAt`, set
+ * in `applyBridgeResult` / `applyBatchBridgeResult`) so the stringify
+ * channel is the faithful reuse of the C.5 oracle. Returns the
+ * decision (and both serialised sides for the divergence record)
+ * instead of throwing, so the `flush()` body can branch on PROMOTE vs
+ * DO-NOT-PROMOTE (Decision 6 tier 1) rather than only signalling via
+ * an exception.
  *
- * **Compare-and-DISCARD.** The thrown `Error` is caught by `flush()`'s
- * existing `try/catch` and recorded into the `BatchedFlush.#error` C.5
- * seam (exactly as a shadow marshal failure already is). The Rust
- * post-state is NEVER promoted on the strength of a match — promotion
- * is the gated load-bearing job of V2.4. A divergence here therefore
- * does NOT change the adopter-facing result; it only lights the C.5
- * tripwire so V2.3 measurement / V2.4's GO/NO-GO can see it.
+ * **Compare-and-PROMOTE (the load-bearing flip).** The `flush()` body
+ * (rust-ssot only) calls this to DECIDE whether to promote the Rust
+ * post-state as canonical for the WASM-side mirror:
  *
- * @throws Error labelled `V2.2 shadow byte-compare diverged` when the
- *   Rust projection is not byte-equal to the JS-engine canonical
- *   `Commit[]` (length mismatch or any record diff).
+ *   - byte-MATCH → PROMOTE: the Rust post-state already applied to the
+ *     mirror by `applyBatchBridgeResult` is honoured (it stays);
+ *     `promotedFlushCount` bumps.
+ *   - byte-DIVERGENCE → DO NOT PROMOTE (Decision 6 tier 1): the
+ *     mirror is ROLLED BACK to the pre-flush JS-engine-equivalent
+ *     post-state and the labelled divergence is recorded into the
+ *     `BatchedFlush.#error` C.5 seam (a true correctness STOP the
+ *     V2.4 1000-trial GO/NO-GO gate exists to catch);
+ *     `divergedFlushCount` bumps. A divergence never reaches the
+ *     adopter — `WasmBackend.commit()` already returned the JS-engine
+ *     SSOT `Commit` synchronously (Decision 1.2).
+ *
+ * Default `js-ssot` NEVER enters this path (V2.1 #1522 / V2.2 #1530
+ * byte-identity invariant): promotion is rust-ssot-only.
  */
-function v2ShadowByteCompare(
+function v2ByteCompareResult(
   jsCommits: readonly Commit[],
   rustCommits: readonly Commit[],
-): void {
-  const l = JSON.stringify(jsCommits)
-  const r = JSON.stringify(rustCommits)
-  if (l !== r) {
-    throw new Error(
-      `V2.2 shadow byte-compare diverged (Rust commit_batch projection ` +
-        `!= JS-engine canonical Commit[]; result DISCARDED, JS engine ` +
-        `remains SSOT — promotion is gated to V2.4)\n` +
-        `JS   = ${l}\n` +
-        `RUST = ${r}`,
-    )
-  }
+): { equal: boolean; js: string; rust: string } {
+  const js = JSON.stringify(jsCommits)
+  const rust = JSON.stringify(rustCommits)
+  return { equal: js === rust, js, rust }
 }
 
 export class BatchedFlush {
@@ -811,6 +813,24 @@ export class BatchedFlush {
    * a divergence (which the `flush()` catch routes into `#error`).
    */
   #shadowCompareCount = 0
+
+  /**
+   * V2.4 (#1534) — count of flushes where the byte-compare MATCHED
+   * and the Rust post-state was PROMOTED as canonical for the mirror
+   * (rust-ssot only). The dev-test seam the V2.4 1000-trial GO/NO-GO
+   * gate asserts equals the flush count (every flush promoted ⇒ 0
+   * divergences ⇒ GO).
+   */
+  #promotedFlushCount = 0
+
+  /**
+   * V2.4 (#1534) — count of flushes where the byte-compare DIVERGED
+   * and the Rust post-state was therefore NOT promoted (the mirror
+   * was rolled back to the JS-engine-equivalent pre-flush post-state;
+   * Decision 6 tier 1). MUST stay `0` for a GO verdict — any non-zero
+   * value is a NO-GO (a true determinism correctness bug).
+   */
+  #divergedFlushCount = 0
 
   /**
    * The `mirror.now` value the NEXT flush's envelope must start from
@@ -887,6 +907,35 @@ export class BatchedFlush {
    */
   get shadowCompareCount(): number {
     return this.#shadowCompareCount
+  }
+
+  /**
+   * V2.4 (#1534) — number of flushes whose byte-compare MATCHED and
+   * whose Rust post-state was therefore PROMOTED as canonical for the
+   * mirror (rust-ssot only; stays `0` under default `js-ssot`). The
+   * dev-test seam the V2.4 LOAD-BEARING 1000-trial GO/NO-GO gate
+   * asserts: with promotion active, every flush must promote
+   * (`promotedFlushCount === shadowCompareCount`) and
+   * `divergedFlushCount === 0` — that is the GO verdict.
+   *
+   * @internal Diagnostic counter; never adopter-facing (the JS engine
+   *   returned the SSOT `Commit` synchronously — Decision 1.2).
+   */
+  get promotedFlushCount(): number {
+    return this.#promotedFlushCount
+  }
+
+  /**
+   * V2.4 (#1534) — number of flushes whose byte-compare DIVERGED and
+   * whose Rust post-state was therefore NOT promoted (the mirror was
+   * rolled back to the JS-engine-equivalent pre-flush post-state;
+   * Decision 6 tier 1). MUST be `0` for a GO verdict; any non-zero
+   * value is a NO-GO (a real determinism correctness bug — HALT).
+   *
+   * @internal Diagnostic counter; never adopter-facing.
+   */
+  get divergedFlushCount(): number {
+    return this.#divergedFlushCount
   }
 
   /**
@@ -1026,25 +1075,89 @@ export class BatchedFlush {
           envelope.state,
           envelope.actions,
         ) as BatchBridgeResult
-        const commits = applyBatchBridgeResult(this.#mirror, result)
-        // V2.2 (#1530) — per-flush shadow byte-compare guard, behind
-        // the rust-ssot flag. Compare RUNS; the Rust projection is
-        // DISCARDED — `commits` is NOT returned to the adopter (the JS
-        // engine already returned its SSOT Commit synchronously from
-        // `WasmBackend.commit()`). On divergence `v2ShadowByteCompare`
-        // throws; the `catch` below records it into the C.5 `#error`
-        // seam exactly as a shadow marshal failure already is. No
-        // promotion of the Rust post-state — that is the gated
-        // load-bearing job of V2.4. Under default `js-ssot` this whole
-        // block is skipped (zero overhead; byte-identical to V2.1).
-        if (this.#engineMode === 'rust-ssot') {
-          // Bump BEFORE the compare so the counter reflects an
-          // attempted run even when the compare throws a divergence.
-          this.#shadowCompareCount += 1
-          v2ShadowByteCompare(jsCommits, commits)
+
+        if (this.#engineMode !== 'rust-ssot') {
+          // Default `js-ssot` — UNCHANGED from V2.1/V2.2 (the
+          // load-bearing #1522 byte-identity invariant). The Rust
+          // post-state is applied to the shadow mirror exactly as
+          // before (C.3 wiring) and the projected `commits` returned
+          // for the C.3 implicit-flush callers. No compare, no
+          // promote, no rollback — zero overhead, byte-identical to
+          // dev `8405b783`. Promotion is rust-ssot-only.
+          const commits = applyBatchBridgeResult(this.#mirror, result)
+          this.#error = undefined
+          return commits
         }
-        this.#error = undefined
-        return commits
+
+        // ===============================================================
+        // V2.4 (#1534) — LOAD-BEARING compare-and-PROMOTE (rust-ssot).
+        //
+        // The F-marshal.5 analog: flip the V2.2 compare-and-DISCARD
+        // guard to compare-and-PROMOTE. The Rust post-state becomes
+        // canonical for the WASM-side mirror ONLY when it byte-matches
+        // the JS-engine canonical `Commit[]` for the same window
+        // (V2-DESIGN §1.3 step 4). On divergence the mirror is NOT
+        // promoted — it is rolled back to the JS-engine-equivalent
+        // pre-flush post-state (Decision 6 tier 1 / §1.3 step 5) and
+        // the labelled divergence is recorded into the C.5 `#error`
+        // seam. A divergence is INVISIBLE to the adopter:
+        // `WasmBackend.commit()` already returned the JS-engine SSOT
+        // `Commit` synchronously (Decision 1.2), so only the WASM-side
+        // mirror (which shadows snapshot()/exportModel()) is affected,
+        // and it simply does not receive the divergent promotion.
+        // ===============================================================
+
+        // Snapshot the mirror's pre-promotion post-state authority so
+        // a divergence can roll the mirror back (Decision 6 tier 1).
+        // The state `applyBatchBridgeResult` promotes is `mirror.now` +
+        // `mirror.inputs`; capture exactly those (shallow value copy of
+        // the inputs map is sufficient — values are JSON scalars/refs
+        // the bridge never mutates in place).
+        const preNow = this.#mirror.now
+        const preInputs = new Map(this.#mirror.inputs)
+
+        // Apply (tentatively promotes the Rust post-state into the
+        // mirror) and project the N `Commit`s for the compare.
+        const commits = applyBatchBridgeResult(this.#mirror, result)
+
+        // Bump BEFORE the compare so `shadowCompareCount` reflects an
+        // attempted run (V2.2 seam contract preserved).
+        this.#shadowCompareCount += 1
+        const cmp = v2ByteCompareResult(jsCommits, commits)
+
+        if (cmp.equal) {
+          // GO path — byte-MATCH ⇒ PROMOTE. The Rust post-state is
+          // canonical for the mirror (it is already applied; honour
+          // it). This is the load-bearing flip.
+          this.#promotedFlushCount += 1
+          this.#error = undefined
+          return commits
+        }
+
+        // NO-GO path — byte-DIVERGENCE ⇒ DO NOT PROMOTE. Roll the
+        // mirror back to the pre-flush JS-engine-equivalent post-state
+        // (Decision 6 tier 1: keep the JS-engine post-state canonical
+        // for this window). Record the divergence into the C.5 seam.
+        // The flush does NOT throw to the adopter (the TS graph is
+        // SSOT and already returned its Commit).
+        this.#mirror.now = preNow
+        this.#mirror.inputs.clear()
+        for (const [k, v] of preInputs) this.#mirror.inputs.set(k, v)
+        this.#divergedFlushCount += 1
+        this.#error = new Error(
+          `V2.4 promote byte-compare DIVERGED — Rust commit_batch ` +
+            `projection != JS-engine canonical Commit[]; the Rust ` +
+            `post-state was NOT promoted, the mirror was rolled back ` +
+            `to the JS-engine-equivalent post-state (Decision 6 tier ` +
+            `1). This is a NO-GO (a true determinism correctness ` +
+            `bug — the V2.4 GO/NO-GO gate HALTS here).\n` +
+            `JS   = ${cmp.js}\n` +
+            `RUST = ${cmp.rust}`,
+        )
+        // The adopter-facing return is empty: the JS engine already
+        // returned the SSOT Commit synchronously; the mirror was NOT
+        // promoted, so there is no Rust projection to surface.
+        return []
       }
       // Degrade path: the bridge has no batched extern. Replay the
       // batch as N sequential single-commit shadow calls. This is

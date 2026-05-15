@@ -855,6 +855,46 @@ export interface CreateCauslOptions {
     readonly afterN?: number
     readonly intervalMs?: number
   }
+
+  /**
+   * V2.1 (#1519) — per-graph Rust-SSOT cutover opt-in for the WASM
+   * backend (epic #1515, V2-DESIGN §2).
+   *
+   * @remarks
+   * Only consumed on the `backend: 'auto'` path (forwarded to
+   * `loadWasmBackend({ engine })` when the auto-adapt wrapper
+   * migrates to the WASM backend). Adopters driving
+   * `loadWasmBackend()` directly pass it there instead.
+   *
+   *   - `'js-ssot'` — DEFAULT. TS engine canonical; the Rust
+   *     `commit_batch` result is discarded into the shadow mirror.
+   *   - `'rust-ssot'` — opt in to the v2.x cutover surface: the Rust
+   *     post-state becomes the candidate canonical for the WASM-side
+   *     mirror at the batched-flush boundary, validated byte-identical
+   *     against the always-on JS-SSOT shadow first (the compare guard
+   *     lands in V2.2; promotion is gated to V2.4).
+   *
+   * **Omitting this (or passing `'js-ssot'`) is byte-identical to
+   * dev `97da8420`** — the load-bearing V2.1 acceptance property
+   * (V2-DESIGN §2.2). Purely additive, per-graph, zero-codemod,
+   * zero-deprecation, default-off.
+   *
+   * **No adopter-visible perf change and no perf win at v2.x.** The
+   * Rust-engine-in-WASM per-commit execution cost is ~85x the TS
+   * engine at current WASM maturity (#1479 comment 4455257530) — a
+   * property of today's runtime that #1493's batching provably
+   * cannot amortise. v2.x is future-facing infrastructure behind
+   * this opt-in plus the V2-DESIGN §3 maturity tripwire; the #1133
+   * falsification is NOT refuted. Promotion of the default to
+   * `'rust-ssot'` is a tripwire-gated future decision explicitly out
+   * of epic #1515 scope.
+   *
+   * The canonical declaration is `WasmEngineMode` in
+   * `packages/core/wasm/index.ts`; the literal union is inlined here
+   * so `./types.js` does not depend on the `@causl/core/wasm`
+   * subpath (which the main barrel must never pull in).
+   */
+  readonly engine?: 'js-ssot' | 'rust-ssot'
 }
 
 // Re-export the flag interface so consumers can pull `CauslFlags`

@@ -274,7 +274,89 @@ export interface WasmBackendOptions {
    * cutover.
    */
   readonly batchedFlush?: BatchedFlushOptions
+
+  /**
+   * V2.1 (#1519) — per-graph Rust-SSOT cutover opt-in (epic #1515,
+   * V2-DESIGN §2). Selects which side's post-state the WASM-side
+   * mirror trusts at the batched-flush boundary:
+   *
+   *   - `'js-ssot'` (default) — the current behaviour: the TS engine
+   *     is canonical, the Rust `commit_batch` result is discarded
+   *     into the shadow mirror (the F-marshal.5 / #1493 C.3 path).
+   *   - `'rust-ssot'` — opt in to the v2.x cutover surface: the Rust
+   *     post-state is the candidate canonical for the WASM-side
+   *     mirror at flush, validated byte-identical against the
+   *     always-on JS-SSOT shadow first (the compare guard lands in
+   *     V2.2; promotion is gated to V2.4 — V2.1 only adds the
+   *     surface + threading).
+   *
+   * **Omitting `engine` (or passing `'js-ssot'`) is byte-identical
+   * to dev `97da8420`** — the load-bearing V2.1 acceptance property
+   * (V2-DESIGN §2.2). `engine: 'rust-ssot'` is purely additive,
+   * per-graph, zero-codemod, zero-deprecation, default-off.
+   *
+   * `engine: 'rust-ssot'` rides the batched-flush queue (V2-DESIGN
+   * Decision 1.3). When the adopter opts into rust-ssot but does NOT
+   * also pass `batchedFlush`, V2.1 defaults the window to
+   * `afterN: 312` (the #1484 §3 / C.6-confirmed <= 50 ns crossing
+   * floor) so the *crossing* tax is amortised — though NOT the
+   * *engine-exec* tax (V2-DESIGN §0: this does NOT make it fast).
+   *
+   * **No adopter-visible perf change and no perf win at v2.x.** The
+   * Rust-engine-in-WASM per-commit execution cost is ~85x the TS
+   * engine at current WASM maturity (#1479 comment 4455257530), a
+   * property of today's runtime (no GC GA, limited JIT, no SIMD)
+   * that #1493's batching provably cannot amortise. v2.x is
+   * future-facing infrastructure behind this opt-in plus the
+   * V2-DESIGN §3 maturity tripwire; the #1133 falsification is NOT
+   * refuted. Promotion of the default to `'rust-ssot'` is a
+   * tripwire-gated future decision explicitly out of epic #1515
+   * scope (V2-DESIGN §2.2 / §5 point 6).
+   */
+  readonly engine?: WasmEngineMode
 }
+
+/**
+ * V2.1 (#1519) — the per-graph engine-canonicality discriminant.
+ *
+ *   - `'js-ssot'` — DEFAULT. TS engine canonical; Rust shadow
+ *     discarded. Byte-identical to dev `97da8420`.
+ *   - `'rust-ssot'` — opt in to the v2.x cutover surface (V2-DESIGN
+ *     §2.1). Default-off; tripwire-gated; not a perf win at current
+ *     WASM maturity (V2-DESIGN §0).
+ *
+ * Mirrors the existing `backend: 'js' | 'auto'` discriminant shape
+ * (`packages/core/src/types.ts:754`) — an `engine` sibling on the
+ * WASM path adopters already program against. NOT a flag on
+ * `batchedFlush` (that knob is contractually a wire-tempo control,
+ * not an SSOT switch — V2-DESIGN §2.1 reason 1) and NOT an
+ * env/build flag (must be per-graph + a runtime config flip for the
+ * Decision 6 rollback story — V2-DESIGN §2.1 reason 3).
+ */
+export type WasmEngineMode = 'js-ssot' | 'rust-ssot'
+
+/**
+ * V2.1 (#1519) — the default engine canonicality when `engine` is
+ * omitted. Pinned as a named constant so the load-bearing
+ * byte-identity acceptance test (`wasm-v2.1-byte-identity.test.ts`)
+ * and the `instantiateBackend` threading reference one source of
+ * truth. Promotion of this default to `'rust-ssot'` is the
+ * tripwire-gated future decision explicitly out of epic #1515 scope
+ * (V2-DESIGN §2.2).
+ */
+export const DEFAULT_WASM_ENGINE_MODE: WasmEngineMode = 'js-ssot'
+
+/**
+ * V2.1 (#1519) — the default batched-flush window v2.x installs when
+ * an adopter opts into `engine: 'rust-ssot'` WITHOUT also passing an
+ * explicit `batchedFlush`. `312` is the #1484 §3 crossing-floor
+ * window (C.6 measured 50.1 ns/op at N=312, SPEC §17.5 trail
+ * addendum) — it amortises the *crossing* tax to the <= 50 ns floor.
+ * It does NOT amortise the *engine-exec* tax (~17 μs/commit, #1479
+ * comment 4455257530); V2-DESIGN §0 is explicit that this is not a
+ * perf win.
+ */
+export const RUST_SSOT_DEFAULT_AFTER_N = 312
 
 /**
  * Concurrent-safe module-level cache: multiple callers racing
@@ -466,7 +548,50 @@ async function instantiateBackend(
   // C.4 (#1505) — thread the per-graph batchedFlush opt-in through to
   // the backend. `options.batchedFlush === undefined` ⇒ no queue ⇒
   // byte-identical to dev b15069fa (load-bearing).
-  return new WasmBackend(bridge, graphName, options.batchedFlush)
+  //
+  // V2.1 (#1519) — thread the per-graph `engine` canonicality opt-in
+  // (V2-DESIGN §2). `options.engine === undefined` ⇒ DEFAULT_WASM_
+  // ENGINE_MODE ('js-ssot') ⇒ byte-identical to dev `97da8420` (the
+  // load-bearing V2.1 acceptance property — V2-DESIGN §2.2). Mirrors
+  // the `batchedFlush` threading above.
+  const engineMode = resolveWasmEngineMode(options.engine)
+  // V2-DESIGN §2.2: `engine: 'rust-ssot'` rides the batched-flush
+  // queue (Decision 1.3). If the adopter opted into rust-ssot but did
+  // NOT pass an explicit `batchedFlush`, default the window to
+  // `afterN: RUST_SSOT_DEFAULT_AFTER_N` (the #1484 §3 / C.6 <= 50 ns
+  // crossing floor) so the *crossing* tax is amortised. This does NOT
+  // amortise the *engine-exec* tax (V2-DESIGN §0 — NOT a perf win).
+  // In 'js-ssot' the batchedFlush threading is byte-identical to C.4
+  // (untouched — the load-bearing default-off property).
+  const batchedFlush =
+    engineMode === 'rust-ssot' && options.batchedFlush === undefined
+      ? { afterN: RUST_SSOT_DEFAULT_AFTER_N }
+      : options.batchedFlush
+  return new WasmBackend(bridge, graphName, batchedFlush, engineMode)
+}
+
+/**
+ * V2.1 (#1519) — validate + normalise the per-graph `engine` opt-in.
+ *
+ * `undefined` ⇒ {@link DEFAULT_WASM_ENGINE_MODE} (`'js-ssot'`) ⇒
+ * byte-identical to dev `97da8420` (the load-bearing V2.1 acceptance
+ * property — V2-DESIGN §2.2). An unrecognised string throws a
+ * `RangeError` at construction (fail-closed: a typo'd `engine` value
+ * must NOT silently fall through to the default and mask an adopter
+ * intent to opt into rust-ssot). Mirrors the `batchedFlush`
+ * validation shape in the {@link WasmBackend} constructor.
+ */
+export function resolveWasmEngineMode(
+  engine: WasmEngineMode | undefined,
+): WasmEngineMode {
+  if (engine === undefined) return DEFAULT_WASM_ENGINE_MODE
+  if (engine !== 'js-ssot' && engine !== 'rust-ssot') {
+    throw new RangeError(
+      `createCausl({ engine }): engine must be 'js-ssot' or ` +
+        `'rust-ssot' (got ${JSON.stringify(engine)})`,
+    )
+  }
+  return engine
 }
 
 // ---------------------------------------------------------------------------
@@ -895,13 +1020,33 @@ class WasmBackend implements BackendEngine {
     | { afterN: number; intervalMs: number }
     | undefined
 
+  /**
+   * V2.1 (#1519) — the validated per-graph engine canonicality mode
+   * (V2-DESIGN §2). `'js-ssot'` (the default when the adopter did not
+   * opt in) keeps the TS engine canonical and the Rust `commit_batch`
+   * result discarded into the shadow mirror — byte-identical to dev
+   * `97da8420` (the load-bearing V2.1 acceptance property). When
+   * `'rust-ssot'` the per-flush byte-compare guard (V2.2) reads this
+   * to decide whether to run the compare; promotion of the Rust
+   * post-state stays gated to V2.4. V2.1 only adds + stores the
+   * discriminant; it does NOT yet change any flush behaviour.
+   */
+  readonly #engineMode: WasmEngineMode
+
   constructor(
     bridge: BridgeId,
     graphName: string,
     batchedFlush?: BatchedFlushOptions,
+    engineMode: WasmEngineMode = DEFAULT_WASM_ENGINE_MODE,
   ) {
     this.bridge = bridge
     this.#graph = createCausl({ name: graphName })
+    // V2.1 (#1519) — store the validated per-graph engine mode.
+    // `instantiateBackend` resolves + validates the adopter-supplied
+    // value via `resolveWasmEngineMode`; the default here keeps every
+    // OTHER WasmBackend construction path (tests, the sync helper)
+    // byte-identical to dev `97da8420` (V2-DESIGN §2.2).
+    this.#engineMode = engineMode
     // C.4 — validate + normalise the per-graph opt-in. Absent ⇒
     // undefined ⇒ byte-identical pre-C.3 path (load-bearing).
     if (batchedFlush !== undefined) {
@@ -934,6 +1079,19 @@ class WasmBackend implements BackendEngine {
     | { afterN: number; intervalMs: number }
     | undefined {
     return this.#batchedFlushConfig
+  }
+
+  /**
+   * V2.1 (#1519) — the validated per-graph engine canonicality mode
+   * (V2-DESIGN §2). Read by the load-bearing V2.1 byte-identity
+   * acceptance test (default ⇒ `'js-ssot'`) and by the V2.2 per-flush
+   * compare guard (which only runs the byte-compare when this is
+   * `'rust-ssot'`). Promotion stays gated to V2.4.
+   *
+   * @internal
+   */
+  __engineModeForTests(): WasmEngineMode {
+    return this.#engineMode
   }
 
   get now(): GraphTime {
@@ -1458,6 +1616,7 @@ export function __createWasmBackendSyncForTests(
   graphName: string,
   bridge: BridgeId = 'serde-json',
   batchedFlush?: BatchedFlushOptions,
+  engine?: WasmEngineMode,
 ): BackendEngine & {
   readonly bridge: BridgeId
   __graph(): Graph
@@ -1471,7 +1630,18 @@ export function __createWasmBackendSyncForTests(
 } {
   // C.4 (#1505) — forward the per-graph batchedFlush opt-in. Default
   // (omitted) ⇒ byte-identical to dev b15069fa (load-bearing).
-  return new WasmBackend(bridge, graphName, batchedFlush)
+  //
+  // V2.1 (#1519) — forward the per-graph engine canonicality opt-in.
+  // Omitted ⇒ `resolveWasmEngineMode(undefined)` ⇒ `'js-ssot'` ⇒
+  // byte-identical to dev `97da8420` (the load-bearing V2.1
+  // acceptance property — V2-DESIGN §2.2). An unrecognised value
+  // throws here exactly as it would on the `instantiateBackend` path.
+  return new WasmBackend(
+    bridge,
+    graphName,
+    batchedFlush,
+    resolveWasmEngineMode(engine),
+  )
 }
 
 /**

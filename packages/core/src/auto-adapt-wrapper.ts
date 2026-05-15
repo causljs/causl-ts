@@ -322,6 +322,10 @@ export function createAutoAdaptGraph(
         const wasmMod = (await import('../wasm/index.js')) as {
           readonly loadWasmBackend: (opts?: {
             readonly graphName?: string
+            readonly batchedFlush?: {
+              readonly afterN?: number
+              readonly intervalMs?: number
+            }
           }) => Promise<unknown>
         }
         // Pass the user-supplied graph name through so the WASM-side
@@ -333,10 +337,17 @@ export function createAutoAdaptGraph(
         // would then be byte-different from a pure-TS baseline run that
         // also uses a synthesised id. Adopters who care about the
         // determinism gate must pass `createCausl({ name })` explicitly.
+        //
+        // C.4 (#1505) — forward the per-graph batchedFlush opt-in to
+        // the WASM backend. Omitted ⇒ undefined ⇒ no queue ⇒
+        // byte-identical to dev b15069fa (load-bearing C.4 property);
+        // per-graph, not global (option-c doc §2.3).
         const graphName = options.name
-        wasmBackendReady = await wasmMod.loadWasmBackend(
-          graphName !== undefined ? { graphName } : {},
-        )
+        const batchedFlush = options.batchedFlush
+        wasmBackendReady = await wasmMod.loadWasmBackend({
+          ...(graphName !== undefined ? { graphName } : {}),
+          ...(batchedFlush !== undefined ? { batchedFlush } : {}),
+        })
       } catch {
         // The wasm load failed (unsupported host, missing artifact,
         // etc). Reset `migrating` so subsequent commits can retry the

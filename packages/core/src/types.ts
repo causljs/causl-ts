@@ -821,6 +821,40 @@ export interface CreateCauslOptions {
    * in dev mode.
    */
   readonly enableH1HazardWarning?: boolean
+
+  /**
+   * C.4 (#1505) — per-graph batched-flush opt-in for the WASM backend
+   * (epic #1493, option-c batched-commit boundary scaffolding).
+   *
+   * @remarks
+   * Only consumed on the `backend: 'auto'` path (forwarded to
+   * `loadWasmBackend({ batchedFlush })` when the auto-adapt wrapper
+   * migrates to the WASM backend). Adopters driving `loadWasmBackend()`
+   * directly pass it there instead.
+   *
+   * **Omitting this is byte-identical to dev `b15069fa`** — the
+   * load-bearing C.4 acceptance property. No queue is installed; the
+   * pre-C.3 per-commit shadow path runs unchanged; `commit()` /
+   * `read()` / `subscribe()` results are exactly what they were before
+   * this cascade. Zero codemod, zero deprecation, zero behavioural
+   * change unless the adopter explicitly opts in. Per-graph, not
+   * global (option-c doc §2.3).
+   *
+   * **No adopter-visible perf change at v1.x even when opted in** —
+   * the JS engine remains SSOT; only the WASM-side wire crossing
+   * batches. This is scaffolding for a future v2.x Rust-SSOT cutover,
+   * NOT a perf win. See `docs/epic-1483/option-c-batched-boundary.md`.
+   *
+   * The shape is `{ afterN?: number; intervalMs?: number }` — kept as
+   * a structural type here so `./types.js` does not depend on the
+   * `@causl/core/wasm` subpath (which the main barrel must never pull
+   * in). The canonical declaration is `BatchedFlushOptions` in
+   * `packages/core/wasm/index.ts`.
+   */
+  readonly batchedFlush?: {
+    readonly afterN?: number
+    readonly intervalMs?: number
+  }
 }
 
 // Re-export the flag interface so consumers can pull `CauslFlags`

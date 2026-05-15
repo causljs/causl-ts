@@ -326,6 +326,7 @@ export function createAutoAdaptGraph(
               readonly afterN?: number
               readonly intervalMs?: number
             }
+            readonly engine?: 'js-ssot' | 'rust-ssot'
           }) => Promise<unknown>
         }
         // Pass the user-supplied graph name through so the WASM-side
@@ -342,11 +343,19 @@ export function createAutoAdaptGraph(
         // the WASM backend. Omitted ⇒ undefined ⇒ no queue ⇒
         // byte-identical to dev b15069fa (load-bearing C.4 property);
         // per-graph, not global (option-c doc §2.3).
+        //
+        // V2.1 (#1519) — forward the per-graph `engine` canonicality
+        // opt-in (V2-DESIGN §2). Omitted ⇒ undefined ⇒ loadWasmBackend
+        // resolves it to `'js-ssot'` ⇒ byte-identical to dev
+        // `97da8420` (the load-bearing V2.1 acceptance property —
+        // V2-DESIGN §2.2); per-graph, not global.
         const graphName = options.name
         const batchedFlush = options.batchedFlush
+        const engine = options.engine
         wasmBackendReady = await wasmMod.loadWasmBackend({
           ...(graphName !== undefined ? { graphName } : {}),
           ...(batchedFlush !== undefined ? { batchedFlush } : {}),
+          ...(engine !== undefined ? { engine } : {}),
         })
       } catch {
         // The wasm load failed (unsupported host, missing artifact,

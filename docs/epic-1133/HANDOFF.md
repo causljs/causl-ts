@@ -12,21 +12,17 @@
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **#1483 decision phase CLOSED.** #1133 perf hypothesis remains FALSIFIED (G.1 #1145, 78× boundary tax). All three re-architectures studied: (b) in-place NO-GO; (a) native CONDITIONAL-GO Node-tier-only (deferred); **(c) batched-commit ACCEPTED**. Active epic is now **#1493** (option-c implementation).
+**Phase**: **v2.x epic #1515 — RE-SCOPED 2026-05-15 around large-tree survival.** Lineage: #1133 perf hypothesis FALSIFIED (G.1 #1145, 78× boundary tax) → #1483 decision (a/b/c studied; (c) accepted) → #1493 option-c batching scaffolding COMPLETE (13 PRs, dev `b07df102`) → v2.x #1515 Rust-SSOT cutover. dev HEAD `ab0a219c`.
 
-**Resumption bookmark**: **Active epic #1493** — batched-commit boundary scaffolding. 7 phases (C.1–C.7), 13 PRs, ~3.75 wk. **Honest framing carried forward**: option (c) delivers ZERO adopter perf at v1.x — JS engine stays SSOT, only the wire crossing batches. It is scaffolding for a *future v2.x epic* that does the Rust-SSOT cutover (where the perf win would materialize, requiring N≥312 batching + SSOT swap). The #1133 falsification is NOT refuted by #1493 — #1493 builds the on-ramp only.
+**Resumption bookmark**: **Active epic #1515 (v2.x), re-scoped.** The #1518 GC-pressure finding (PRs #1523/#1524) recentered #1515's value prop from the dead median-latency maturity-bet to the **present, non-maturity-gated large-tree-survival axis**: at 50k nodes the TS engine is over a 60Hz frame budget *at the p50* (15.6 ms) and GC-livelocks to process death; the Rust path (WASM linear memory) accretes ≈0 B/commit. Re-scoping comment: [#1515 4463153592](https://github.com/iasbuilt/causl/issues/1515#issuecomment-4463153592).
 
-| Order | Phase | Scope | PRs |
-|---|---|---|---|
-| 1 | **C.1** | Rust-side `commit_batch` extern (both bridges); N=1/10/100/312 unit tests | 2 |
-| 2 | **C.2** | JS-side `marshalBatchEnvelope` + `applyBatchBridgeResult` | 2 |
-| 3 | **C.3** | `BatchedFlush` queue on WasmBackend | 3 |
-| 4 | **C.4** | Adopter API `createCausl({ batchedFlush })`; default afterN=1 byte-identical | 2 |
-| 5 | **C.5** | Cross-backend determinism gate per-flush | 1 |
-| 6 | **C.6** | Bench probes `op-rust-batch-boundary-{10,100,312,1000}` | 2 |
-| 7 | **C.7** | SPEC §17.6 trail rows + adoption-guide opt-in section | 1 |
+**HARD GATE before V2.2**: **#1525** — real-engine (non-synthetic) heap confirmation. The #1518 evidence is from the *synthetic shadow bridge* (establishes the axis, not a real engine's absolute bytes/commit). #1525 must build+load the real serde-wasm artifact, run the gc-pressure probe against it, and verdict PASS/FAIL on {≈0 B/commit, no 50k GC-livelock, ~437× p99.9 flattening}. **V2.2–V2-final are BLOCKED until #1525 lands a verdict.** The ~85× median regression (#1133/#1479) is expected and explicitly out of #1525 scope (orthogonal axis; #1133 STANDS).
 
-Pinned design (from `docs/epic-1483/option-c-batched-boundary.md`): `commit()` sync-returns `Commit`; flush triggers count/time/manual/implicit; subscriber-fire per-commit synchronous; `graph.now` per-commit; default `afterN=1`; no SPEC amendment needed.
+**Landed + valid**: V2.0 design pin (#1517, `97da8420`); V2.1 `engine:'rust-ssot'` opt-in surface (#1522, `2b7e7ea5` — default-off, 15/15 byte-identity gate, zero adopter regression). **Held pending #1525 gate**: V2.2 (shadow byte-compare) → V2.3 (honest re-measure) → 🚦V2.4 (LOAD-BEARING promote GO/NO-GO) → V2.5 (rollback tiers) → V2-final (tripwire + docs + SPEC §19). Decomposition: #1516 comment.
+
+**Next claimable**: **#1525** (the gate). Nothing in v2.x proceeds past V2.1 until it verdicts.
+
+Pinned v2.x design (`docs/epic-1515/V2-DESIGN.md`, #1517): swap point = `BatchedFlush.flush()` body (not `commit()`); JS engine stays per-commit authority + always-on shadow; opt-in `createCausl({ engine:'rust-ssot' })` default `'js-ssot'`; maturity tripwire T1∧T2∧T3∧T4 (T1 = real Rust-in-WASM exec ≤3× TS — the median axis, distinct from #1525's GC axis); no SPEC amendment for v2.x as scoped.
 
 **Decision-phase artifacts** (all on dev `9005ddd8`):
 - `docs/epic-1483/CONSTRAINTS.md` (#1484/PR #1489), `option-a-native-binary.md` (#1485/PR #1491), `option-b-in-place-mutation.md` (#1486/PR #1490), `option-c-batched-boundary.md` (#1487/PR #1492)

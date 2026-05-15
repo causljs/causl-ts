@@ -728,6 +728,116 @@ export function applyBridgeResult(
 }
 
 // ---------------------------------------------------------------------------
+// C.2 (#1498) — Rust→JS application of the BATCH BridgeResult.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire shape of the C.1 `commit_batch` extern's result
+ * (`BatchBridgeResult` in `tools/engine-rs-bridge-serde/src/lib.rs`,
+ * `GcBatchBridgeResult` in `tools/engine-rs-bridge-gc/src/lib.rs`,
+ * PRs #1496/#1497).
+ *
+ * `commit` is the **last** commit's record (parity with the
+ * single-envelope `BridgeResult.commit` so consumers can read
+ * `result.commit.time` uniformly); `commits` carries every N
+ * `CommitRecord` in replay order (`commits.length === actions.length`,
+ * entry `i` is the record the `i`-th batch action produced). `state`
+ * is the post-batch state (the engine threaded all N actions through
+ * `transition_phased` internally).
+ */
+export interface BatchBridgeResult {
+  readonly state: {
+    readonly now: number
+    readonly inputs: readonly InputCellWire[]
+    readonly [k: string]: unknown
+  }
+  readonly commit: BridgeCommitRecord
+  readonly commits: readonly BridgeCommitRecord[]
+  readonly events: readonly unknown[]
+}
+
+/**
+ * C.2 (#1498) — apply the C.1 `commit_batch` extern's
+ * {@link BatchBridgeResult} to the JS-side mirror and project the N
+ * `CommitRecord` entries into the JS-shape {@link Commit}[] adopters
+ * consume.
+ *
+ * Reuses {@link applyBridgeResult}'s post-state projection verbatim:
+ * `mirror.now` is refreshed from the post-batch clock and
+ * `mirror.inputs` from every post-state input cell (the mirror
+ * reflects the end of the batch, exactly as it would after N
+ * sequential `applyBridgeResult` calls — the option-c doc §3.1
+ * byte-identity property). The `idx → NodeId` reverse-index is built
+ * ONCE and reused across all N records (O(N + total-changed) instead
+ * of O(N · dictionary) per-record rebuilds).
+ *
+ * Each record's slot-integer `changedNodes` is reverse-translated to
+ * adopter-facing string NodeIds via the mirror's dictionary; slot ids
+ * absent from the live dictionary are dropped silently (dispose race —
+ * same affordance as the single-commit path).
+ *
+ * Returns the N projected `Commit`s in replay order. The caller (the
+ * C.3 `BatchedFlush` queue) fires per-commit subscribers from these in
+ * order — option (c) does NOT coalesce subscriber fires (option-c doc
+ * §4.2 choice (i); SPEC §15.3 preserved verbatim).
+ *
+ * N=1 produces a single-element array whose `Commit` is byte-identical
+ * to what {@link applyBridgeResult} produces for the equivalent
+ * single-envelope result — the option-c doc §7 "N=1 byte-identical"
+ * invariant at the JS projection boundary.
+ *
+ * **No adopter-visible perf change at v1.x** — the JS engine remains
+ * SSOT; only the wire crossing is batched. Scaffolding for a future
+ * v2.x Rust-SSOT cutover.
+ *
+ * @param mirror - Live JS-side state mirror to update in place.
+ * @param result - The `BatchBridgeResult` returned by the bridge's
+ *   `commit_batch(state, actions)` extern.
+ */
+export function applyBatchBridgeResult(
+  mirror: WasmStateMirror,
+  result: BatchBridgeResult,
+): Commit[] {
+  // Refresh `mirror.now` from the post-batch clock and the input cell
+  // mirror from the post-state — identical to the single-commit
+  // projection, just applied once at the batch boundary instead of N
+  // times. The end-state the mirror reflects is byte-identical to N
+  // sequential applyBridgeResult calls (option-c doc §3.1).
+  mirror.now = result.state.now as unknown as GraphTime
+  for (const cell of result.state.inputs) {
+    mirror.inputs.set(cell.id, cell.value)
+  }
+
+  // Build the idx → NodeId reverse-index ONCE, reused for every record
+  // in the batch.
+  const idxToNodeId = new Map<number, NodeId>()
+  for (const [nodeId, slot] of mirror.dictionary) {
+    idxToNodeId.set(slot.idx, nodeId)
+  }
+
+  const commits: Commit[] = []
+  for (const record of result.commits) {
+    const changedNodes: NodeId[] = []
+    for (const slot of record.changedNodes) {
+      const nodeId = idxToNodeId.get(slot)
+      if (nodeId !== undefined) {
+        changedNodes.push(nodeId)
+      }
+      // Else: slot not in the live dictionary (dispose race) — drop
+      // silently, matching the single-commit path.
+    }
+    commits.push({
+      time: record.time as unknown as GraphTime,
+      intent: record.intent,
+      changedNodes,
+      originatedAt: undefined,
+    })
+  }
+
+  return commits
+}
+
+// ---------------------------------------------------------------------------
 // F-marshal.7 (#1470) — snapshot()/hydrate() round-trip via marshaler.
 // ---------------------------------------------------------------------------
 

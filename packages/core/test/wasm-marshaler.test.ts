@@ -12,13 +12,17 @@
 import { describe, it, expect } from 'vitest'
 import type { GraphSnapshot, GraphTime, NodeId } from '../src/types.js'
 import {
+  applyBatchBridgeResult,
+  applyBridgeResult,
   hydrate,
   marshalBatchEnvelope,
   marshalCommitEnvelope,
   NodeDisposedError,
   snapshot,
   WasmStateMirror,
+  type BatchBridgeResult,
   type BridgeAllocator,
+  type BridgeResult,
   type Slot,
 } from '../wasm/marshaler.js'
 
@@ -530,5 +534,169 @@ describe('marshalBatchEnvelope() — C.2 (#1498) JS→Rust batch builder', () =>
       { id: 1, value: 'one', last_write_time: 0 },
       { id: 5, value: 'five', last_write_time: 0 },
     ])
+  })
+})
+
+describe('applyBatchBridgeResult() — C.2 (#1498) Rust→JS batch projection', () => {
+  // Option (c) batched-commit boundary scaffolding (epic #1493).
+  // applyBatchBridgeResult iterates the N CommitRecord entries the C.1
+  // commit_batch extern (PRs #1496/#1497) returns and projects each
+  // into a Commit, reusing applyBridgeResult's post-state projection.
+  //
+  // NOTE: option (c) delivers ZERO adopter perf at v1.x — the JS engine
+  // remains SSOT; only the wire crossing is batched. These tests assert
+  // correct scaffolding, NOT a perf win.
+
+  it('refreshes mirror.now and mirror.inputs from the post-batch state', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('b' as NodeId, { idx: 1, gen: 0 })
+
+    const result: BatchBridgeResult = {
+      state: { now: 12, inputs: [
+        { id: 0, value: 'A', last_write_time: 12 },
+        { id: 1, value: 'B', last_write_time: 11 },
+      ] },
+      commit: { time: 12, intent: 'c2', changedNodes: [1] },
+      commits: [
+        { time: 10, intent: 'c0', changedNodes: [0] },
+        { time: 11, intent: 'c1', changedNodes: [1] },
+        { time: 12, intent: 'c2', changedNodes: [1] },
+      ],
+      events: [],
+    }
+    const commits = applyBatchBridgeResult(m, result)
+    expect(m.now).toBe(12)
+    expect(m.inputs.get(0)).toBe('A')
+    expect(m.inputs.get(1)).toBe('B')
+    expect(commits).toHaveLength(3)
+  })
+
+  it('projects every CommitRecord in replay order with reverse-translated NodeIds', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('alpha' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('beta' as NodeId, { idx: 1, gen: 0 })
+
+    const result: BatchBridgeResult = {
+      state: { now: 3, inputs: [] },
+      commit: { time: 3, intent: 'last', changedNodes: [] },
+      commits: [
+        { time: 1, intent: 'first', changedNodes: [0] },
+        { time: 2, intent: 'second', changedNodes: [0, 1] },
+        { time: 3, intent: 'last', changedNodes: [] },
+      ],
+      events: [],
+    }
+    const commits = applyBatchBridgeResult(m, result)
+    expect(commits).toEqual([
+      {
+        time: 1,
+        intent: 'first',
+        changedNodes: ['alpha'],
+        originatedAt: undefined,
+      },
+      {
+        time: 2,
+        intent: 'second',
+        changedNodes: ['alpha', 'beta'],
+        originatedAt: undefined,
+      },
+      { time: 3, intent: 'last', changedNodes: [], originatedAt: undefined },
+    ])
+  })
+
+  it('N=1 batch projection is byte-identical to applyBridgeResult', () => {
+    // The option-c doc §7 "N=1 byte-identical" invariant at the JS
+    // projection boundary.
+    const single = new WasmStateMirror()
+    single.registerInput('x' as NodeId, { idx: 0, gen: 0 })
+    const batch = new WasmStateMirror()
+    batch.registerInput('x' as NodeId, { idx: 0, gen: 0 })
+
+    const post = { now: 5, inputs: [{ id: 0, value: 42, last_write_time: 5 }] }
+    const record = { time: 5, intent: 'edit', changedNodes: [0] }
+
+    const singleResult: BridgeResult = {
+      state: post,
+      commit: record,
+      events: [],
+    }
+    const batchResult: BatchBridgeResult = {
+      state: post,
+      commit: record,
+      commits: [record],
+      events: [],
+    }
+
+    const singleCommit = applyBridgeResult(single, singleResult)
+    const batchCommits = applyBatchBridgeResult(batch, batchResult)
+
+    expect(batchCommits).toHaveLength(1)
+    expect(batchCommits[0]).toEqual(singleCommit)
+    expect(batch.now).toBe(single.now)
+    expect(batch.inputs.get(0)).toBe(single.inputs.get(0))
+  })
+
+  it('empty batch produces an empty Commit[] but still refreshes the mirror', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    const result: BatchBridgeResult = {
+      state: { now: 9, inputs: [{ id: 0, value: 1, last_write_time: 0 }] },
+      commit: { time: 9, intent: 'batch-empty', changedNodes: [] },
+      commits: [],
+      events: [],
+    }
+    const commits = applyBatchBridgeResult(m, result)
+    expect(commits).toEqual([])
+    expect(m.now).toBe(9)
+    expect(m.inputs.get(0)).toBe(1)
+  })
+
+  it('drops changedNodes slots absent from the live dictionary (dispose race)', () => {
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    // slot 9 was never registered (or disposed) — must be dropped.
+    const result: BatchBridgeResult = {
+      state: { now: 2, inputs: [] },
+      commit: { time: 2, intent: 'c1', changedNodes: [0, 9] },
+      commits: [{ time: 2, intent: 'c1', changedNodes: [0, 9] }],
+      events: [],
+    }
+    const commits = applyBatchBridgeResult(m, result)
+    expect(commits[0]?.changedNodes).toEqual(['a'])
+  })
+
+  it('round-trips marshalBatchEnvelope → (bridge) → applyBatchBridgeResult shape', () => {
+    // End-to-end shape check: the batch the marshaler emits and the
+    // batch result the bridge returns compose into N Commits. This is
+    // the JS-side half of the option-c wire path; the byte-identity
+    // vs sequential is pinned Rust-side by C.1's tests.
+    const m = new WasmStateMirror()
+    m.registerInput('a' as NodeId, { idx: 0, gen: 0 })
+    m.registerInput('b' as NodeId, { idx: 1, gen: 0 })
+
+    const env = marshalBatchEnvelope(m, [
+      { intent: 'c0', writes: new Map([['a' as NodeId, 1]]) },
+      { intent: 'c1', writes: new Map([['b' as NodeId, 2]]) },
+    ])
+    expect(env.actions).toHaveLength(2)
+
+    // Simulated bridge result for that 2-commit batch.
+    const result: BatchBridgeResult = {
+      state: { now: 2, inputs: [
+        { id: 0, value: 1, last_write_time: 1 },
+        { id: 1, value: 2, last_write_time: 2 },
+      ] },
+      commit: { time: 2, intent: 'c1', changedNodes: [1] },
+      commits: [
+        { time: 1, intent: 'c0', changedNodes: [0] },
+        { time: 2, intent: 'c1', changedNodes: [1] },
+      ],
+      events: [],
+    }
+    const commits = applyBatchBridgeResult(m, result)
+    expect(commits.map((c) => c.intent)).toEqual(['c0', 'c1'])
+    expect(commits.map((c) => c.changedNodes)).toEqual([['a'], ['b']])
+    expect(m.now).toBe(2)
   })
 })

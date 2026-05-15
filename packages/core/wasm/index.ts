@@ -60,6 +60,7 @@ import {
   type JsonValue as MarshalerJsonValue,
 } from './marshaler.js'
 export {
+  applyBatchBridgeResult,
   applyBridgeResult,
   hydrate,
   marshalBatchEnvelope,
@@ -69,6 +70,7 @@ export {
   WasmStateMirror,
 } from './marshaler.js'
 export type {
+  BatchBridgeResult,
   BatchCommitInput,
   BatchEnvelope,
   BridgeAllocator,

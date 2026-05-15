@@ -724,6 +724,48 @@ const HOST_FLUSH_TIMER: FlushTimer = {
   },
 }
 
+/**
+ * V2.2 (#1530) — the per-flush shadow byte-compare oracle.
+ *
+ * Reuses the #1493 C.5 cross-backend determinism gate's compare
+ * discipline VERBATIM (`replay-determinism.test.ts:434`
+ * `expectByteEqualIR`): `JSON.stringify` is the byte-equality channel,
+ * and a string-inequality is a determinism violation that throws a
+ * single labelled `Error` carrying both sides. We do NOT reinvent a
+ * structural diff — the `Commit` shape has stable key order
+ * (`time` / `intent` / `changedNodes` / `originatedAt`, set in
+ * `applyBridgeResult` / `applyBatchBridgeResult`) so the stringify
+ * channel is the faithful reuse of the C.5 oracle.
+ *
+ * **Compare-and-DISCARD.** The thrown `Error` is caught by `flush()`'s
+ * existing `try/catch` and recorded into the `BatchedFlush.#error` C.5
+ * seam (exactly as a shadow marshal failure already is). The Rust
+ * post-state is NEVER promoted on the strength of a match — promotion
+ * is the gated load-bearing job of V2.4. A divergence here therefore
+ * does NOT change the adopter-facing result; it only lights the C.5
+ * tripwire so V2.3 measurement / V2.4's GO/NO-GO can see it.
+ *
+ * @throws Error labelled `V2.2 shadow byte-compare diverged` when the
+ *   Rust projection is not byte-equal to the JS-engine canonical
+ *   `Commit[]` (length mismatch or any record diff).
+ */
+function v2ShadowByteCompare(
+  jsCommits: readonly Commit[],
+  rustCommits: readonly Commit[],
+): void {
+  const l = JSON.stringify(jsCommits)
+  const r = JSON.stringify(rustCommits)
+  if (l !== r) {
+    throw new Error(
+      `V2.2 shadow byte-compare diverged (Rust commit_batch projection ` +
+        `!= JS-engine canonical Commit[]; result DISCARDED, JS engine ` +
+        `remains SSOT — promotion is gated to V2.4)\n` +
+        `JS   = ${l}\n` +
+        `RUST = ${r}`,
+    )
+  }
+}
+
 export class BatchedFlush {
   /** Count-based flush threshold. `1` = flush every commit (default). */
   readonly afterN: number
@@ -740,6 +782,19 @@ export class BatchedFlush {
   /** Buffered per-commit shadow inputs, in commit order. */
   readonly #buffer: BatchCommitInput[] = []
 
+  /**
+   * V2.2 (#1530) — the JS-engine canonical {@link Commit} for each
+   * buffered shadow input, in commit order (parallel to {@link #buffer}).
+   * This is the SSOT result `WasmBackend.commit()` already returned
+   * synchronously to the adopter; the V2.2 per-flush byte-compare guard
+   * diffs the Rust `commit_batch` projection against THIS. Only
+   * populated when the rust-ssot flag is set (the `enqueue` caller
+   * passes it conditionally); under default `js-ssot` it stays empty
+   * and the compare path is never entered — zero added overhead, the
+   * load-bearing V2.1 #1522 byte-identity invariant preserved.
+   */
+  readonly #jsCommits: Commit[] = []
+
   /** The mirror the queue marshals against (Decision 1 SSOT — JS-side). */
   readonly #mirror: WasmStateMirror
 
@@ -748,6 +803,14 @@ export class BatchedFlush {
 
   /** Captured flush error for the determinism gate's assertion path. */
   #error: Error | undefined
+
+  /**
+   * V2.2 (#1530) — count of per-flush shadow byte-compare runs (see
+   * {@link shadowCompareCount}). Bumped just before the compare so it
+   * reflects an *attempted* compare even when the compare then throws
+   * a divergence (which the `flush()` catch routes into `#error`).
+   */
+  #shadowCompareCount = 0
 
   /**
    * The `mirror.now` value the NEXT flush's envelope must start from
@@ -764,12 +827,27 @@ export class BatchedFlush {
   /** C.3 PR 2 — handle of the in-flight interval timer (if any). */
   #timerHandle: unknown
 
+  /**
+   * V2.2 (#1530) — the per-graph engine canonicality mode threaded
+   * from {@link WasmBackend.#engineMode}. `'js-ssot'` (the default)
+   * means the per-flush byte-compare guard is INERT — `flush()`
+   * behaves byte-identically to dev `97da8420` / V2.1 #1522 (the
+   * load-bearing default-off invariant). `'rust-ssot'` arms the
+   * compare-and-DISCARD guard: every flush byte-compares the Rust
+   * `commit_batch` projection against the JS-engine canonical
+   * `Commit[]` and records divergence via the existing C.5 `#error`
+   * seam. The Rust post-state is NEVER promoted here — promotion is
+   * the gated load-bearing job of V2.4.
+   */
+  readonly #engineMode: WasmEngineMode
+
   constructor(
     mirror: WasmStateMirror,
     bridge: BatchedFlushBridge,
     afterN = 1,
     intervalMs = 16,
     timer: FlushTimer = HOST_FLUSH_TIMER,
+    engineMode: WasmEngineMode = DEFAULT_WASM_ENGINE_MODE,
   ) {
     if (!Number.isInteger(afterN) || afterN < 1) {
       throw new RangeError(
@@ -786,11 +864,29 @@ export class BatchedFlush {
     this.afterN = afterN
     this.intervalMs = intervalMs
     this.#timer = timer
+    this.#engineMode = engineMode
   }
 
   /** Number of commits currently buffered (un-flushed). */
   get pending(): number {
     return this.#buffer.length
+  }
+
+  /**
+   * V2.2 (#1530) — number of times the per-flush shadow byte-compare
+   * guard has RUN (incremented once per `commit_batch` flush while
+   * `engine: 'rust-ssot'`). Stays `0` for the entire lifetime of a
+   * default `js-ssot` queue — the dev-test seam the V2.2 acceptance
+   * test asserts on to prove (a) the compare path executes under
+   * rust-ssot and (b) the compare path is NEVER invoked under the
+   * default config (zero overhead, byte-identical to V2.1 #1522).
+   *
+   * @internal A diagnostic counter, not adopter-facing surface; it
+   *   never influences the returned `Commit` (the JS engine is SSOT
+   *   — promotion is gated to V2.4).
+   */
+  get shadowCompareCount(): number {
+    return this.#shadowCompareCount
   }
 
   /**
@@ -809,8 +905,20 @@ export class BatchedFlush {
    * the same window do not move it (the Rust extern threads the
    * post-state internally). Triggers a count-based flush when the
    * buffer reaches `afterN`.
+   *
+   * V2.2 (#1530) — `jsCommit` is the JS-engine canonical {@link Commit}
+   * `WasmBackend.commit()` already returned synchronously to the
+   * adopter (the SSOT). Under `engine: 'rust-ssot'` the caller passes
+   * it so the per-flush byte-compare guard can diff the Rust
+   * `commit_batch` projection against it; under default `js-ssot` the
+   * caller passes `undefined` and the compare path is never entered
+   * (zero added overhead — the load-bearing V2.1 #1522 invariant).
    */
-  enqueue(input: BatchCommitInput, baseNow: number): void {
+  enqueue(
+    input: BatchCommitInput,
+    baseNow: number,
+    jsCommit?: Commit,
+  ): void {
     if (this.#buffer.length === 0) {
       this.#pendingBaseNow = baseNow
       // C.3 PR 2 — arm the time-based trigger on the FIRST buffered
@@ -823,6 +931,13 @@ export class BatchedFlush {
       }
     }
     this.#buffer.push(input)
+    // V2.2 — parallel-buffer the JS-engine canonical Commit ONLY under
+    // rust-ssot (the `enqueue` caller gates this). The `#jsCommits`
+    // length tracks `#buffer` 1:1 for the window so the compare can
+    // index Rust record `i` against JS commit `i`.
+    if (this.#engineMode === 'rust-ssot' && jsCommit !== undefined) {
+      this.#jsCommits.push(jsCommit)
+    }
     if (this.#buffer.length >= this.afterN) {
       this.flush()
     }
@@ -888,6 +1003,15 @@ export class BatchedFlush {
     this.#cancelTimer()
     if (this.#buffer.length === 0) return []
     const batch = this.#buffer.splice(0, this.#buffer.length)
+    // V2.2 (#1530) — drain the parallel JS-engine canonical Commit
+    // buffer for THIS window. Empty under default `js-ssot` (the
+    // `enqueue` caller never populated it) so this splice is a no-op
+    // and the compare path below is never entered — the load-bearing
+    // V2.1 #1522 default-off byte-identity invariant is preserved.
+    const jsCommits =
+      this.#engineMode === 'rust-ssot'
+        ? this.#jsCommits.splice(0, this.#jsCommits.length)
+        : []
     const baseNow = this.#pendingBaseNow ?? (this.#mirror.now as unknown as number)
     this.#pendingBaseNow = undefined
     try {
@@ -903,6 +1027,22 @@ export class BatchedFlush {
           envelope.actions,
         ) as BatchBridgeResult
         const commits = applyBatchBridgeResult(this.#mirror, result)
+        // V2.2 (#1530) — per-flush shadow byte-compare guard, behind
+        // the rust-ssot flag. Compare RUNS; the Rust projection is
+        // DISCARDED — `commits` is NOT returned to the adopter (the JS
+        // engine already returned its SSOT Commit synchronously from
+        // `WasmBackend.commit()`). On divergence `v2ShadowByteCompare`
+        // throws; the `catch` below records it into the C.5 `#error`
+        // seam exactly as a shadow marshal failure already is. No
+        // promotion of the Rust post-state — that is the gated
+        // load-bearing job of V2.4. Under default `js-ssot` this whole
+        // block is skipped (zero overhead; byte-identical to V2.1).
+        if (this.#engineMode === 'rust-ssot') {
+          // Bump BEFORE the compare so the counter reflects an
+          // attempted run even when the compare throws a divergence.
+          this.#shadowCompareCount += 1
+          v2ShadowByteCompare(jsCommits, commits)
+        }
         this.#error = undefined
         return commits
       }
@@ -1147,12 +1287,20 @@ class WasmBackend implements BackendEngine {
       // The pre-batch base clock for the FIRST buffered commit is the
       // TS graph's PRE-commit clock (tsCommit.time - 1), exactly the
       // value the pre-C.3 per-commit path synced mirror.now to.
+      // V2.2 (#1530) — pass the JS-engine canonical `tsCommit` (the
+      // SSOT result already returned to the adopter) ONLY under
+      // rust-ssot, so the per-flush byte-compare guard can diff the
+      // Rust `commit_batch` projection against it. Under default
+      // `js-ssot` we pass `undefined` and the queue never buffers /
+      // never compares — zero added overhead, the load-bearing V2.1
+      // #1522 byte-identity invariant preserved.
       this.#batchedFlush.enqueue(
         {
           intent,
           writes: writes as ReadonlyMap<NodeId, MarshalerJsonValue>,
         },
         (tsCommit.time as number) - 1,
+        this.#engineMode === 'rust-ssot' ? tsCommit : undefined,
       )
     } else if (this.#marshaler !== undefined) {
       // Pre-C.3 per-commit shadow path — preserved verbatim for the
@@ -1319,10 +1467,29 @@ class WasmBackend implements BackendEngine {
       return undefined
     }
     const { afterN, intervalMs } = this.#batchedFlushConfig
+    // V2.2 (#1530) — thread the per-graph engine mode into the queue
+    // so its per-flush byte-compare guard arms under `rust-ssot` and
+    // stays inert under default `js-ssot`. Pass `HOST_FLUSH_TIMER`
+    // explicitly on the no-injected-timer branch so the `engineMode`
+    // positional is reached without changing the default timer.
     const queue =
       timer !== undefined
-        ? new BatchedFlush(mirror, bridge, afterN, intervalMs, timer)
-        : new BatchedFlush(mirror, bridge, afterN, intervalMs)
+        ? new BatchedFlush(
+            mirror,
+            bridge,
+            afterN,
+            intervalMs,
+            timer,
+            this.#engineMode,
+          )
+        : new BatchedFlush(
+            mirror,
+            bridge,
+            afterN,
+            intervalMs,
+            HOST_FLUSH_TIMER,
+            this.#engineMode,
+          )
     this.#batchedFlush = queue
     return queue
   }

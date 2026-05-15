@@ -537,3 +537,161 @@ describe('WasmBackend — C.3 PR 3 implicit flush on snapshot()/dispose()', () =
     expect(bridge.batchCalls).toHaveLength(1)
   })
 })
+
+describe('C.4 (#1505) — createCausl/loadWasmBackend({ batchedFlush }) wiring', () => {
+  // Per-graph adopter opt-in plumbed through to WasmBackend. The
+  // load-bearing C.4 property (default config byte-identical to dev
+  // b15069fa) gets its own dedicated acceptance test in C.4 PR 2.
+
+  it('default config (no batchedFlush) installs NO queue (byte-identical path)', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.default',
+    ) as unknown as {
+      __batchedFlushConfigForTests(): unknown
+      __getBatchedFlushForTests(): unknown
+    }
+    // No config stored, no queue installed — the pre-C.3 per-commit
+    // shadow path runs unchanged.
+    expect(backend.__batchedFlushConfigForTests()).toBeUndefined()
+    expect(backend.__getBatchedFlushForTests()).toBeUndefined()
+  })
+
+  it('explicit batchedFlush stores a validated, normalised config', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.opt',
+      'serde-json',
+      { afterN: 100 },
+    ) as unknown as {
+      __batchedFlushConfigForTests(): {
+        afterN: number
+        intervalMs: number
+      } | undefined
+    }
+    // afterN explicit; intervalMs defaults to 16 (option-c doc §2.2).
+    expect(backend.__batchedFlushConfigForTests()).toEqual({
+      afterN: 100,
+      intervalMs: 16,
+    })
+  })
+
+  it('empty batchedFlush {} normalises to the default-on shape afterN=1/intervalMs=16', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.empty',
+      'serde-json',
+      {},
+    ) as unknown as {
+      __batchedFlushConfigForTests(): {
+        afterN: number
+        intervalMs: number
+      } | undefined
+    }
+    // batchedFlush:{} is an explicit (if trivial) opt-in — afterN=1
+    // makes it behaviourally byte-identical to the per-commit path
+    // anyway (option-c doc §2.3), but the config IS recorded so the
+    // queue gets installed when a bridge primes.
+    expect(backend.__batchedFlushConfigForTests()).toEqual({
+      afterN: 1,
+      intervalMs: 16,
+    })
+  })
+
+  it('rejects invalid afterN at construction (fail-fast, not silent)', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    expect(() =>
+      wasmMod.__createWasmBackendSyncForTests(
+        'causl.test.c4.badN',
+        'serde-json',
+        { afterN: 0 },
+      ),
+    ).toThrow(RangeError)
+    expect(() =>
+      wasmMod.__createWasmBackendSyncForTests(
+        'causl.test.c4.badN2',
+        'serde-json',
+        { afterN: 2.5 },
+      ),
+    ).toThrow(RangeError)
+  })
+
+  it('rejects invalid intervalMs at construction', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    expect(() =>
+      wasmMod.__createWasmBackendSyncForTests(
+        'causl.test.c4.badMs',
+        'serde-json',
+        { intervalMs: -5 },
+      ),
+    ).toThrow(RangeError)
+  })
+
+  it('config is PER-GRAPH, not global (two backends, independent configs)', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const a = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.graphA',
+      'serde-json',
+      { afterN: 50 },
+    ) as unknown as {
+      __batchedFlushConfigForTests(): { afterN: number } | undefined
+    }
+    const b = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.graphB',
+      'serde-json',
+    ) as unknown as {
+      __batchedFlushConfigForTests(): { afterN: number } | undefined
+    }
+    expect(a.__batchedFlushConfigForTests()?.afterN).toBe(50)
+    expect(b.__batchedFlushConfigForTests()).toBeUndefined()
+  })
+
+  it('__installBatchedFlushFromConfig builds the queue with the configured afterN/intervalMs', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.install',
+      'serde-json',
+      { afterN: 3, intervalMs: 32 },
+    ) as unknown as {
+      __installBatchedFlushFromConfig(
+        mirror: WasmStateMirror,
+        bridge: BatchedFlushBridge,
+        timer?: FlushTimer,
+      ): BatchedFlush | undefined
+      __getBatchedFlushForTests(): BatchedFlush | undefined
+    }
+    const m = mirrorWith('a')
+    const queue = backend.__installBatchedFlushFromConfig(
+      m,
+      recordingBatchBridge(),
+      fakeTimer(),
+    )
+    expect(queue).toBeInstanceOf(BatchedFlush)
+    expect(queue?.afterN).toBe(3)
+    expect(queue?.intervalMs).toBe(32)
+    expect(backend.__getBatchedFlushForTests()).toBe(queue)
+  })
+
+  it('__installBatchedFlushFromConfig is a NO-OP when the adopter did not opt in (load-bearing)', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c4.noinstall',
+    ) as unknown as {
+      __installBatchedFlushFromConfig(
+        mirror: WasmStateMirror,
+        bridge: BatchedFlushBridge,
+      ): BatchedFlush | undefined
+      __getBatchedFlushForTests(): BatchedFlush | undefined
+    }
+    const m = mirrorWith('a')
+    const queue = backend.__installBatchedFlushFromConfig(
+      m,
+      recordingBatchBridge(),
+    )
+    // No config ⇒ no queue ⇒ pre-C.3 path ⇒ byte-identical to dev
+    // b15069fa. This is the load-bearing C.4 invariant at the
+    // installer seam.
+    expect(queue).toBeUndefined()
+    expect(backend.__getBatchedFlushForTests()).toBeUndefined()
+  })
+})

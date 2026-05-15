@@ -261,6 +261,19 @@ export interface WasmBackendOptions {
    * and `loadWasmBackend({ graphName: name })`.
    */
   readonly graphName?: string
+
+  /**
+   * C.4 (#1505) — per-graph batched-flush opt-in. Omitting this is
+   * byte-identical to dev `b15069fa` (the load-bearing C.4 acceptance
+   * property — no queue installed, pre-C.3 per-commit shadow path
+   * unchanged). When supplied, a {@link BatchedFlush} queue is
+   * installed on the returned backend with the configured `afterN` /
+   * `intervalMs`. Per-graph, not global (option-c doc §2.3). No
+   * adopter-visible perf change at v1.x even when opted in — the JS
+   * engine remains SSOT; scaffolding for a future v2.x Rust-SSOT
+   * cutover.
+   */
+  readonly batchedFlush?: BatchedFlushOptions
 }
 
 /**
@@ -450,7 +463,10 @@ async function instantiateBackend(
   // other non-id chars allowed. Mint the default with the
   // dot-separated form that survives the validator.
   const graphName = options.graphName ?? `causl.wasm.${bridge}`
-  return new WasmBackend(bridge, graphName)
+  // C.4 (#1505) — thread the per-graph batchedFlush opt-in through to
+  // the backend. `options.batchedFlush === undefined` ⇒ no queue ⇒
+  // byte-identical to dev b15069fa (load-bearing).
+  return new WasmBackend(bridge, graphName, options.batchedFlush)
 }
 
 // ---------------------------------------------------------------------------
@@ -491,6 +507,45 @@ export interface BatchedFlushBridge {
    * single-envelope path.
    */
   commit_batch?(state: unknown, actions: unknown): unknown
+}
+
+/**
+ * C.4 (#1505) — per-graph adopter opt-in for batched-flush mode.
+ *
+ * Passed via `createCausl({ batchedFlush })` (auto-backend path) or
+ * `loadWasmBackend({ batchedFlush })` (direct path). Per-graph, NOT
+ * global (option-c doc §2.3) — multi-graph adopters (`@causl/sync`,
+ * embedded use-cases) opt in per graph without cross-graph coupling.
+ *
+ * **Omitting `batchedFlush` entirely is byte-identical to dev
+ * `b15069fa`** (the load-bearing C.4 acceptance property): no queue
+ * is installed, the pre-C.3 per-commit shadow path runs unchanged,
+ * and adopter `commit()` / `read()` / `subscribe()` results are
+ * exactly what they were before this cascade. Zero codemod, zero
+ * deprecation, zero behavioural change unless the adopter explicitly
+ * passes this option.
+ *
+ * **No adopter-visible perf change at v1.x even when opted in** — the
+ * JS engine remains SSOT; only the WASM-side wire crossing batches.
+ * Scaffolding for a future v2.x Rust-SSOT cutover, not a perf win.
+ */
+export interface BatchedFlushOptions {
+  /**
+   * Count-based flush threshold. Default `1` — flush every commit,
+   * byte-identical to the pre-C.3 per-commit shadow path
+   * (option-c doc §2.3). Adopters who want wire amortisation set
+   * `afterN: 100` (production-grade per §1.2) or `312` (the #1484 §3
+   * kill-threshold — meets the floor on every contract-bearing cell).
+   * Must be an integer ≥ 1.
+   */
+  readonly afterN?: number
+  /**
+   * Time-based flush threshold (ms). Default `16` — one 60 Hz frame
+   * (option-c doc §2.2). Bounds flush latency when the commit rate is
+   * below `afterN / intervalMs`. `0` disables the time trigger
+   * (count / manual / implicit only). Must be a finite number ≥ 0.
+   */
+  readonly intervalMs?: number
 }
 
 /**
@@ -827,9 +882,58 @@ class WasmBackend implements BackendEngine {
    */
   #syntheticFallbackCount = 0
 
-  constructor(bridge: BridgeId, graphName: string) {
+  /**
+   * C.4 (#1505) — validated per-graph batched-flush config, or
+   * `undefined` when the adopter did not opt in. When `undefined` the
+   * backend behaves byte-identically to dev `b15069fa` (no queue, the
+   * pre-C.3 per-commit shadow path) — the load-bearing C.4 acceptance
+   * property. When present, a {@link BatchedFlush} queue is built from
+   * it the moment a marshaler mirror + bridge are primed
+   * (F-marshal.5 / future real bridge).
+   */
+  readonly #batchedFlushConfig:
+    | { afterN: number; intervalMs: number }
+    | undefined
+
+  constructor(
+    bridge: BridgeId,
+    graphName: string,
+    batchedFlush?: BatchedFlushOptions,
+  ) {
     this.bridge = bridge
     this.#graph = createCausl({ name: graphName })
+    // C.4 — validate + normalise the per-graph opt-in. Absent ⇒
+    // undefined ⇒ byte-identical pre-C.3 path (load-bearing).
+    if (batchedFlush !== undefined) {
+      const afterN = batchedFlush.afterN ?? 1
+      const intervalMs = batchedFlush.intervalMs ?? 16
+      if (!Number.isInteger(afterN) || afterN < 1) {
+        throw new RangeError(
+          `createCausl({ batchedFlush }): afterN must be an integer >= 1 (got ${String(afterN)})`,
+        )
+      }
+      if (!Number.isFinite(intervalMs) || intervalMs < 0) {
+        throw new RangeError(
+          `createCausl({ batchedFlush }): intervalMs must be a finite number >= 0 (got ${String(intervalMs)})`,
+        )
+      }
+      this.#batchedFlushConfig = { afterN, intervalMs }
+    } else {
+      this.#batchedFlushConfig = undefined
+    }
+  }
+
+  /**
+   * C.4 (#1505) — the validated per-graph batched-flush config (or
+   * `undefined` when the adopter did not opt in). Read by the C.4
+   * byte-identity acceptance test and by future real-bridge wiring.
+   *
+   * @internal
+   */
+  __batchedFlushConfigForTests():
+    | { afterN: number; intervalMs: number }
+    | undefined {
+    return this.#batchedFlushConfig
   }
 
   get now(): GraphTime {
@@ -1026,6 +1130,43 @@ class WasmBackend implements BackendEngine {
     this.#marshaler = mirror
     this.#marshalerBridge = bridge
     this.#marshalerError = undefined
+  }
+
+  /**
+   * C.4 (#1505) — install a {@link BatchedFlush} queue built from the
+   * per-graph `batchedFlush` config (validated in the constructor)
+   * against a primed mirror + bridge. When the adopter did NOT opt in
+   * (`#batchedFlushConfig === undefined`) this is a NO-OP and the
+   * backend keeps the pre-C.3 per-commit shadow path — the
+   * load-bearing C.4 byte-identity property: default config is
+   * byte-identical to dev `b15069fa`.
+   *
+   * Wiring path: the C.5 cross-backend determinism gate and future
+   * real-bridge loader call this after priming the mirror so the
+   * configured `afterN` / `intervalMs` take effect per-graph. The
+   * `timer` parameter is injectable so the gate / tests drive the
+   * time trigger deterministically.
+   *
+   * @internal Wired through `createCausl({ batchedFlush })` /
+   * `loadWasmBackend({ batchedFlush })`; not an adopter-facing method.
+   */
+  __installBatchedFlushFromConfig(
+    mirror: WasmStateMirror,
+    bridge: BatchedFlushBridge,
+    timer?: FlushTimer,
+  ): BatchedFlush | undefined {
+    if (this.#batchedFlushConfig === undefined) {
+      // Adopter did not opt in — byte-identical pre-C.3 path. Do NOT
+      // install a queue.
+      return undefined
+    }
+    const { afterN, intervalMs } = this.#batchedFlushConfig
+    const queue =
+      timer !== undefined
+        ? new BatchedFlush(mirror, bridge, afterN, intervalMs, timer)
+        : new BatchedFlush(mirror, bridge, afterN, intervalMs)
+    this.#batchedFlush = queue
+    return queue
   }
 
   /**
@@ -1316,6 +1457,7 @@ export function __isPhase1WasmBackendForTests(
 export function __createWasmBackendSyncForTests(
   graphName: string,
   bridge: BridgeId = 'serde-json',
+  batchedFlush?: BatchedFlushOptions,
 ): BackendEngine & {
   readonly bridge: BridgeId
   __graph(): Graph
@@ -1327,7 +1469,9 @@ export function __createWasmBackendSyncForTests(
     readonly syntheticFallbackCount: number
   }
 } {
-  return new WasmBackend(bridge, graphName)
+  // C.4 (#1505) — forward the per-graph batchedFlush opt-in. Default
+  // (omitted) ⇒ byte-identical to dev b15069fa (load-bearing).
+  return new WasmBackend(bridge, graphName, batchedFlush)
 }
 
 /**

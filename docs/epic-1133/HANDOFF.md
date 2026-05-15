@@ -12,15 +12,18 @@
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **v2.x epic #1515 — RE-SCOPED 2026-05-15 around large-tree survival.** Lineage: #1133 perf hypothesis FALSIFIED (G.1 #1145, 78× boundary tax) → #1483 decision (a/b/c studied; (c) accepted) → #1493 option-c batching scaffolding COMPLETE (13 PRs, dev `b07df102`) → v2.x #1515 Rust-SSOT cutover. dev HEAD `ab0a219c`.
+**Phase**: **v2.x epic #1515 — re-scoped + REAL-ENGINE-CONFIRMED 2026-05-15.** Lineage: #1133 FALSIFIED (G.1 #1145, 78× boundary tax) → #1483 decision ((c) accepted) → #1493 option-c scaffolding COMPLETE (13 PRs, `b07df102`) → v2.x #1515 → #1525 gate PASS. dev HEAD `0b813d30`.
 
-**Resumption bookmark**: **Active epic #1515 (v2.x), re-scoped.** The #1518 GC-pressure finding (PRs #1523/#1524) recentered #1515's value prop from the dead median-latency maturity-bet to the **present, non-maturity-gated large-tree-survival axis**: at 50k nodes the TS engine is over a 60Hz frame budget *at the p50* (15.6 ms) and GC-livelocks to process death; the Rust path (WASM linear memory) accretes ≈0 B/commit. Re-scoping comment: [#1515 4463153592](https://github.com/iasbuilt/causl/issues/1515#issuecomment-4463153592).
+**Resumption bookmark**: **Active epic #1515 (v2.x). #1525 real-engine gate PASSED (corrected basis); V2.2 next.** Value prop = the **present, non-maturity-gated large-tree-survival axis**, empirically confirmed on the *real* serde-wasm engine (#1525, PR #1528, reproduced 4×) — NOT the synthetic #1518 projection, which was corrected:
 
-**HARD GATE before V2.2**: **#1525** — real-engine (non-synthetic) heap confirmation. The #1518 evidence is from the *synthetic shadow bridge* (establishes the axis, not a real engine's absolute bytes/commit). #1525 must build+load the real serde-wasm artifact, run the gc-pressure probe against it, and verdict PASS/FAIL on {≈0 B/commit, no 50k GC-livelock, ~437× p99.9 flattening}. **V2.2–V2-final are BLOCKED until #1525 lands a verdict.** The ~85× median regression (#1133/#1479) is expected and explicitly out of #1525 scope (orthogonal axis; #1133 STANDS).
+- **Real 50k vs TS-SSOT**: TS p50 **15.5 ms** (over 60 Hz frame budget at the *median*) + **43 major-GC pauses** + GC-livelocks to process death; real Rust p50 **1.73 ms** + **1 GC pause** + survives.
+- **Corrected mechanism**: Rust per-commit allocation is **transient (GC-reclaimed serde envelope; ~11/19/44 B/commit at 1k/10k/50k — NOT ≈0; at 50k *higher raw* than TS's 7.74)**, **not retained**. Survival = no retained per-commit JS object graph; the **43→1 GC-pause collapse** is the proof, not the slope.
+- **Real p99.9 flattening ~16.6× at 50k** (5.4× / 11.9× at 1k/10k) — NOT the synthetic's ~437× (order of magnitude lower).
+- Correction comment [#1515 4463498406](https://github.com/iasbuilt/causl/issues/1515#issuecomment-4463498406) **supersedes** the synthetic-numbers re-scope 4463153592. #1133 median falsification STANDS (orthogonal, out of #1525 scope).
 
-**Landed + valid**: V2.0 design pin (#1517, `97da8420`); V2.1 `engine:'rust-ssot'` opt-in surface (#1522, `2b7e7ea5` — default-off, 15/15 byte-identity gate, zero adopter regression). **Held pending #1525 gate**: V2.2 (shadow byte-compare) → V2.3 (honest re-measure) → 🚦V2.4 (LOAD-BEARING promote GO/NO-GO) → V2.5 (rollback tiers) → V2-final (tripwire + docs + SPEC §19). Decomposition: #1516 comment.
+**Landed + valid**: V2.0 (#1517, `97da8420`); V2.1 `engine:'rust-ssot'` opt-in (#1522, `2b7e7ea5` — default-off, 15/15 byte-identity); #1525 gate (#1528, `0b813d30`). **Next: V2.2** (per-flush shadow byte-compare, result DISCARDED — promotion gated to V2.4) → V2.3 (honest re-measure) → 🚦V2.4 (LOAD-BEARING promote GO/NO-GO) → V2.5 (rollback tiers) → V2-final (tripwire + docs + SPEC §19). Decomposition: #1516 comment.
 
-**Next claimable**: **#1525** (the gate). Nothing in v2.x proceeds past V2.1 until it verdicts.
+**Next claimable**: **V2.2** (gate PASSED + record corrected; project-owner GO 2026-05-15 on the corrected ~16.6×/transient value prop).
 
 Pinned v2.x design (`docs/epic-1515/V2-DESIGN.md`, #1517): swap point = `BatchedFlush.flush()` body (not `commit()`); JS engine stays per-commit authority + always-on shadow; opt-in `createCausl({ engine:'rust-ssot' })` default `'js-ssot'`; maturity tripwire T1∧T2∧T3∧T4 (T1 = real Rust-in-WASM exec ≤3× TS — the median axis, distinct from #1525's GC axis); no SPEC amendment for v2.x as scoped.
 

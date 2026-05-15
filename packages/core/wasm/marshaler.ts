@@ -469,6 +469,156 @@ export function marshalCommitEnvelope(
 }
 
 // ---------------------------------------------------------------------------
+// C.2 (#1498) — JS→Rust BATCH envelope builder for `commit_batch`.
+// ---------------------------------------------------------------------------
+
+/**
+ * One commit's worth of batch input — an `(intent, writes)` pair. A
+ * batch is an ordered list of these; the marshaler turns them into the
+ * `Vec<Action>` the C.1 `commit_batch(state, actions)` extern consumes.
+ */
+export interface BatchCommitInput {
+  readonly intent: string
+  readonly writes: ReadonlyMap<NodeId, JsonValue>
+}
+
+/**
+ * Marshaled batch envelope — the `(state, actions)` pair the C.1
+ * `commit_batch(state, actions)` extern consumes. One FFI envelope
+ * carries N commits' worth of action payload; the Rust side replays
+ * them sequentially through `transition_phased`, threading the
+ * post-state forward (PR #1496 / #1497).
+ *
+ * The single `state` carries the **pre-batch** input snapshot — the
+ * Rust `commit_batch` extern threads each post-state into the next
+ * action internally, so the JS side ships the starting state once and
+ * lets the engine walk the batch. This is the wire-amortisation that
+ * option (c) is built on (`docs/epic-1483/option-c-batched-boundary.md`
+ * §1): one marshal of the input block instead of N.
+ *
+ * **No adopter-visible perf change at v1.x** — the JS engine remains
+ * SSOT; only the wire crossing is batched. Scaffolding for a future
+ * v2.x Rust-SSOT cutover.
+ */
+export interface BatchEnvelope {
+  readonly state: BridgeState
+  readonly actions: readonly BridgeCommitAction[]
+}
+
+/**
+ * C.2 (#1498) — build the JS→Rust BATCH commit envelope from the
+ * mirror's live slot set + an ordered list of per-commit
+ * `(intent, writes)` inputs.
+ *
+ * Reuses {@link marshalCommitEnvelope}'s input-cell resolution loop
+ * verbatim: the single `state` envelope is built exactly as the
+ * single-commit path builds it (the mirror's live slot set rebuilt
+ * into a `Vec<InputCell>` in sorted-by-slot order, with the **first**
+ * commit's writes applied so the engine's starting state reflects the
+ * pre-batch input snapshot). The Rust `commit_batch` extern threads
+ * each subsequent commit's writes via the per-action `writes` slot
+ * list, advancing the post-state internally — so the marshaler does
+ * NOT pre-apply writes 2..N into the input block (that would
+ * double-count the first commit's effect on the wire).
+ *
+ * Each batch action's `writes` is resolved against the mirror's
+ * dictionary (NodeId → slot) and emitted as a sorted-ascending bare
+ * slot integer list — the same deterministic wire shape
+ * `marshalCommitEnvelope` produces, so the cross-backend determinism
+ * gate (#685) sees a stable batch wire shape.
+ *
+ * Any write whose NodeId is not in the dictionary throws
+ * {@link NodeDisposedError} (same fail-fast surface as the
+ * single-commit builder) — the offending id is surfaced before the
+ * batch envelope ships across the FFI.
+ *
+ * N=1 produces a `BatchEnvelope` whose single action is byte-identical
+ * to what {@link marshalCommitEnvelope} emits for the same
+ * `(intent, writes)` — the option-c doc §7 "N=1 byte-identical"
+ * invariant at the JS marshal boundary.
+ *
+ * @param mirror - JS-side state mirror.
+ * @param commits - Ordered per-commit `(intent, writes)` inputs.
+ */
+export function marshalBatchEnvelope(
+  mirror: WasmStateMirror,
+  commits: readonly BatchCommitInput[],
+): BatchEnvelope {
+  // Resolve every action's writes up front so a disposed/unknown
+  // NodeId fails fast (before any wire bytes ship), matching the
+  // single-commit builder's pre-resolution discipline.
+  const resolvedPerCommit: { idx: number; value: JsonValue }[][] = []
+  for (const { writes } of commits) {
+    const resolved: { idx: number; value: JsonValue }[] = []
+    for (const [nodeId, value] of writes) {
+      const slot = mirror.dictionary.get(nodeId)
+      if (slot === undefined) {
+        throw new NodeDisposedError(nodeId)
+      }
+      resolved.push({ idx: slot.idx, value })
+    }
+    resolvedPerCommit.push(resolved)
+  }
+
+  // Build the pre-batch input snapshot via the SAME resolution loop
+  // the single-commit builder uses. The first commit's writes are
+  // applied into the starting state's input block (so the engine's
+  // Phase-A staging for commit #0 sees the adopter's intended value);
+  // commits 1..N-1's writes ride the per-action `writes` slot list and
+  // are applied by the Rust extern as it threads the post-state — the
+  // marshaler must NOT pre-apply them here or the wire would
+  // double-count commit #0's effect.
+  const firstWrites = new Map<number, JsonValue>()
+  const firstResolved = resolvedPerCommit[0]
+  if (firstResolved !== undefined) {
+    for (const { idx, value } of firstResolved) {
+      firstWrites.set(idx, value)
+    }
+  }
+
+  const nextTime = (mirror.now as unknown as number) + 1
+
+  // Rebuild `inputs: Vec<InputCell>` from the mirror's live slot set —
+  // dedup by `idx`, sorted ascending, exactly as marshalCommitEnvelope.
+  const slotsByIdx = new Map<number, { slot: Slot }>()
+  for (const slot of mirror.dictionary.values()) {
+    if (slotsByIdx.has(slot.idx)) continue
+    slotsByIdx.set(slot.idx, { slot })
+  }
+  const sortedIdxs = Array.from(slotsByIdx.keys()).sort((a, b) => a - b)
+  const inputs: InputCellWire[] = sortedIdxs.map((idx) => {
+    const writeValue = firstWrites.get(idx)
+    const value =
+      writeValue !== undefined ? writeValue : mirror.inputs.get(idx) ?? null
+    const lastWriteTime = writeValue !== undefined ? nextTime : 0
+    return { id: idx, value, last_write_time: lastWriteTime }
+  })
+
+  // One BridgeCommitAction per commit; writes sorted ascending so the
+  // batch wire shape is deterministic per-action (same invariant as
+  // the single-commit builder's `writeSlots`).
+  const actions: BridgeCommitAction[] = commits.map((c, i) => {
+    const resolved = resolvedPerCommit[i] ?? []
+    const writeSlots = Array.from(new Set(resolved.map((r) => r.idx))).sort(
+      (a, b) => a - b,
+    )
+    return {
+      action: 'commit',
+      intent: c.intent,
+      writes: writeSlots,
+    }
+  })
+
+  return {
+    state: {
+      now: mirror.now as unknown as number,
+      inputs,
+    },
+    actions,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // F-marshal.3 (#1466) — Rust→JS application of BridgeResult.
 // ---------------------------------------------------------------------------
 

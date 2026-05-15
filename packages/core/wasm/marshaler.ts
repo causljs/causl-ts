@@ -28,7 +28,12 @@
  * @internal
  */
 
-import type { Commit, GraphTime, NodeId } from '../src/types.js'
+import type {
+  Commit,
+  GraphSnapshot,
+  GraphTime,
+  NodeId,
+} from '../src/types.js'
 
 /**
  * Slot handle — the JS-side mirror of a WASM-side `NodeId { slot, gen }`.
@@ -569,5 +574,152 @@ export function applyBridgeResult(
     intent: result.commit.intent,
     changedNodes,
     originatedAt: undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// F-marshal.7 (#1470) — snapshot()/hydrate() round-trip via marshaler.
+// ---------------------------------------------------------------------------
+
+/**
+ * F-marshal.7 (#1470) — Capture the JS-side mirror state into a
+ * {@link GraphSnapshot} wire envelope.
+ *
+ * Per Decision 1 of #1457 the JS-side mirror is the authoritative copy
+ * for input cells; the WASM-side does not retain input values across
+ * `commit()` calls (the bridge is stateless w.r.t. the commit-time
+ * State envelope — every commit ships the full input snapshot, every
+ * return ships the post-state). Hence `snapshot()` reads exclusively
+ * from the mirror — no FFI crossing is required.
+ *
+ * The emitted shape matches the canonical {@link GraphSnapshot}:
+ * `{ schema: 1, time, inputs: Record<NodeId, JsonValue> }`. The
+ * `schemaHash` field is intentionally NOT populated by the marshaler —
+ * hash computation belongs to the adopter `Graph.snapshot()` surface
+ * (`packages/core/src/graph.ts`) which knows the registered id-set
+ * the hash digests over. Hand-authored snapshots and pre-hash test
+ * fixtures stay valid because `schemaHash` is optional on the wire.
+ *
+ * `inputs` iteration order follows the dictionary's insertion order
+ * (JS `Map` guarantee) so two mirrors with equivalent dictionaries
+ * emit byte-identical JSON when serialised. This is the precondition
+ * the migration round-trip suite (#687) keys on.
+ *
+ * Slot integers and generation tags do NOT cross into the snapshot —
+ * the wire format speaks adopter-facing string NodeIds. A subsequent
+ * {@link hydrate} call against a fresh mirror with the same NodeId
+ * set walks the same slot dictionary back into existence.
+ *
+ * @param mirror - Live JS-side state mirror.
+ * @returns Snapshot envelope suitable for `Graph.hydrate()` consumption.
+ */
+export function snapshot(mirror: WasmStateMirror): GraphSnapshot {
+  // Walk the dictionary in insertion order; map each live NodeId to
+  // its JS-side mirrored input value. The mirror's `inputs` map is
+  // keyed by slot `idx`; we resolve through the dictionary to surface
+  // adopter-facing string keys.
+  const inputs: Record<string, JsonValue> = {}
+  for (const [nodeId, slot] of mirror.dictionary) {
+    // The dictionary entry is the source of truth for liveness; the
+    // inputs-map entry may be a null sentinel from `registerInput`
+    // (adopter never wrote) or an explicit value. Either way we emit
+    // it verbatim — the snapshot captures the cell's current value.
+    const value = mirror.inputs.get(slot.idx)
+    inputs[nodeId] = value === undefined ? null : value
+  }
+
+  return {
+    schema: 1,
+    time: mirror.now,
+    inputs: inputs as Readonly<Record<NodeId, unknown>>,
+  }
+}
+
+/**
+ * F-marshal.7 (#1470) — Restore the JS-side mirror state from a
+ * {@link GraphSnapshot} envelope.
+ *
+ * Per Decision 1 of #1457 the JS-side is SSOT for inputs; `hydrate`
+ * mirrors the snapshot's `inputs` map into `mirror.inputs` and resets
+ * `mirror.now` to the snapshot's `time`. The `dictionary` is
+ * REPOPULATED from scratch via the supplied {@link BridgeAllocator} —
+ * each NodeId in the snapshot has a fresh `Slot` minted through
+ * `wasmCreateInput()`, so the WASM-side allocator state stays
+ * consistent with the JS-side dictionary (Decision 4: WASM-side
+ * authoritative on disposed cells; slot generation tags must come
+ * from the engine's allocator).
+ *
+ * The hydrate path WIPES the mirror's prior state. Any `Slot` handles
+ * held by adopter code at hydrate-time become stale (their generation
+ * tags no longer match the fresh allocations); subsequent reads
+ * through them surface as {@link NodeDisposedError}. This matches the
+ * TS engine's `Graph.hydrate()` semantics — the post-hydrate graph is
+ * a clean slate keyed on the snapshot's id-set.
+ *
+ * The `schema` field is validated at the door: only `schema: 1` is
+ * accepted (the current canonical version per `GraphSnapshot` jsdoc).
+ * Any future schema bump lands a new accept path; legacy fixtures
+ * with `schema: 1` remain hydrate-able indefinitely.
+ *
+ * The optional `schemaHash` field is NOT validated here — that
+ * capability check belongs to the adopter `Graph.hydrate()` surface
+ * which knows the live id-set the hash digests over (per
+ * `HydrationSchemaError` jsdoc on `GraphSnapshot`). The marshaler
+ * just rebuilds the cell mirror.
+ *
+ * `rebuild_dependents()` on the Rust side (`state.rs:1258`) is the
+ * recovery hatch for the `State.dependents` reverse-adjacency map
+ * — a `#[serde(skip)]` derived view of `DerivedCell::deps`.
+ * `GraphSnapshot` only carries **input** cells (per its `inputs:
+ * Record<NodeId, unknown>` schema); deriveds are reconstructed by
+ * adopter code re-registering formulas through the marshaler's
+ * derived-allocation path ({@link WasmStateMirror.allocateDerivedSlot})
+ * post-hydrate, at which point the bridge's allocator State has
+ * already absorbed the new edges. The marshaler-layer hydrate
+ * therefore does NOT need to invoke `rebuild_dependents` directly;
+ * the rebuild happens organically as adopters re-register their
+ * derived cells against the hydrated mirror.
+ *
+ * @param mirror - JS-side state mirror to repopulate in place.
+ * @param snapshotEnvelope - Snapshot returned from {@link snapshot}
+ *   (or hand-authored matching the same shape).
+ * @param allocator - Bridge allocator adapter — supplies the
+ *   `wasmCreateInput()` extern so each hydrated NodeId gets a fresh
+ *   slot/generation pair from the engine's allocator.
+ * @throws Error on unsupported `schema` field.
+ */
+export function hydrate(
+  mirror: WasmStateMirror,
+  snapshotEnvelope: GraphSnapshot,
+  allocator: BridgeAllocator,
+): void {
+  if (snapshotEnvelope.schema !== 1) {
+    throw new Error(
+      `hydrate: unsupported snapshot schema ${String(snapshotEnvelope.schema)} (expected 1)`,
+    )
+  }
+
+  // Wipe the mirror's prior state — hydrate is a clean-slate restore,
+  // not a merge. Adopters that need merge semantics layer them above
+  // the marshaler.
+  mirror.dictionary.clear()
+  mirror.inputs.clear()
+
+  // Stamp the clock from the snapshot envelope BEFORE allocating
+  // slots, so any post-hydrate observer that reads `mirror.now`
+  // mid-hydrate sees the snapshot's value (defensive — the loop
+  // below is synchronous so this ordering is observationally
+  // indistinguishable from stamping at the end, but keeps the
+  // ordering invariant explicit).
+  mirror.now = snapshotEnvelope.time
+
+  // Walk the snapshot's `inputs` record in iteration order
+  // (`Object.entries` preserves insertion order for string keys per
+  // ES2015 spec). For each NodeId mint a fresh slot via the bridge
+  // allocator and seed the mirror's inputs map with the captured
+  // value.
+  for (const [nodeId, value] of Object.entries(snapshotEnvelope.inputs)) {
+    const slot = mirror.allocateSlot(nodeId as NodeId, allocator)
+    mirror.inputs.set(slot.idx, value as JsonValue)
   }
 }

@@ -61,8 +61,10 @@ import {
 } from './marshaler.js'
 export {
   applyBridgeResult,
+  hydrate,
   marshalCommitEnvelope,
   NodeDisposedError,
+  snapshot,
   WasmStateMirror,
 } from './marshaler.js'
 export type {

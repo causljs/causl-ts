@@ -6,32 +6,54 @@
 
 ## Current state
 
-**Last session**: 2026-05-14 (F-marshal COMPLETE — 9/9 sub-tickets .0–.7 + .N landed + 1 investigation .6.1 closed without merge; Phase G validation (#1145) next claimable per user-direction post-F-marshal pivot)
+**Last session**: 2026-05-14 (G.1 #1145 perf measurement landed — **arithmetic verdict: epic perf hypothesis FALSIFIED**. Re-architecture epic #1483 filed; downstream tickets closed as blocked.)
 
-**dev branch HEAD**: post-F-marshal.N (this PR — pure HANDOFF.md update).
+**dev branch HEAD**: `ca26c233` (G.1 measurement) + this PR (HANDOFF.md / PLAN.md update).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **F-marshal (#1457) COMPLETE** — 9/9 PRs landed + .6.1 investigation closed (pivot record on #1479). Other F-phase sub-epics still claimable: **#1458** (F-loader), **#1460** (F-cross-backend-actual-gate). **Phase G validation (#1145/#1146/#1141/#1138/#1140)** is the user-chosen post-F-marshal pivot direction (per 2026-05-14 user choice).
+**Phase**: **#1133 perf hypothesis FALSIFIED.** G.1 (#1145, PR #1482, commit `ca26c233`) measured boundary cost at 78× the entire TS equality-cutoff workload. Re-architecture epic **#1483** is the successor. Eight downstream tickets closed as blocked by #1483: #1142, #1146, #1141, #1138, #1140, #1458, #1460, #1148, #1143, #1137, #1139.
 
-**Resumption bookmark**: F-marshal cascade complete. F-marshal.6 measured 156.4 ms / 10k workload for the full bidirectional marshal probe (15.64 μs/op, ~80× over the boundary floor, STOP-VERDICT verdict per cascade brief). F-marshal.6.1 (#1479) investigated stateful WASM-side bridge entrypoints (delta-only marshaler); investigation closed without merge after the verdict reframed the perf question. Pivot record at #1479. Profile data preserved on branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47`. Next claimable work:
+**Resumption bookmark**: epic #1133 stays OPEN as historical record + infrastructure-source-of-truth. **All work going forward proceeds against #1483** (re-architecture decision phase). Next claimable work:
 
-| Order | Issue | Sub-epic | Notes |
-|---|---|---|---|
-| 1 | **#1145** | Phase G validation (umbrella) | Cross-backend determinism + perf-floor real-Rust re-measurement. **User-chosen post-F-marshal pivot.** |
-| 2 | **#1458** | F-loader | `loadWasmBackend()` actually instantiates .wasm. serde-json is the universal-fallback baseline. |
-| 3 | **#1460** | F-cross-backend-actual-gate | Flip determinism gate to real-Rust-vs-TS. Unblocked by F-marshal completion + #1458. |
+| Order | Issue | Description |
+|---|---|---|
+| 1 (predecessor) | **#1484** | Constraint analysis — adopter-API, deployment, perf, parity needs. Rubric for the feasibility studies. |
+| 2 (parallel × 3) | **#1485** / **#1486** / **#1487** | Feasibility studies: (a) native binary, (b) in-place mutation, (c) batched-commit. Each fills the constraint rubric from #1484. |
+| 3 (after) | — | Recommendation comment on #1483 picking a path; file successor implementation epic. |
 
-Re-scoping landed in issue-tracker comments only (no dev PR for the re-scoping itself, just this HANDOFF.md bookmark update):
-- #1142 [comment 4454139936](https://github.com/iasbuilt/causl/issues/1142#issuecomment-4454139936) — Phase F decomposition superseded
-- #1142 [comment 4454142102](https://github.com/iasbuilt/causl/issues/1142#issuecomment-4454142102) — sub-epic ticket numbers + dependency edges
-- #1133 [comment 4454142282](https://github.com/iasbuilt/causl/issues/1133#issuecomment-4454142282) — epic-level acknowledgement that Phase F crosses the cascade-pattern limit
+### Falsification verdict — measurement chain
 
-**Why the cascade pattern broke at Phase F** (honest assessment for future sessions):
-- Phases B–E were contained engine-internal Rust ports with clear SPEC mappings — perfect for cascades
-- Phase F crosses JS↔WASM integration; needs architectural decisions (state ownership, NodeId surface translation, singleton/multiplex routing) that cascade briefs cannot delegate
-- Phase F agent halted at pre-flight after verifying: bridge `commit(state, action)` is stateless and no JS-side marshaler exists; `loadWasmBackend()` never reaches `WebAssembly.instantiate`; `setSubscriberCallback` is module-global; original F.5 "remove Proxy + structuredClone shim" described code that doesn't exist. Proceeding-as-briefed would produce PRs that fail `pnpm validate` — a different risk class than overriding a measurable STOP-VERDICT
-- Future phase work proceeds **per-sub-epic with explicit design phases**, not cascade-style
+- **G.1 (#1145, PR #1482, `ca26c233`)**: bench harness silently falls back to TS via `void args.backend`. WasmBackend.commit() SSOT is still TS engine post-F-marshal.5 (marshaler is shadow-only validator, 1000 trials × 0 byte differences). Boundary-tax probe in isolation: 15.64 μs/op, projects to 156.4 ms / 10k commits vs TS equality-cutoff × 10000 median 2.017 ms — **78× over entire TS workload**. No engine speedup can compensate.
+- **F-marshal.6.1 (#1479, branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47`, NOT merged)**: stateful delta-only bridge attempt measured 472.9 ms / 10k (worse). Profile decomposition: `wasmApplyWrites` alone 3.1 ms (FFI cheap), `wasmCommitWithIntent` alone 171.4 ms (engine + serialize). The engine call itself is the floor; no bridge architecture can close the gap.
+- **F-marshal.6 (#1469, PR #1478, `d1843470`)**: 156.4 ms / 10k stateless full-envelope baseline. STOP-VERDICT filed; user chose investigation path (F-marshal.6.1) which deepened the verdict.
+
+### What's preserved on dev (78 PRs)
+
+| Phase | PRs | Status |
+|---|---|---|
+| Phase 0/1 | 9 | Infrastructure (planning + corpus + harness) |
+| Phase A | 12 | Precondition gate + Phase A-C engine (typestate machine) |
+| Phase B | 11 | Phase D Kahn recompute + glitch-freedom (6×1000 proptest × 0 divergences) |
+| Phase C | 12 | Phase E/F/F.4/F.5/F.6 commit envelope + retention chain |
+| Phase D | 12 | Phase G/H subscriber dispatch + transient drop drain |
+| Phase E | 11 | Subscriber callback bridge (`setSubscriberCallback` + batched dispatch) |
+| Phase F partial | 1 (#1459 multiplex) + 9 (F-marshal cascade) = 10 | Multiplex routing; marshaler + shadow validator |
+| Phase G | 1 (#1145) | The falsification measurement |
+
+**Reusable**: engine-rs-core (byte-identical to TS engine; 1000 trials × 0 byte differences); marshaler infrastructure; both bridge crates; multiplex routing; test discipline; SPEC §17 honest about boundary math.
+
+### Three STOP-VERDICTs on record — all predicted this
+
+| Probe | Measurement | Over kill threshold |
+|---|---|---|
+| A.1 (PR #1329, `b2332d68`) | 17.5 ms / 10k empty-envelope, zero engine work | 35× |
+| B.3 (#1133 comment 4446221188) | 1.154 ms / 10k synthetic ComputeCallback | 2.3× |
+| F-marshal.6 (PR #1478, `d1843470`) | 156.4 ms / 10k real bidirectional marshal | 313× |
+
+Each was user-overridden on the bet that downstream gains compound past boundary tax. G.1 confirms they don't.
+
+**Why the cascade pattern worked for Phases B–E but the perf hypothesis failed**: cascades are good for delivering correctness against a SPEC. They're not a substitute for measuring whether the cumulative architecture meets adopter perf needs. The Rust port DELIVERED on correctness (1000 trials × 0 byte differences); it failed on the perf math because boundary tax dominates engine-work cost in WASM-bridge architectures. Future epic #1483 picks an architecture that escapes the boundary.
 
 **Phase B technical state delivered (B.0–B.10 closeout — landed earlier this session)**:
 - Kahn-BFS recompute drain live (B.2 fused affected/indegree + B.3 drain + ComputeCallback FFI boundary)
@@ -527,13 +549,19 @@ If the next session continues the cascade, claim **Phase G validation (#1145)** 
 - Phase C parent (CLOSED): [`#1144`](https://github.com/iasbuilt/causl/issues/1144)
 - Phase D parent (CLOSED): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
 - Phase E parent (CLOSED): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
-- Phase F parent (OPEN, re-scoped): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
+- Phase F parent (CLOSED, superseded by #1483): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
 - Phase F sub-epics:
   - **#1459** (CLOSED, decision landed): [`F-singleton-vs-multiplex`](https://github.com/iasbuilt/causl/issues/1459)
-  - **#1457** (CLOSED, F-marshal complete): [`F-marshal`](https://github.com/iasbuilt/causl/issues/1457)
-  - **#1458** (OPEN, claimable): [`F-loader`](https://github.com/iasbuilt/causl/issues/1458)
-  - **#1460** (OPEN, claimable post-F-loader): [`F-cross-backend-actual-gate`](https://github.com/iasbuilt/causl/issues/1460)
-- Phase G validation umbrella (next claimable per user choice 2026-05-14): [`#1145`](https://github.com/iasbuilt/causl/issues/1145)
+  - **#1457** (CLOSED, F-marshal cascade complete): [`F-marshal`](https://github.com/iasbuilt/causl/issues/1457)
+  - **#1458** (CLOSED as blocked by #1483): [`F-loader`](https://github.com/iasbuilt/causl/issues/1458)
+  - **#1460** (CLOSED as blocked by #1483): [`F-cross-backend-actual-gate`](https://github.com/iasbuilt/causl/issues/1460)
+- Phase G validation umbrella (CLOSED as blocked / except #1145 measurement):
+  - **#1145** (CLOSED, the falsification measurement): [PR #1482 `ca26c233`](https://github.com/iasbuilt/causl/issues/1145)
+  - **#1146** / **#1141** / **#1138** / **#1140** (CLOSED as blocked by #1483)
+- Phase H production-deployment tickets (CLOSED as blocked by #1483): **#1148** / **#1143** / **#1137** / **#1139**
 - F-marshal.6.1 investigation (CLOSED without merge — pivot record): [`#1479`](https://github.com/iasbuilt/causl/issues/1479) (profile data on branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47`)
+- **Successor epic (active work)**: [`#1483`](https://github.com/iasbuilt/causl/issues/1483) — Rust engine re-architecture decision phase
+  - **#1484** (predecessor): constraint analysis
+  - **#1485** / **#1486** / **#1487** (parallel): feasibility studies (a)/(b)/(c)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

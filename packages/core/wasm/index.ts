@@ -53,9 +53,13 @@ import { evaluateStatechart as evaluateStatechartCanonical } from '../src/statec
 // methods today (TS-engine wrap) and through the marshaler directly
 // once F-marshal.5 routes `WasmBackend.commit()` through it.
 import {
+  applyBatchBridgeResult,
   applyBridgeResult,
+  marshalBatchEnvelope,
   marshalCommitEnvelope,
   WasmStateMirror,
+  type BatchBridgeResult,
+  type BatchCommitInput,
   type BridgeResult,
   type JsonValue as MarshalerJsonValue,
 } from './marshaler.js'
@@ -449,6 +453,197 @@ async function instantiateBackend(
   return new WasmBackend(bridge, graphName)
 }
 
+// ---------------------------------------------------------------------------
+// C.3 (#1501) — BatchedFlush queue.
+//
+// Option (c) batched-commit boundary scaffolding (epic #1493). Per
+// `docs/epic-1483/option-c-batched-boundary.md` §2.1 Answer C the JS
+// engine is SSOT: `commit()` returns the TS graph's `Commit`
+// synchronously; the marshaler runs in a buffered SHADOW mode. The
+// only thing this queue batches is the WASM-side WIRE crossing — NOT
+// the commit semantics, NOT subscriber dispatch (§4.2 choice (i)), NOT
+// `graph.now` advancement (§3.1, one tick per commit always).
+//
+// **No adopter-visible perf change at v1.x.** With the default
+// `afterN = 1` (wired through `createCausl` in C.4) the queue flushes
+// immediately on every commit, which is byte-identical to the
+// pre-C.3 per-commit shadow path (option-c doc §2.3 / §7). This is
+// scaffolding for a future v2.x Rust-SSOT cutover, not a perf win;
+// the #1133 boundary-tax falsification is not refuted by this work.
+// ---------------------------------------------------------------------------
+
+/**
+ * The shadow bridge adapter the {@link BatchedFlush} queue drives. The
+ * single-commit `commit(state, action)` is the pre-C.3 F-marshal.5
+ * shadow surface (kept for the `afterN === 1` fast path and for
+ * adapters that have not adopted `commit_batch` yet); `commit_batch`
+ * is the C.1 batched extern (`tools/engine-rs-bridge-{serde,gc}`,
+ * PRs #1496/#1497).
+ */
+export interface BatchedFlushBridge {
+  commit(state: unknown, action: unknown): unknown
+  /**
+   * Optional — the C.1 `commit_batch(state, actions)` extern. When a
+   * primed bridge does not expose it (legacy single-commit adapters,
+   * older test mocks) the queue degrades to N sequential
+   * `commit(state, action)` calls, which is byte-identical by
+   * construction (option-c doc §3.1) — the loop body IS the
+   * single-envelope path.
+   */
+  commit_batch?(state: unknown, actions: unknown): unknown
+}
+
+/**
+ * C.3 (#1501) — buffered shadow-flush queue for the WASM wire
+ * crossing.
+ *
+ * Buffers per-commit `(intent, writes)` shadow inputs and flushes them
+ * as a single `commit_batch` envelope when a trigger fires:
+ *
+ *   - **count** — `afterN` commits buffered (this PR);
+ *   - **time** — `intervalMs` elapsed since the first buffered commit
+ *     (C.3 PR 2);
+ *   - **manual** — {@link flush} called explicitly (this PR);
+ *   - **implicit** — `snapshot()` / `dispose()` force a flush so the
+ *     WASM-side state reflects committed work (C.3 PR 3).
+ *
+ * The queue NEVER influences the adopter-facing `Commit` — that is the
+ * TS graph's synchronous return (Answer C). A flush failure is
+ * captured for the cross-backend determinism gate's assertion path
+ * exactly as the pre-C.3 shadow path captured per-commit failures;
+ * adopter commits do not throw on shadow failures (the TS graph is
+ * SSOT).
+ */
+export class BatchedFlush {
+  /** Count-based flush threshold. `1` = flush every commit (default). */
+  readonly afterN: number
+
+  /** Buffered per-commit shadow inputs, in commit order. */
+  readonly #buffer: BatchCommitInput[] = []
+
+  /** The mirror the queue marshals against (Decision 1 SSOT — JS-side). */
+  readonly #mirror: WasmStateMirror
+
+  /** Shadow bridge adapter (single + optional batched extern). */
+  readonly #bridge: BatchedFlushBridge
+
+  /** Captured flush error for the determinism gate's assertion path. */
+  #error: Error | undefined
+
+  /**
+   * The `mirror.now` value the NEXT flush's envelope must start from
+   * (the pre-batch clock). Set when the first commit is buffered so
+   * the batch envelope's `state.now` matches what the SSOT TS engine
+   * started the first buffered commit from — mirrors the pre-C.3
+   * per-commit `mirror.now` sync (index.ts:581).
+   */
+  #pendingBaseNow: number | undefined
+
+  constructor(
+    mirror: WasmStateMirror,
+    bridge: BatchedFlushBridge,
+    afterN = 1,
+  ) {
+    if (!Number.isInteger(afterN) || afterN < 1) {
+      throw new RangeError(
+        `BatchedFlush: afterN must be an integer >= 1 (got ${String(afterN)})`,
+      )
+    }
+    this.#mirror = mirror
+    this.#bridge = bridge
+    this.afterN = afterN
+  }
+
+  /** Number of commits currently buffered (un-flushed). */
+  get pending(): number {
+    return this.#buffer.length
+  }
+
+  /**
+   * Captured flush error, if the most recent flush threw. Cleared on
+   * the next successful flush. The cross-backend determinism gate
+   * asserts this stays `undefined`.
+   */
+  get error(): Error | undefined {
+    return this.#error
+  }
+
+  /**
+   * Buffer one commit's shadow input. The `baseNow` is the TS graph's
+   * PRE-commit clock for the FIRST buffered commit (the value the
+   * batch envelope's `state.now` must carry); subsequent commits in
+   * the same window do not move it (the Rust extern threads the
+   * post-state internally). Triggers a count-based flush when the
+   * buffer reaches `afterN`.
+   */
+  enqueue(input: BatchCommitInput, baseNow: number): void {
+    if (this.#buffer.length === 0) {
+      this.#pendingBaseNow = baseNow
+    }
+    this.#buffer.push(input)
+    if (this.#buffer.length >= this.afterN) {
+      this.flush()
+    }
+  }
+
+  /**
+   * Flush the buffer as a single `commit_batch` envelope (or, if the
+   * bridge lacks the batched extern, as N sequential single-commit
+   * calls — byte-identical by construction, option-c doc §3.1). A
+   * no-op when the buffer is empty (so implicit/manual flushes are
+   * always safe to call). The projected `Commit[]` is returned for
+   * the C.3 PR 3 implicit-flush callers; the per-commit subscriber
+   * fire is the JS engine's job (Answer C — NOT batched here).
+   */
+  flush(): Commit[] {
+    if (this.#buffer.length === 0) return []
+    const batch = this.#buffer.splice(0, this.#buffer.length)
+    const baseNow = this.#pendingBaseNow ?? (this.#mirror.now as unknown as number)
+    this.#pendingBaseNow = undefined
+    try {
+      // Sync the mirror clock to the pre-batch base so the envelope's
+      // `state.now` matches what the SSOT TS engine started the first
+      // buffered commit from (mirrors index.ts:581's per-commit sync,
+      // applied once per batch boundary).
+      this.#mirror.now = baseNow as unknown as GraphTime
+      const envelope = marshalBatchEnvelope(this.#mirror, batch)
+      if (typeof this.#bridge.commit_batch === 'function') {
+        const result = this.#bridge.commit_batch(
+          envelope.state,
+          envelope.actions,
+        ) as BatchBridgeResult
+        const commits = applyBatchBridgeResult(this.#mirror, result)
+        this.#error = undefined
+        return commits
+      }
+      // Degrade path: the bridge has no batched extern. Replay the
+      // batch as N sequential single-commit shadow calls. This is
+      // byte-identical to the batched path by construction — the
+      // loop body IS the single-envelope path (option-c doc §3.1).
+      const commits: Commit[] = []
+      for (const single of batch) {
+        const singleEnv = marshalCommitEnvelope(
+          this.#mirror,
+          single.intent,
+          single.writes as ReadonlyMap<NodeId, MarshalerJsonValue>,
+        )
+        const singleResult = this.#bridge.commit(
+          singleEnv.state,
+          singleEnv.action,
+        ) as BridgeResult
+        commits.push(applyBridgeResult(this.#mirror, singleResult))
+      }
+      this.#error = undefined
+      return commits
+    } catch (err) {
+      // Shadow-path failure — captured for the determinism gate.
+      // Adopter commits do not throw (the TS graph is SSOT).
+      this.#error = err as Error
+      return []
+    }
+  }
+}
+
 /**
  * Phase-1 `BackendEngine` implementation backed by a TS engine.
  *
@@ -567,11 +762,30 @@ class WasmBackend implements BackendEngine {
       }
     })
 
-    // Shadow marshaler path — null-safe so adopters who never prime
-    // the marshaler (the common case, until F-marshal.7) see no
-    // overhead. The determinism gate primes the mirror so the cross-
-    // backend property test exercises the bidirectional marshal pair.
-    if (this.#marshaler !== undefined) {
+    // C.3 (#1501) — BUFFERED shadow path. When a BatchedFlush queue is
+    // primed, the per-commit shadow wire crossing is buffered and
+    // flushed on a trigger (count this PR; time/manual/implicit in
+    // C.3 PR 2/3) as a single `commit_batch` envelope. The
+    // adopter-facing return is STILL the TS graph's synchronous
+    // `Commit` (option-c doc §2.1 Answer C — only the wire crosses
+    // batches, not the commit semantics). With the default afterN=1
+    // (wired via createCausl in C.4) this is byte-identical to the
+    // pre-C.3 per-commit shadow path (option-c doc §2.3 / §7).
+    if (this.#batchedFlush !== undefined) {
+      // The pre-batch base clock for the FIRST buffered commit is the
+      // TS graph's PRE-commit clock (tsCommit.time - 1), exactly the
+      // value the pre-C.3 per-commit path synced mirror.now to.
+      this.#batchedFlush.enqueue(
+        {
+          intent,
+          writes: writes as ReadonlyMap<NodeId, MarshalerJsonValue>,
+        },
+        (tsCommit.time as number) - 1,
+      )
+    } else if (this.#marshaler !== undefined) {
+      // Pre-C.3 per-commit shadow path — preserved verbatim for the
+      // F-marshal.5 gate that primes only the single-commit mirror.
+      // Null-safe so adopters who never prime see no overhead.
       try {
         // Sync mirror.now to the TS graph's pre-commit clock so the
         // marshaler envelope's `state.now` matches what the SSOT TS
@@ -603,6 +817,36 @@ class WasmBackend implements BackendEngine {
     }
 
     return tsCommit
+  }
+
+  /** C.3 (#1501) — BatchedFlush queue (buffered shadow path). */
+  #batchedFlush: BatchedFlush | undefined
+
+  /**
+   * C.3 (#1501) — install a {@link BatchedFlush} queue so `commit()`
+   * BUFFERS the shadow wire crossing instead of flushing per-commit.
+   * The adopter-facing `commit()` return is unchanged (the TS graph's
+   * synchronous `Commit`). When a queue is primed it SUPERSEDES the
+   * pre-C.3 single-commit shadow path; the cross-backend determinism
+   * gate's per-flush assertion (C.5) reads {@link __getBatchedFlushForTests}.
+   *
+   * @internal Test-only seam until C.4 wires it through `createCausl`.
+   */
+  __primeBatchedFlushForTests(queue: BatchedFlush): void {
+    this.#batchedFlush = queue
+  }
+
+  /**
+   * C.3 (#1501) — the installed {@link BatchedFlush} queue (or
+   * `undefined`). The cross-backend determinism gate (C.5) reads
+   * `.error` off this for its per-flush assertion path; implicit-flush
+   * callers (C.3 PR 3) read it to force a flush before
+   * `snapshot()` / `dispose()`.
+   *
+   * @internal
+   */
+  __getBatchedFlushForTests(): BatchedFlush | undefined {
+    return this.#batchedFlush
   }
 
   /**

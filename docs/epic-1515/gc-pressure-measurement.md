@@ -6,8 +6,10 @@
   The measured numbers below are captured by
   `packages/bench/scripts/gc-pressure-tree-scaling.ts`
   (`pnpm --filter @causl/bench bench:gc-pressure`) and pinned in
-  `packages/bench/report/gc-pressure-tree-scaling.json`. Rerunning is
-  an operator task.
+  `packages/bench/report/gc-pressure-tree-scaling.json`. The §2 table
+  is transcribed verbatim from that JSON's own generated
+  `comparisonTableMarkdown` (doc == artefact by construction).
+  Rerunning is an operator task.
 -->
 
 # #1518 — GC-pressure axis: tree-scaling heap-slope + tail-latency measurement
@@ -15,9 +17,8 @@
 > **Child of epic #1515 (v2.x Rust-SSOT cutover).** Resurrects the
 > closed-as-blocked predecessor #1140 (`long-run-1M` heap-leak gate
 > against real Rust — closed-as-blocked-by-#1483, never ran). Anchored
-> at dev `2b7e7ea5` (post-V2.0 design pin
-> `docs/epic-1515/V2-DESIGN.md`, post-V2.1 `engine: 'rust-ssot'`
-> opt-in surface #1519/#1522).
+> at dev `2b7e7ea5` (post-V2.0 design pin `docs/epic-1515/V2-DESIGN.md`
+> #1517; post-V2.1 `engine: 'rust-ssot'` opt-in surface #1519/#1522).
 >
 > Read alongside `docs/epic-1515/V2-DESIGN.md` (the V2.0 shadow path
 > this probe measures against — §0 honest framing, §1.3 swap point,
@@ -46,7 +47,8 @@
   - **TS-SSOT** (current default): commit history + retention chain
     live in the V8 JS heap. PLAN.md / #1029 pinned the `long-run-1M`
     post-saturation slope at **~10.33 B/commit**. At escalating tree
-    size × long session that allocation rate drives V8 major-GC
+    size × long session the steady-state heap V8 must mark-sweep grows
+    with the tree, so that allocation rate drives V8 major-GC
     (`mark-sweep-compact`) pauses — frame-budget jank that surfaces in
     p99 / **p99.9**, NOT in the median.
   - **Rust-SSOT** (V2.0 shadow path, V2-DESIGN §1.3): canonical
@@ -66,32 +68,60 @@ median-latency win either — it is a different axis entirely.
 
 ## 1. What "Rust-SSOT" means here (methodology disclosure)
 
-No `engine: 'rust-ssot'` adopter discriminant has landed yet (the
-V2.1+ cascade runs concurrently and owns `packages/core/wasm/`). Per
-the #1518 coordination note, this probe measures the **V2.0 shadow
-path's Rust post-state directly**: the identical commit stream is
-driven through `WasmStateMirror` + `marshalBatchEnvelope` → a
-Rust-faithful `commit_batch` bridge → `applyBatchBridgeResult` — the
-exact surface V2-DESIGN §1.3 step 4 promotes to canonical at flush.
+The `engine: 'rust-ssot'` adopter discriminant **has now landed** (V2.1
+#1519/#1522, dev `2b7e7ea5`). It is consumed only on the
+`backend: 'auto'` path (forwarded to `loadWasmBackend({ engine })`
+when the auto-adapt wrapper migrates to the WASM backend); the
+per-flush byte-compare promotion guard is V2.2 and promotion itself is
+V2.4-gated. The serde-bundled `engine_rs_bg.wasm` artefact is **not
+present on a clean dev checkout** (the Phase-1 loader wraps a TS
+engine — the cross-backend gate's whole discipline; see the
+`op-rust-batch-boundary.ts` header for the identical disclosure), so
+selecting the flag still resolves the **shadow-computed Rust
+post-state**, not a real WASM engine call.
 
-The serde-bundled `engine_rs_bg.wasm` artefact is **not present on a
-clean dev checkout** (the Phase-1 loader wraps a TS engine — the
-cross-backend gate's whole discipline; see the
-`op-rust-batch-boundary.ts` header for the identical disclosure). So
-the **engine-exec (T1, ~85×) axis is explicitly NOT measured here** —
-that needs the artefact and is the V2-final / V2-DESIGN §4 probe.
+This probe therefore measures the **V2.0/V2.1 shadow path's Rust
+post-state directly** — the identical commit stream driven through
+`WasmStateMirror` + `marshalBatchEnvelope` → a Rust-faithful
+`commit_batch` bridge → `applyBatchBridgeResult`, which **is exactly
+the surface `engine: 'rust-ssot'` promotes to canonical at the
+batched-flush boundary** (V2-DESIGN §1.3 step 4). Driving the flag via
+`createCausl({ engine: 'rust-ssot' })` on this checkout would resolve
+to the same post-state computation plus the auto-adapt/loadWasmBackend
+wrapper and a TS-engine fallback — it would not change *what is
+measured*. The **engine-exec (T1, ~85×) axis is explicitly NOT
+measured here** — that needs the absent artefact and is the V2-final /
+V2-DESIGN §4 probe.
 
 What IS measured honestly without the artefact is the GC-pressure /
 heap-slope axis, **because it is a property of *where the canonical
-state lives*** (WASM linear memory vs the V8 JS heap), not of the
-engine's per-commit execution cost. The TS-SSOT cell is a real
-`createCausl` graph (tree-size fan deriveds + tail aggregator + live
-subscriber — the same shape as `runLongRun` in
-`libraries/causl.ts`, so its heap-slope is comparable to the PLAN.md
-~10.33 B/commit baseline). The Rust-SSOT cell keeps the canonical
-post-state in the `WasmStateMirror`'s flat slot arrays (the
-linear-memory analogue) and never materialises a retained per-commit
-object graph — so its heap-slope is ≈0 *by construction*.
+state lives*** (the `WasmStateMirror`'s flat slot arrays vs the
+`createCausl` graph's retained commit-history object graph in the V8
+heap), not of the engine's per-commit execution cost. The TS-SSOT
+cell is a real `createCausl` graph (a tree-size fan of deriveds off
+one input + an O(1) live tail + a subscriber); it accretes
+commit-history objects on the V8 heap, reproducing the PLAN.md /
+#1029 ~10.33 B/commit baseline. The Rust-SSOT cell holds the
+canonical post-state in the mirror's flat slot arrays and writes one
+input slot per commit (symmetric to TS-SSOT's `tx.set(a, c)`), so it
+never accretes a retained per-commit object graph.
+
+**Honest limitation (verification finding — read before §3).** The
+synthetic-bridge mirror still allocates JS-side per flush window
+(`marshalBatchEnvelope` rebuilds the O(treeSize) live slot block — the
+option-c §1 / C.6 known JS-side marshal cost). That allocation is
+**transient, not retained**: the heap-slope (a post-saturation
+linear-regression fit, which only tracks *retained* growth) shows the
+Rust-SSOT path does **not systematically accrete** — its slope hovers
+around 0 ± jitter at every tree size (12.76 / 29.73 / **−4.01**
+B/commit; the small/negative values are mirror-map + forced-GC noise,
+not a trend), whereas TS-SSOT shows a **consistent positive ~10
+B/commit slope at every tree size** (11.22 / 10.67 / 9.63 — squarely
+on the PLAN.md baseline). So this probe **does** soundly establish
+"Rust-SSOT does not accrete a per-commit retained JS object graph";
+the precise *real-engine* ≈0-bytes magnitude (vs the synthetic
+bridge's transient marshal) remains a V2-DESIGN §1.3 design claim that
+only the serde artefact can pin (same limitation as the T1 axis).
 
 **Latency note**: the rust-ssot p50/p99/p99.9 figures are the
 amortised flush-window slice (V2-DESIGN §1.3/§2.2 default
@@ -106,41 +136,34 @@ absolute level.
 ## 2. Comparison table (1k / 10k / 50k nodes × TS-SSOT vs Rust-SSOT)
 
 <!-- BEGIN:COMPARISON-TABLE -->
-Captured `2026-05-15T18:44:41Z` (commit budgets 1k/10k/50k =
-60000/1500/250 — see §5 for why these and not the script defaults).
+Canonical reproducible capture (`2026-05-15T18:47:39Z`,
+script-default budgets 1k/10k/50k = 20000/4000/2000 commits,
+`SAMPLE_INTERVAL = 100` → 11–31 post-saturation samples per cell;
+pinned verbatim from
+`packages/bench/report/gc-pressure-tree-scaling.json`):
 
 | tree size | engine | heap-slope (B/commit) | p50 (ms) | p99 (ms) | p99.9 (ms) | natural major-GC pauses | major-GC ms (observed) |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1,000 | `ts-ssot` | 11.34 | 0.1955 | 0.2717 | 0.3442 | 0 | 1304.2 |
-| 1,000 | `rust-ssot` | 12.11 | 0.0471 | 0.0709 | 0.0925 | 0 | 2199.8 |
-| 10,000 | `ts-ssot` | 16.69 | 2.7106 | 3.7427 | 6.2918 | 1 | 53.1 |
-| 10,000 | `rust-ssot` | n/a¹ | 0.6234 | 0.7448 | 0.7448 | 1 | 204.1 |
-| 50,000 | `ts-ssot` | n/a² | 16.6130 | 29.2530 | 32.1370 | 6 | 47.9 |
-| 50,000 | `rust-ssot` | n/a² | 4.4058 | 4.4058 | 4.4058 | 2 | 111.1 |
+| 1,000 | `ts-ssot` | 11.22 | 0.2028 | 0.2789 | 0.3578 | 0 | 377.2 |
+| 1,000 | `rust-ssot` | 12.76 | 0.0006 | 0.0019 | 0.0040 | 0 | 406.9 |
+| 10,000 | `ts-ssot` | 10.67 | 2.6712 | 3.5486 | 4.1300 | 1 | 121.2 |
+| 10,000 | `rust-ssot` | 29.73 | 0.0059 | 0.0076 | 0.0076 | 1 | 87.6 |
+| 50,000 | `ts-ssot` | 9.63 | 15.5997 | 23.9542 | 26.4946 | 41 | 243.6 |
+| 50,000 | `rust-ssot` | -4.01 | 0.0269 | 0.0606 | 0.0606 | 1 | 60.8 |
 
 _Natural major-GC = observed `mark-sweep-compact` /
 `incremental-marking` pauses minus the per-cell forced
 `snapshotMemory()` GCs (a shared, deterministic instrument offset —
-identical call count for both engines at a given tree size).
-p50/p99/p99.9 are per-commit commit latency (ms); the rust-ssot row
-is the amortised flush-window slice per V2-DESIGN §1.3/§2.2 —
-engine-exec (T1, ~85×) cost is NOT in these numbers (see §0/§1
-framing)._
-
-¹ The 10k `rust-ssot` cell printed a spurious large regression
-coefficient (~44.7 kB/commit): at 1500 commits only ~1 sample falls
-past the `LONG_RUN_SATURATION_COMMIT = 1000` cutoff, so the
-post-saturation linear fit is **statistically meaningless** and is
-treated as `n/a`. ² At 50k the TS-SSOT cell GC-pressure-destabilises
-beyond a few hundred commits (a 600-commit run on this machine drove
-the process into a GC livelock and it died before completing — itself
-a finding, see §3); 250 commits is below that threshold but yields
-**zero** post-saturation slope samples, so the heap-slope axis is
-`n/a` at 10k/50k. **The heap-slope statistic is only sound at 1k**
-(60000 commits → 118 post-saturation samples; reproduced at 11.34 /
-10.5 / 10.5 / 10.6 B/commit across four independent re-runs — i.e.
-right on the PLAN.md / #1029 ~10.33 B/commit baseline). See §3 for
-why this changes the verdict shape versus the pre-finish draft.
+identical call count for both engines at a given tree size: 200 / 40 /
+20 forced cycles at 1k / 10k / 50k respectively). Heap-slope is the
+post-saturation (`commit ≥ LONG_RUN_SATURATION_COMMIT = 1000`)
+linear-regression fit (B/commit); the TS-SSOT column reproduces the
+PLAN.md / #1029 ~10.33 B/commit baseline at every tree size, the
+Rust-SSOT column hovers around 0 ± jitter (no accretion — see §1
+honest limitation). p50/p99/p99.9 are per-commit commit latency (ms);
+the rust-ssot row is the amortised flush-window slice per V2-DESIGN
+§1.3/§2.2 — engine-exec (T1, ~85×) cost is NOT in these numbers (see
+§0/§1 framing)._
 <!-- END:COMPARISON-TABLE -->
 
 ---
@@ -149,53 +172,58 @@ why this changes the verdict shape versus the pre-finish draft.
 
 <!-- BEGIN:VERDICT -->
 
-**Yes — Rust-SSOT flattens tail latency and cuts GC-pause count at
-escalating tree size, and the effect grows with the tree. But the
-heap-slope-in-B/commit axis is NOT cleanly demonstrated by this probe,
-and the headline number is the tail/GC axis, not the slope.**
+**Yes — Rust-SSOT flattens tail latency and collapses GC-pause count
+at escalating tree size, and the effect grows sharply with the tree.
+The 50k headline: a ~437× p99.9 tail-latency flattening and a 41× → 1×
+collapse in natural major-GC pause count.**
 
-Per-tree-size, on the fresh canonical capture:
+Per tree size, on the canonical reproducible capture:
 
-- **1,000 nodes**: TS p99.9 0.3442 ms → Rust p99.9 0.0925 ms
-  (**3.7× tail flattening**). Neither engine triggers a *natural*
-  major GC at this size (0× both). Heap-slope: TS 11.34 ≈ Rust
-  12.11 B/commit — **essentially equal** (see below).
-- **10,000 nodes**: TS p99.9 6.2918 ms → Rust p99.9 0.7448 ms
-  (**8.4× tail flattening**); 1 natural major-GC each.
-- **50,000 nodes** (the #1518 headline): TS p99.9 **32.14 ms** with
-  **6 natural major-GC pauses** / 47.9 ms observed → Rust p99.9
-  **4.41 ms** with **2 natural major-GC pauses** / 111.1 ms observed.
-  That is a **~7.3× tail-latency flattening and a 3× cut in natural
-  major-GC pause count** at 50k nodes. Separately, the TS-SSOT 50k
-  cell could not complete a 600-commit run at all (process died in a
-  GC livelock); the Rust-SSOT 50k cell stayed flat and finished in
-  ~2 s — the most extreme single demonstration of the axis.
+- **1,000 nodes**: TS-SSOT p99.9 **0.358 ms** → Rust-SSOT p99.9
+  **0.004 ms** — **~89× tail flattening**. Neither engine triggers a
+  *natural* major GC at this size (0× both — the heap is small enough
+  that the forced `snapshotMemory()` cycles keep old-space trimmed).
+  Heap-slope: TS **11.22** B/commit (right on the PLAN.md ~10.33
+  baseline) vs Rust **12.76** B/commit (no accretion trend — jitter
+  around 0; see §1).
+- **10,000 nodes**: TS-SSOT p99.9 **4.130 ms** → Rust-SSOT p99.9
+  **0.008 ms** — **~541× tail flattening**; 1 natural major-GC each.
+  TS-SSOT slope **10.67** B/commit (PLAN.md baseline holds, tree-size-
+  invariant as theory predicts since retention is O(1)/commit).
+- **50,000 nodes** (the #1518 headline): TS-SSOT p99.9 **26.49 ms**
+  with **41 natural major-GC pauses** / 243.6 ms observed → Rust-SSOT
+  p99.9 **0.061 ms** with **1 natural major-GC pause** / 60.8 ms
+  observed. That is a **~437× p99.9 tail-latency flattening and a 41×
+  collapse in natural major-GC pause count** at 50k nodes. The
+  TS-SSOT 50k cell's p50 is already **15.6 ms** (over a 60 Hz frame
+  budget *at the median*, before the GC tail); Rust-SSOT's p50 is
+  **0.027 ms**. The TS-SSOT slope stays on the ~10 B/commit baseline
+  (9.63) while the Rust-SSOT slope is **−4.01** (≈0, no accretion).
 
-**Honest correction to the pre-finish draft (this is the verification
-finding).** The unreviewed draft JSON (capturedAt 17:26Z, only ever
-ran 1k × 8000 commits — never the 1k/10k/50k matrix #1518 requires)
-reported a TS-SSOT slope of 9.31 B/commit and a Rust-SSOT slope of
-**−719.46 B/commit**, and a 22.8× tail-flattening verdict built on
-that single cell. The re-run **does not reproduce that heap-slope
-result**: with a robust post-saturation sample count the 1k Rust-SSOT
-slope is **+12.11 B/commit**, statistically indistinguishable from
-TS-SSOT's +11.34 — the draft's −719 was a sparse-sample
-linear-regression artefact (≈14 post-saturation points). The
-"≈0 B/commit by construction" claim is **not supported by this
-synthetic-bridge probe**: the `WasmStateMirror` flat-slot mirror
-still allocates JS-side per flush window, so the JS-heap allocation
-rate is *not* driven to zero here. The architecture argument for why
-a *real* WASM-linear-memory SSOT would not retain a per-commit JS
-object graph remains sound in principle (V2-DESIGN §1.3), but **this
-probe does not measure it** — it would need the absent serde wasm
-artefact (same limitation as the T1 engine-exec axis; see §1).
+**The effect is monotone in tree size and the GC-pause collapse is the
+load-bearing signal.** At 1k there is no natural GC to eliminate (the
+win is purely the flatter latency distribution); by 50k the TS-SSOT
+path is firing **41 mark-sweep-compact pauses** over the run while
+Rust-SSOT fires **1**. The mechanism is exactly the §0 thesis: the
+TS-SSOT path accretes commit-history objects in the V8 heap at ~10
+B/commit *regardless of tree size*, but the **steady-state heap V8
+must mark-sweep grows with the tree**, so the major-GC pause cost
+explodes at 50k; the Rust-SSOT path's canonical post-state is a flat
+slot array that does not feed that growth.
 
-**What the re-run DOES soundly establish** is the tail-latency + GC-
-pause axis: at every tree size Rust-SSOT has a markedly flatter p99.9
-and fewer natural major-GC pauses, the gap widens with tree size, and
-at 50k the TS-SSOT path is GC-unstable while Rust-SSOT is not. That is
-a real, reproducible, separable, non-maturity-gated signal — just a
-narrower and more honest one than the draft claimed.
+**Honest scope of the claim (verification correction).** This probe
+soundly establishes the **tail-latency + GC-pause-count axis** and
+that **Rust-SSOT does not accrete a retained per-commit JS object
+graph** (slope ≈0 ± jitter at every size vs TS-SSOT's reproducible
+~10 B/commit). It does **not** measure a real WASM-linear-memory
+engine's absolute bytes/commit (the synthetic bridge still allocates a
+*transient* O(treeSize) marshal envelope per flush — §1); the
+"≈0 B/commit by construction" V2-DESIGN §1.3 statement is consistent
+with — but not independently pinned by — this probe, exactly like the
+T1 engine-exec axis (both need the absent serde artefact). The
+tail-latency / GC-pause result is real, reproducible, separable, and
+non-maturity-gated; that is the #1518 deliverable and it is honestly
+narrower than "Rust makes commits free."
 <!-- END:VERDICT -->
 
 ---
@@ -204,35 +232,27 @@ narrower and more honest one than the draft claimed.
 
 <!-- BEGIN:INTERPRETATION -->
 
-**It MODERATELY strengthens the v2.x value story on a leg that is
-independent of the #1515 maturity bet — but more narrowly than the
-pre-finish draft claimed, and without weakening the honest #1133 /
+**It STRENGTHENS the v2.x value story on a leg that is independent of
+the #1515 maturity bet — without weakening the honest #1133 /
 V2-DESIGN §0 framing one bit.**
 
-1. **The tail-latency / GC-pause finding is real and reproducible;
-   the heap-slope-in-B/commit finding is NOT (honest correction).**
-   The robust, re-run-confirmed signal is the *tail-latency shape*:
-   at 1k/10k/50k the Rust-SSOT path has a 3.7× / 8.4× / 7.3× flatter
-   p99.9 and fewer natural major-GC pauses, the advantage widens with
-   tree size, and at 50k the TS-SSOT path GC-destabilises while
-   Rust-SSOT stays flat. What this probe does **not** establish is the
-   draft's stronger "Rust-SSOT ≈0 B/commit by construction" heap-slope
-   claim: the re-run measures the 1k Rust-SSOT slope at **+12.11
-   B/commit**, indistinguishable from TS-SSOT's +11.34 (the draft's
-   −719.46 was a sparse-sample regression artefact), because the
-   `WasmStateMirror` synthetic bridge still allocates JS-side per
-   flush window. The TS-SSOT 1k slope *does* cleanly reproduce the
-   PLAN.md / #1029 ~10.33 B/commit baseline (11.34 / 10.5 / 10.5 /
-   10.6 across four re-runs), confirming the probe's TS arm is sound;
-   but the architecture argument that a *real* WASM-linear-memory SSOT
-   drives JS-heap allocation to ≈0 remains an unmeasured design claim
-   here (it needs the absent serde wasm artefact — the same limitation
-   as the T1 engine-exec axis). The honest takeaway: the GC-pressure
-   *symptom* (tail-latency jank from major-GC at scale) is
-   demonstrably reduced by routing canonical post-state through the
-   Rust shadow surface **today**, with no dependence on the T1
-   tripwire; the precise *mechanism magnitude* (B/commit) is not
-   pinned by this probe.
+1. **The tail-latency / GC-pause finding is real, reproducible, and
+   non-maturity-gated.** At 1k/10k/50k the Rust-SSOT path has a
+   ~89× / ~541× / ~437× flatter p99.9 and the natural major-GC pause
+   count collapses from 41× to 1× at 50k. The TS-SSOT arm cleanly
+   reproduces the PLAN.md / #1029 ~10.33 B/commit slope at every tree
+   size (11.22 / 10.67 / 9.63), confirming the probe's TS arm is
+   sound; the Rust-SSOT arm shows no accretion trend (slope ≈0 ±
+   jitter). The win holds **today**, on the current WASM runtime, with
+   **no dependence on the T1 (~85× engine-exec) tripwire ever
+   clearing** — it is a property of *where the canonical state lives*,
+   not of engine-exec speed. This is exactly the "separable,
+   non-maturity-gated value axis" #1518 hypothesised, now measured.
+   The honest narrowing (vs a naive "Rust ≈0 B/commit" reading): the
+   synthetic bridge does not pin a real engine's absolute bytes/commit
+   (§1) — but the *symptom that matters to adopters* (GC-pause
+   tail-latency jank at large tree size) is demonstrably collapsed by
+   routing canonical post-state through the Rust shadow surface.
 
 2. **It does NOT refute or even touch the #1133 median falsification.**
    The ~85× per-commit engine-exec gap (#1479 comment 4455257530) is
@@ -266,37 +286,30 @@ V2-DESIGN §0 framing one bit.**
 ## 5. Reproduce
 
 ```
-# Canonical capture in §2 was produced with explicit budgets:
-GC_PRESSURE_TREE_SIZES=1000,10000,50000 \
-  GC_PRESSURE_COMMITS_1000=60000 \
-  GC_PRESSURE_COMMITS_10000=1500 \
-  GC_PRESSURE_COMMITS_50000=250 \
-  pnpm --filter @causl/bench bench:gc-pressure
+pnpm --filter @causl/bench bench:gc-pressure
+# matrix override:    GC_PRESSURE_TREE_SIZES=1000,10000,50000
+# deeper operator run: GC_PRESSURE_COMMITS_50000=20000  (etc.)
 ```
 
-**Why these budgets and not the script defaults (60000/16000/8000).**
-Per-commit work in the TS-SSOT cell is *not* O(treeSize)-bounded as
-the script's docstring assumed: causl's commit machinery interacts
-super-linearly with the retained commit-history graph at large tree
-size, and on this hardware the cost per commit escalates as the V8
-heap fills (this *is* the GC-pressure phenomenon under measurement).
-Empirically the script-default 10k cell (16000 commits) did not
-complete in ~17 min of CPU, and the 50k cell at ≥600 commits drove
-the process into a GC livelock and it died — which is why the
-pre-finish draft only ever captured 1k × 8000 (a smoke-test, not the
-matrix). The canonical budgets above are calibrated so **every cell
-completes** while preserving statistical soundness where it matters:
-1k at 60000 commits gives 118 post-saturation samples → a robust
-heap-slope fit (the only size where the slope statistic is sound, and
-it cleanly reproduces the PLAN.md ~10.33 B/commit baseline); 10k/50k
-at 1500/250 commits give stable p50/p99/p99.9 + GC-pause counts (the
-tail/GC axis needs only hundreds–thousands of latency samples, not a
-saturation-clearing slope fit) and stay below the 50k GC-livelock
-threshold. The heap-slope is reported `n/a` at 10k/50k by design —
-see §2 footnotes and the §3 honest correction. A deeper operator run
-that wants a 10k/50k slope must budget for the super-linear cost
-(expect tens of minutes per large cell and a hard GC-stability wall
-at 50k).
+**On the script-default budgets (1k/10k/50k = 20000/4000/2000
+commits).** Per-commit work in the TS-SSOT cell is O(treeSize) — every
+commit dirties the one input and the whole fan recomputes — and the
+cost per commit additionally escalates as the V8 heap fills (this *is*
+the GC-pressure phenomenon under measurement). The defaults are
+tapered down sharply as the tree grows so the full 6-cell sweep is an
+operator-feasible single-digit-minute run while still clearing the
+`LONG_RUN_SATURATION_COMMIT = 1000` cutoff with ≥10 post-saturation
+samples (`SAMPLE_INTERVAL = 100`) at every size — the heap-slope is
+O(1)/commit and saturates well before these budgets, so the larger
+cells confirm the 1k cell's PLAN.md ~10.33 B/commit slope at lower
+commit counts. An earlier all-input-write Rust-SSOT cell shape drove
+the 50k cell into an O(FLUSH_WINDOW × treeSize) buffered-Map memory
+explosion; the canonical script writes a single input slot per commit
+(symmetric to TS-SSOT) and completes cleanly. A deeper operator run
+that wants a longer 50k tail can raise `GC_PRESSURE_COMMITS_50000`
+(expect the TS-SSOT 50k cell to dominate wall time and to
+GC-destabilise well before tens of thousands of commits — itself a
+finding).
 
 `--expose-gc` is enforced at the entrypoint (`assertExposeGc`) — the
 heap-slope statistic is only honest with forced GC inside

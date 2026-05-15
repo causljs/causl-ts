@@ -17,7 +17,40 @@ import { WasmStateMirror } from '../wasm/marshaler.js'
 import {
   BatchedFlush,
   type BatchedFlushBridge,
+  type FlushTimer,
 } from '../wasm/index.js'
+
+/**
+ * Deterministic fake timer — records the scheduled callback so a test
+ * can fire the time-based flush trigger by hand (no real setTimeout,
+ * no leaked timers, no flake).
+ */
+function fakeTimer(): FlushTimer & {
+  fire(): void
+  scheduled: number
+  cancelled: number
+} {
+  let pending: (() => void) | undefined
+  const obj = {
+    scheduled: 0,
+    cancelled: 0,
+    schedule(callback: () => void) {
+      obj.scheduled += 1
+      pending = callback
+      return { id: obj.scheduled }
+    },
+    cancel() {
+      obj.cancelled += 1
+      pending = undefined
+    },
+    fire() {
+      const cb = pending
+      pending = undefined
+      cb?.()
+    },
+  }
+  return obj
+}
 
 /**
  * Recording bridge that implements `commit_batch` by deterministically
@@ -257,5 +290,137 @@ describe('BatchedFlush — error capture (shadow path, TS graph SSOT)', () => {
     fail = false
     q.enqueue({ intent: 'c1', writes: new Map([['a' as NodeId, 2]]) }, 1)
     expect(q.error).toBeUndefined()
+  })
+})
+
+describe('BatchedFlush — C.3 PR 2 time-based trigger', () => {
+  it('rejects negative / non-finite intervalMs', () => {
+    const m = mirrorWith('a')
+    expect(
+      () => new BatchedFlush(m, recordingBatchBridge(), 1, -1),
+    ).toThrow(RangeError)
+    expect(
+      () => new BatchedFlush(m, recordingBatchBridge(), 1, NaN),
+    ).toThrow(RangeError)
+  })
+
+  it('defaults intervalMs to 16 (one 60 Hz frame, option-c doc §2.2)', () => {
+    const m = mirrorWith('a')
+    const q = new BatchedFlush(m, recordingBatchBridge())
+    expect(q.intervalMs).toBe(16)
+  })
+
+  it('arms the timer on the first buffered commit (afterN large)', () => {
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 16, t)
+    expect(q.timerArmed).toBe(false)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    expect(q.timerArmed).toBe(true)
+    expect(t.scheduled).toBe(1)
+    expect(bridge.batchCalls).toHaveLength(0) // count threshold not hit
+  })
+
+  it('firing the timer flushes the buffered window', () => {
+    const m = mirrorWith('a', 'b')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 16, t)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    q.enqueue({ intent: 'c1', writes: new Map([['b' as NodeId, 2]]) }, 0)
+    expect(q.pending).toBe(2)
+    t.fire()
+    expect(q.pending).toBe(0)
+    expect(bridge.batchCalls).toHaveLength(1)
+    expect((bridge.batchCalls[0]?.actions as unknown[]).length).toBe(2)
+    expect(q.timerArmed).toBe(false)
+  })
+
+  it('a count-flush cancels the pending time trigger (no double-flush)', () => {
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 2, 16, t)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    expect(t.scheduled).toBe(1)
+    expect(q.timerArmed).toBe(true)
+    q.enqueue({ intent: 'c1', writes: new Map([['a' as NodeId, 2]]) }, 0)
+    // count threshold (2) flushed; timer cancelled.
+    expect(bridge.batchCalls).toHaveLength(1)
+    expect(t.cancelled).toBe(1)
+    expect(q.timerArmed).toBe(false)
+    // Firing the (now cancelled) timer is a no-op — buffer empty.
+    t.fire()
+    expect(bridge.batchCalls).toHaveLength(1)
+  })
+
+  it('re-arms the timer for the NEXT window after a flush', () => {
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 16, t)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    t.fire() // flush window 1
+    expect(bridge.batchCalls).toHaveLength(1)
+    q.enqueue({ intent: 'c1', writes: new Map([['a' as NodeId, 2]]) }, 1)
+    expect(q.timerArmed).toBe(true) // re-armed for window 2
+    expect(t.scheduled).toBe(2)
+  })
+
+  it('intervalMs=0 disables the time trigger (count/manual only)', () => {
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 0, t)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    expect(q.timerArmed).toBe(false)
+    expect(t.scheduled).toBe(0)
+    expect(q.pending).toBe(1) // buffered, no time flush
+  })
+
+  it('cancelTimer() releases the timer without flushing the buffer', () => {
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 16, t)
+    q.enqueue({ intent: 'c0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    q.cancelTimer()
+    expect(q.timerArmed).toBe(false)
+    expect(q.pending).toBe(1) // buffer NOT drained
+    expect(bridge.batchCalls).toHaveLength(0)
+  })
+})
+
+describe('WasmBackend.flush() — C.3 PR 2 manual escape hatch', () => {
+  it('returns [] when no BatchedFlush queue is installed', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c3pr2.nobf',
+    )
+    // No __primeBatchedFlushForTests — default config.
+    expect(
+      (backend as unknown as { flush(): unknown[] }).flush(),
+    ).toEqual([])
+  })
+
+  it('drains a primed queue and returns the projected Commits', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c3pr2.bf',
+    ) as unknown as {
+      __primeBatchedFlushForTests(q: BatchedFlush): void
+      flush(): { intent: string }[]
+    }
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const t = fakeTimer()
+    const q = new BatchedFlush(m, bridge, 100, 16, t)
+    backend.__primeBatchedFlushForTests(q)
+    q.enqueue({ intent: 'manual0', writes: new Map([['a' as NodeId, 1]]) }, 0)
+    q.enqueue({ intent: 'manual1', writes: new Map([['a' as NodeId, 2]]) }, 0)
+    const commits = backend.flush()
+    expect(commits.map((c) => c.intent)).toEqual(['manual0', 'manual1'])
+    expect(q.pending).toBe(0)
   })
 })

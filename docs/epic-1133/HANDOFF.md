@@ -6,21 +6,33 @@
 
 ## Current state
 
-**Last session**: 2026-05-14 (G.1 #1145 perf measurement landed — **arithmetic verdict: epic perf hypothesis FALSIFIED**. Re-architecture epic #1483 filed; downstream tickets closed as blocked.)
+**Last session**: 2026-05-14 (#1483 re-architecture decision phase COMPLETE — 3 feasibility studies landed; **decision: ship option (c) batched-commit scaffolding**; successor epic #1493 filed)
 
-**dev branch HEAD**: `ca26c233` (G.1 measurement) + this PR (HANDOFF.md / PLAN.md update).
+**dev branch HEAD**: `9005ddd8` (option-c feasibility study) + this PR (HANDOFF.md bookmark update).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **#1133 perf hypothesis FALSIFIED.** G.1 (#1145, PR #1482, commit `ca26c233`) measured boundary cost at 78× the entire TS equality-cutoff workload. Re-architecture epic **#1483** is the successor. Eight downstream tickets closed as blocked by #1483: #1142, #1146, #1141, #1138, #1140, #1458, #1460, #1148, #1143, #1137, #1139.
+**Phase**: **#1483 decision phase CLOSED.** #1133 perf hypothesis remains FALSIFIED (G.1 #1145, 78× boundary tax). All three re-architectures studied: (b) in-place NO-GO; (a) native CONDITIONAL-GO Node-tier-only (deferred); **(c) batched-commit ACCEPTED**. Active epic is now **#1493** (option-c implementation).
 
-**Resumption bookmark**: epic #1133 stays OPEN as historical record + infrastructure-source-of-truth. **All work going forward proceeds against #1483** (re-architecture decision phase). Next claimable work:
+**Resumption bookmark**: **Active epic #1493** — batched-commit boundary scaffolding. 7 phases (C.1–C.7), 13 PRs, ~3.75 wk. **Honest framing carried forward**: option (c) delivers ZERO adopter perf at v1.x — JS engine stays SSOT, only the wire crossing batches. It is scaffolding for a *future v2.x epic* that does the Rust-SSOT cutover (where the perf win would materialize, requiring N≥312 batching + SSOT swap). The #1133 falsification is NOT refuted by #1493 — #1493 builds the on-ramp only.
 
-| Order | Issue | Description |
-|---|---|---|
-| 1 (predecessor) | **#1484** | Constraint analysis — adopter-API, deployment, perf, parity needs. Rubric for the feasibility studies. |
-| 2 (parallel × 3) | **#1485** / **#1486** / **#1487** | Feasibility studies: (a) native binary, (b) in-place mutation, (c) batched-commit. Each fills the constraint rubric from #1484. |
-| 3 (after) | — | Recommendation comment on #1483 picking a path; file successor implementation epic. |
+| Order | Phase | Scope | PRs |
+|---|---|---|---|
+| 1 | **C.1** | Rust-side `commit_batch` extern (both bridges); N=1/10/100/312 unit tests | 2 |
+| 2 | **C.2** | JS-side `marshalBatchEnvelope` + `applyBatchBridgeResult` | 2 |
+| 3 | **C.3** | `BatchedFlush` queue on WasmBackend | 3 |
+| 4 | **C.4** | Adopter API `createCausl({ batchedFlush })`; default afterN=1 byte-identical | 2 |
+| 5 | **C.5** | Cross-backend determinism gate per-flush | 1 |
+| 6 | **C.6** | Bench probes `op-rust-batch-boundary-{10,100,312,1000}` | 2 |
+| 7 | **C.7** | SPEC §17.6 trail rows + adoption-guide opt-in section | 1 |
+
+Pinned design (from `docs/epic-1483/option-c-batched-boundary.md`): `commit()` sync-returns `Commit`; flush triggers count/time/manual/implicit; subscriber-fire per-commit synchronous; `graph.now` per-commit; default `afterN=1`; no SPEC amendment needed.
+
+**Decision-phase artifacts** (all on dev `9005ddd8`):
+- `docs/epic-1483/CONSTRAINTS.md` (#1484/PR #1489), `option-a-native-binary.md` (#1485/PR #1491), `option-b-in-place-mutation.md` (#1486/PR #1490), `option-c-batched-boundary.md` (#1487/PR #1492)
+- Synthesis: [#1483 comment 4456619154](https://github.com/iasbuilt/causl/issues/1483#issuecomment-4456619154); decision record on #1483 close.
+
+**Closed-as-blocked-by-#1483 (still blocked; #1493 does not unblock them — only a future v2.x Rust-SSOT epic would)**: #1142, #1146, #1141, #1138, #1140, #1458, #1460, #1148, #1143, #1137, #1139.
 
 ### Falsification verdict — measurement chain
 

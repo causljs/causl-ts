@@ -514,9 +514,48 @@ export interface BatchedFlushBridge {
  * adopter commits do not throw on shadow failures (the TS graph is
  * SSOT).
  */
+/**
+ * C.3 PR 2 (#1501) — injectable timer surface for the time-based flush
+ * trigger. Production wires `setTimeout` / `clearTimeout`; tests inject
+ * a fake-clock so the 16 ms interval is exercised deterministically
+ * without leaking real timers into the suite.
+ */
+export interface FlushTimer {
+  schedule(callback: () => void, ms: number): unknown
+  cancel(handle: unknown): void
+}
+
+/**
+ * Default {@link FlushTimer} — host `setTimeout` / `clearTimeout`. The
+ * `.unref?.()` call (Node) keeps a pending flush timer from holding
+ * the event loop open (a buffered shadow flush must never prevent
+ * process exit — the TS graph is SSOT, the shadow is best-effort).
+ */
+const HOST_FLUSH_TIMER: FlushTimer = {
+  schedule(callback, ms) {
+    const h = setTimeout(callback, ms) as unknown as {
+      unref?: () => void
+    }
+    h.unref?.()
+    return h
+  },
+  cancel(handle) {
+    clearTimeout(handle as ReturnType<typeof setTimeout>)
+  },
+}
+
 export class BatchedFlush {
   /** Count-based flush threshold. `1` = flush every commit (default). */
   readonly afterN: number
+
+  /**
+   * C.3 PR 2 (#1501) — time-based flush threshold (ms). Default 16 ms
+   * = one animation frame at 60 Hz (option-c doc §2.2). `0` disables
+   * the time trigger (count / manual / implicit only). A flush is
+   * scheduled when the FIRST commit is buffered and fires after
+   * `intervalMs` unless the count threshold flushes first.
+   */
+  readonly intervalMs: number
 
   /** Buffered per-commit shadow inputs, in commit order. */
   readonly #buffer: BatchCommitInput[] = []
@@ -539,19 +578,34 @@ export class BatchedFlush {
    */
   #pendingBaseNow: number | undefined
 
+  /** C.3 PR 2 — injectable timer surface. */
+  readonly #timer: FlushTimer
+
+  /** C.3 PR 2 — handle of the in-flight interval timer (if any). */
+  #timerHandle: unknown
+
   constructor(
     mirror: WasmStateMirror,
     bridge: BatchedFlushBridge,
     afterN = 1,
+    intervalMs = 16,
+    timer: FlushTimer = HOST_FLUSH_TIMER,
   ) {
     if (!Number.isInteger(afterN) || afterN < 1) {
       throw new RangeError(
         `BatchedFlush: afterN must be an integer >= 1 (got ${String(afterN)})`,
       )
     }
+    if (!Number.isFinite(intervalMs) || intervalMs < 0) {
+      throw new RangeError(
+        `BatchedFlush: intervalMs must be a finite number >= 0 (got ${String(intervalMs)})`,
+      )
+    }
     this.#mirror = mirror
     this.#bridge = bridge
     this.afterN = afterN
+    this.intervalMs = intervalMs
+    this.#timer = timer
   }
 
   /** Number of commits currently buffered (un-flushed). */
@@ -579,11 +633,63 @@ export class BatchedFlush {
   enqueue(input: BatchCommitInput, baseNow: number): void {
     if (this.#buffer.length === 0) {
       this.#pendingBaseNow = baseNow
+      // C.3 PR 2 — arm the time-based trigger on the FIRST buffered
+      // commit. Prevents arbitrary flush latency when the commit rate
+      // is below `afterN / intervalMs` (option-c doc §2.2 + surprise
+      // #3: the 60 Hz × N=100 1.67 s latency makes time-based flush
+      // non-optional). `intervalMs === 0` disables it.
+      if (this.intervalMs > 0) {
+        this.#armTimer()
+      }
     }
     this.#buffer.push(input)
     if (this.#buffer.length >= this.afterN) {
       this.flush()
     }
+  }
+
+  /**
+   * C.3 PR 2 — schedule the interval flush. Cancels any prior handle
+   * first (defensive — `enqueue` only arms on an empty buffer so this
+   * is a single-armed invariant, but a future caller path must not
+   * leak overlapping timers).
+   */
+  #armTimer(): void {
+    this.#cancelTimer()
+    this.#timerHandle = this.#timer.schedule(() => {
+      this.#timerHandle = undefined
+      // The timer fires on the macrotask AFTER the buffering commits;
+      // `flush()` is a no-op if a count/manual flush already drained
+      // the buffer, so the time trigger is safe to fire unconditionally.
+      this.flush()
+    }, this.intervalMs)
+  }
+
+  /** C.3 PR 2 — cancel the in-flight interval timer, if any. */
+  #cancelTimer(): void {
+    if (this.#timerHandle !== undefined) {
+      this.#timer.cancel(this.#timerHandle)
+      this.#timerHandle = undefined
+    }
+  }
+
+  /**
+   * C.3 PR 2 — `true` when a time-based flush is currently armed.
+   * Exposed for tests and the C.3 PR 3 implicit-flush callers (which
+   * must cancel a pending timer when they force a synchronous flush).
+   */
+  get timerArmed(): boolean {
+    return this.#timerHandle !== undefined
+  }
+
+  /**
+   * C.3 PR 2 — release the interval timer without flushing. Called by
+   * the C.3 PR 3 dispose path; idempotent. Does NOT drain the buffer
+   * (a caller that needs the bytes on the wire calls {@link flush}
+   * first — the implicit-flush wiring in C.3 PR 3 does exactly that).
+   */
+  cancelTimer(): void {
+    this.#cancelTimer()
   }
 
   /**
@@ -596,6 +702,10 @@ export class BatchedFlush {
    * fire is the JS engine's job (Answer C — NOT batched here).
    */
   flush(): Commit[] {
+    // C.3 PR 2 — a count/manual/implicit flush supersedes a pending
+    // time trigger; cancel it so a stale timer can't double-flush an
+    // already-drained (or freshly re-buffered) window.
+    this.#cancelTimer()
     if (this.#buffer.length === 0) return []
     const batch = this.#buffer.splice(0, this.#buffer.length)
     const baseNow = this.#pendingBaseNow ?? (this.#mirror.now as unknown as number)
@@ -847,6 +957,30 @@ class WasmBackend implements BackendEngine {
    */
   __getBatchedFlushForTests(): BatchedFlush | undefined {
     return this.#batchedFlush
+  }
+
+  /**
+   * C.3 PR 2 (#1501) — manual flush escape hatch (option-c doc §2.2).
+   *
+   * Forces any buffered shadow commits across the WASM wire NOW. The
+   * adopter calls this before navigation / before `snapshot()` / in
+   * tests when they need the wire bytes to land synchronously rather
+   * than waiting for the count or time trigger.
+   *
+   * A no-op (returns `[]`) when no `BatchedFlush` queue is installed
+   * (the default until C.4 wires it through `createCausl`) or when the
+   * buffer is empty — so adopters can always call `backend.flush()`
+   * safely regardless of configuration.
+   *
+   * Returns the projected `Commit[]` the flush produced (empty when
+   * nothing was buffered). This does NOT re-fire subscribers — under
+   * Answer C subscriber dispatch already ran synchronously per commit
+   * in the JS engine (option-c doc §4.2 choice (i)); the flush only
+   * reconciles the WASM-side wire/mirror state.
+   */
+  flush(): Commit[] {
+    if (this.#batchedFlush === undefined) return []
+    return this.#batchedFlush.flush()
   }
 
   /**

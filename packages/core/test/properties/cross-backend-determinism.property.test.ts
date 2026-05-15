@@ -1977,4 +1977,180 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
       })
     },
   )
+
+  // ===================================================================
+  // C.5 (#1508) — cross-backend determinism gate fires PER-FLUSH, not
+  // per-commit, on the WASM mirror.
+  //
+  // Option (c) batched-commit boundary scaffolding (epic #1493). Per
+  // `docs/epic-1483/option-c-batched-boundary.md` §4.2 (cost of
+  // choice (i)): the gate's Phase-G assertion (per-commit on the
+  // WASM-side mirror) needs a minor adjustment to compare
+  // batched-aggregate state at the FLUSH boundary rather than
+  // per-commit state. This is the one-PR test-harness change the doc
+  // names — NOT a SPEC amendment (§4.3 §15.3 preserved verbatim).
+  //
+  // The F-marshal.5 1000-trial × 0-byte-difference proof carries
+  // forward by construction: a single Vec<Action> of N actions
+  // produces the same end-state as N single-action envelopes via
+  // transition_phased's loop body (pinned Rust-side by C.1's unit
+  // tests at N=1/10/100/312). This cell asserts that property at the
+  // JS marshal/projection boundary too: after a flush of N buffered
+  // commits, the batched WASM-mirror state is byte-identical to the
+  // per-commit JS-engine SSOT state.
+  //
+  // The WASM-mirror analog in Phase-1 is a SECOND pure-TS graph the
+  // commit_batch bridge replays the batch's actions through (no real
+  // wasm artifact ships at Phase-1 — the cross-backend gate's whole
+  // discipline). Byte-identity of the SSOT graph and the
+  // per-flush-reconciled mirror IS the determinism property.
+  //
+  // **No adopter-visible perf change at v1.x** — this is a
+  // determinism (byte-identity) gate, which is BLOCKING and stays
+  // green. C.6's bench probes are measurement, not blocking. The JS
+  // engine remains SSOT; scaffolding for a future v2.x Rust-SSOT
+  // cutover.
+  // ===================================================================
+  describe('C.5 (#1508) — per-flush batched-commit determinism gate', () => {
+    /**
+     * Trials per N axis. The SPEC §15.2 / #1063 cross-backend floor
+     * is 1000; we hold it here so the per-flush adjustment inherits
+     * the same 1000-trial × 0-byte-difference discipline the
+     * per-commit gate had.
+     */
+    const TRIALS = 1000
+
+    /** The C.1 batch sizes (option-c doc §6 acceptance axes). */
+    const N_AXES = [1, 10, 100, 312] as const
+
+    for (const N of N_AXES) {
+      it(`batched flush at N=${N} is byte-identical to per-commit SSOT × ${TRIALS} trials`, async () => {
+        const { WasmStateMirror, BatchedFlush } = await import(
+          '../../wasm/index.js'
+        )
+
+        for (let trial = 0; trial < TRIALS; trial++) {
+          // ---- JS-engine SSOT: per-commit, the authoritative side. --
+          const ssot = createCausl({
+            name: `c5:n${N}:t${trial}`,
+          })
+          const aSsot = ssot.input('a', 0)
+          const bSsot = ssot.input('b', 0)
+
+          // ---- WASM-mirror analog: a SECOND TS graph the
+          // commit_batch bridge replays the batch through, updated
+          // ONCE per flush (not per commit). --------------------------
+          const mirrorGraph = createCausl({
+            name: `c5:n${N}:t${trial}`, // same graphId — #685 discipline
+          })
+          const aMirror = mirrorGraph.input('a', 0)
+          const bMirror = mirrorGraph.input('b', 0)
+
+          // The per-commit write script, populated as the SSOT commits
+          // below. Declared BEFORE the bridge so the commit_batch
+          // closure (invoked synchronously from queue.enqueue's flush,
+          // by which point every replayed action's write is already
+          // recorded) closes over the live array.
+          const ssotWrites: { a: number; b: number }[] = []
+
+          // commit_batch bridge: replays the buffered batch's actions
+          // through the mirror graph (the Phase-1 WASM-side analog),
+          // returning the BatchBridgeResult shape applyBatchBridgeResult
+          // expects. Replays per-action so the mirror advances exactly
+          // as N single commits would (the C.1 byte-identity property
+          // at the bridge boundary).
+          const bridge = {
+            commit(_s: unknown, _a: unknown): unknown {
+              throw new Error('C.5 cell uses the batched extern only')
+            },
+            commit_batch(state: unknown, actions: unknown): unknown {
+              const s = state as { now: number }
+              const acts = actions as {
+                intent: string
+                writes: number[]
+              }[]
+              const commits: {
+                time: number
+                intent: string
+                changedNodes: number[]
+              }[] = []
+              acts.forEach((act, i) => {
+                // Replay each action as a real commit on the mirror
+                // graph so its IR advances byte-identically to the
+                // SSOT's per-commit IR.
+                mirrorGraph.commit(act.intent, (tx) => {
+                  // The batch encodes writes as slot ids 0 (a) / 1 (b)
+                  // — the marshaler's sorted-ascending wire shape.
+                  if (act.writes.includes(0)) tx.set(aMirror, ssotWrites[i]!.a)
+                  if (act.writes.includes(1)) tx.set(bMirror, ssotWrites[i]!.b)
+                })
+                commits.push({
+                  time: s.now + i + 1,
+                  intent: act.intent,
+                  changedNodes: act.writes,
+                })
+              })
+              return {
+                state: { now: s.now + acts.length, inputs: [] },
+                commit:
+                  commits[commits.length - 1] ??
+                  { time: s.now, intent: 'batch-empty', changedNodes: [] },
+                commits,
+                events: [],
+              }
+            },
+          }
+
+          const mirror = new WasmStateMirror()
+          mirror.registerInput('a' as never, { idx: 0, gen: 0 })
+          mirror.registerInput('b' as never, { idx: 1, gen: 0 })
+          const queue = new BatchedFlush(mirror, bridge, N, 0)
+
+          // Deterministic per-trial command script: N commits, each
+          // writing a (and b on every 3rd). The SSOT commits
+          // per-commit; the queue buffers and flushes per-N.
+          for (let i = 0; i < N; i++) {
+            const av = (trial + i) % 97
+            const bv = (trial * 2 + i) % 89
+            ssotWrites.push({ a: av, b: bv })
+            // JS SSOT — per-commit (the authoritative tick).
+            ssot.commit(`c${i}`, (tx) => {
+              tx.set(aSsot, av)
+              if (i % 3 === 0) tx.set(bSsot, bv)
+            })
+            // Buffer the shadow commit. With afterN=N the queue
+            // flushes exactly once, at i === N-1 — the FLUSH boundary.
+            queue.enqueue(
+              {
+                intent: `c${i}`,
+                writes: new Map<never, never>(
+                  (i % 3 === 0
+                    ? [
+                        ['a', av],
+                        ['b', bv],
+                      ]
+                    : [['a', av]]) as never,
+                ),
+              },
+              i, // base clock for the first buffered commit
+            )
+          }
+
+          // The queue MUST have flushed exactly at the count
+          // threshold (no residual buffered commits at the boundary).
+          expect(queue.pending).toBe(0)
+          // Shadow path MUST be byte-clean — the C.5 blocking gate.
+          expect(queue.error).toBeUndefined()
+
+          // PER-FLUSH byte-identity: after the single flush of N
+          // buffered commits, the mirror graph's IR is byte-identical
+          // to the per-commit JS-engine SSOT graph's IR. This is the
+          // option-c doc §3.1 property at the flush boundary — a
+          // single Vec<Action> of N actions == N single envelopes.
+          expect(ir(mirrorGraph)).toBe(ir(ssot))
+          expect(mirrorGraph.now).toBe(ssot.now)
+        }
+      }, /* 1000 trials × N commits × 2 graphs */ 120_000)
+    }
+  })
 })

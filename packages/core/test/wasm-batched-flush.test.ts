@@ -424,3 +424,116 @@ describe('WasmBackend.flush() — C.3 PR 2 manual escape hatch', () => {
     expect(q.pending).toBe(0)
   })
 })
+
+describe('WasmBackend — C.3 PR 3 implicit flush on snapshot()/dispose()', () => {
+  async function primedBackend(graphName: string): Promise<{
+    backend: {
+      snapshot(): unknown
+      dispose(n: NodeId): void
+      __registerInput(id: NodeId, h: unknown): void
+      __graph(): { input(id: string, v: unknown): unknown }
+    }
+    queue: BatchedFlush
+    bridge: ReturnType<typeof recordingBatchBridge>
+    timer: ReturnType<typeof fakeTimer>
+  }> {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      graphName,
+    ) as unknown as {
+      snapshot(): unknown
+      dispose(n: NodeId): void
+      __primeBatchedFlushForTests(q: BatchedFlush): void
+      __registerInput(id: NodeId, h: unknown): void
+      __graph(): { input(id: string, v: unknown): unknown }
+    }
+    const m = mirrorWith('a')
+    const bridge = recordingBatchBridge()
+    const timer = fakeTimer()
+    // afterN large + intervalMs>0 so commits buffer (don't auto-flush)
+    // and the implicit flush is the thing that drains them.
+    const queue = new BatchedFlush(m, bridge, 100, 16, timer)
+    backend.__primeBatchedFlushForTests(queue)
+    return { backend, queue, bridge, timer }
+  }
+
+  it('snapshot() forces a flush of the buffered shadow window', async () => {
+    const { backend, queue, bridge } = await primedBackend(
+      'causl.test.c3pr3.snap',
+    )
+    queue.enqueue(
+      { intent: 'buffered', writes: new Map([['a' as NodeId, 1]]) },
+      0,
+    )
+    expect(queue.pending).toBe(1)
+    expect(bridge.batchCalls).toHaveLength(0)
+
+    backend.snapshot()
+    // snapshot() implicitly flushed the window before reading.
+    expect(queue.pending).toBe(0)
+    expect(bridge.batchCalls).toHaveLength(1)
+  })
+
+  it('snapshot() also disarms a pending time trigger', async () => {
+    const { backend, queue } = await primedBackend(
+      'causl.test.c3pr3.snaptimer',
+    )
+    queue.enqueue(
+      { intent: 'buffered', writes: new Map([['a' as NodeId, 1]]) },
+      0,
+    )
+    expect(queue.timerArmed).toBe(true)
+    backend.snapshot()
+    expect(queue.timerArmed).toBe(false)
+  })
+
+  it('dispose() forces a flush BEFORE freeing the slot', async () => {
+    const { backend, queue, bridge } = await primedBackend(
+      'causl.test.c3pr3.disp',
+    )
+    // Register an input on the wrapped graph so dispose() resolves a
+    // handle and reaches the implicit-flush path.
+    const g = backend.__graph()
+    const node = g.input('disp-node', 0)
+    backend.__registerInput('disp-node' as NodeId, node)
+
+    queue.enqueue(
+      { intent: 'pre-dispose', writes: new Map([['a' as NodeId, 9]]) },
+      0,
+    )
+    expect(queue.pending).toBe(1)
+    backend.dispose('disp-node' as NodeId)
+    // Window flushed before the slot was freed.
+    expect(queue.pending).toBe(0)
+    expect(bridge.batchCalls).toHaveLength(1)
+  })
+
+  it('snapshot()/dispose() are no-ops on the flush path when no queue is primed', async () => {
+    const wasmMod = await import('../wasm/index.js')
+    const backend = wasmMod.__createWasmBackendSyncForTests(
+      'causl.test.c3pr3.noqueue',
+    ) as unknown as {
+      snapshot(): unknown
+      dispose(n: NodeId): void
+    }
+    // No queue primed — snapshot()/dispose() must not throw and must
+    // behave exactly as the pre-C.3 path (TS graph SSOT unchanged).
+    expect(() => backend.snapshot()).not.toThrow()
+    expect(() => backend.dispose('never-registered' as NodeId)).not.toThrow()
+  })
+
+  it('implicit flush is idempotent — a second snapshot() with empty buffer is a no-op', async () => {
+    const { backend, queue, bridge } = await primedBackend(
+      'causl.test.c3pr3.idem',
+    )
+    queue.enqueue(
+      { intent: 'x', writes: new Map([['a' as NodeId, 1]]) },
+      0,
+    )
+    backend.snapshot()
+    expect(bridge.batchCalls).toHaveLength(1)
+    // Second snapshot with nothing buffered — no extra flush.
+    backend.snapshot()
+    expect(bridge.batchCalls).toHaveLength(1)
+  })
+})

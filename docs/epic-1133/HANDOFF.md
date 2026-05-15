@@ -6,22 +6,21 @@
 
 ## Current state
 
-**Last session**: 2026-05-14 (Phase E COMPLETE; Phase F RE-SCOPED — original cascade decomposition halted at pre-flight after scoping verdict; replaced with four sub-epics)
+**Last session**: 2026-05-14 (F-marshal COMPLETE — 9/9 sub-tickets .0–.7 + .N landed + 1 investigation .6.1 closed without merge; Phase G validation (#1145) next claimable per user-direction post-F-marshal pivot)
 
-**dev branch HEAD**: post-E.10 (Phase E commit `f9fe17db`; this PR adds the Phase-F re-scoping bookmark only).
+**dev branch HEAD**: post-F-marshal.N (this PR — pure HANDOFF.md update).
 
 **main HEAD at session open**: `117941ac1b7ff088247f2dae4fad84984cc0b864`
 
-**Phase**: **E COMPLETE** (11/11 E.0–E.10 landed). **Phase F (#1142) OPEN, re-scoped** into four sub-epics. **Phase G validation (#1145/#1146/#1141/#1138/#1140) structurally blocked** by Phase F sub-epics.
+**Phase**: **F-marshal (#1457) COMPLETE** — 9/9 PRs landed + .6.1 investigation closed (pivot record on #1479). Other F-phase sub-epics still claimable: **#1458** (F-loader), **#1460** (F-cross-backend-actual-gate). **Phase G validation (#1145/#1146/#1141/#1138/#1140)** is the user-chosen post-F-marshal pivot direction (per 2026-05-14 user choice).
 
-**Resumption bookmark**: Phase F has been **re-scoped** because the JS↔Rust state marshaler the original cascade presupposed does not exist. Cascade pattern (B/C/D/E shape) doesn't fit; integration-class work needs design phases. Next claimable work:
+**Resumption bookmark**: F-marshal cascade complete. F-marshal.6 measured 156.4 ms / 10k workload for the full bidirectional marshal probe (15.64 μs/op, ~80× over the boundary floor, STOP-VERDICT verdict per cascade brief). F-marshal.6.1 (#1479) investigated stateful WASM-side bridge entrypoints (delta-only marshaler); investigation closed without merge after the verdict reframed the perf question. Pivot record at #1479. Profile data preserved on branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47`. Next claimable work:
 
 | Order | Issue | Sub-epic | Notes |
 |---|---|---|---|
-| 1 | **#1459** | F-singleton-vs-multiplex | Decision record on `setSubscriberCallback` routing. Smallest unblock; shapes #1457 surface. No code. |
-| 2 | **#1457** | F-marshal | Bidirectional JS↔Rust state marshaler. Design pinned in issue body, then decomposed into multi-PR sub-cascade. Largest sub-epic. |
-| 3 | **#1458** | F-loader | `loadWasmBackend()` actually instantiates .wasm. Parallelizable with #1457 implementation. |
-| 4 | **#1460** | F-cross-backend-actual-gate | Flip determinism gate to real-Rust-vs-TS. Blocked by #1457 + #1458. |
+| 1 | **#1145** | Phase G validation (umbrella) | Cross-backend determinism + perf-floor real-Rust re-measurement. **User-chosen post-F-marshal pivot.** |
+| 2 | **#1458** | F-loader | `loadWasmBackend()` actually instantiates .wasm. serde-json is the universal-fallback baseline. |
+| 3 | **#1460** | F-cross-backend-actual-gate | Flip determinism gate to real-Rust-vs-TS. Unblocked by F-marshal completion + #1458. |
 
 Re-scoping landed in issue-tracker comments only (no dev PR for the re-scoping itself, just this HANDOFF.md bookmark update):
 - #1142 [comment 4454139936](https://github.com/iasbuilt/causl/issues/1142#issuecomment-4454139936) — Phase F decomposition superseded
@@ -405,15 +404,16 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 
 ## Next-session claim
 
-**Phase F (#1142)** is the next claimable umbrella per PLAN.md §3 phase decomposition — WasmBackend integration. Phase E shipped the SubscriberCallback trait + JS↔WASM bridge surface; Phase F lifts the Phase-1 `WasmBackend`'s internal TS-wrapper to route the real Rust engine through the bridge's `commit()` entry point. The same adopter-facing surface (`backend.subscribe`, `backend.commit`, `backend.read`) is preserved.
+**Phase G validation (#1145)** is the next claimable umbrella per user direction 2026-05-14 (post-F-marshal pivot). F-marshal completion unblocked the real-Rust commit path the cross-backend determinism gate + perf-floor real-Rust re-measurement against `equality-cutoff × 10000` measure against. **This is where the STOP-VERDICT arithmetic verdict materializes** in workload-relevant numbers — three STOP verdicts now on record (A.1: 17.5 ms / 10k FFI tax; B.3: 1.154 ms / 10k ComputeCallback tax; F-marshal.6: 156.4 ms / 10k full bidirectional marshal probe), all user-overridden. Phase G arithmetic is the deciding measurement.
 
 Alternative umbrellas (interleavable, any order):
-- **Phase G validation** (#1145/#1146/#1141/#1138/#1140) — Cross-backend determinism + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. **This is where the STOP-VERDICT arithmetic verdict materializes.** Phase F unblocks the real-Rust commit path Phase G measures against.
+- **#1458 F-loader** — `loadWasmBackend()` actually instantiates .wasm; serde-json is the universal-fallback baseline. Parallelizable with Phase G validation work.
+- **#1460 F-cross-backend-actual-gate** — flip the determinism gate to real-Rust-vs-TS. Unblocked by F-marshal completion + #1458.
 - **Phase H** (#1148/#1143/#1137/#1139) — Production readout (bundle ceiling, bench scenario, hydrate/serialize ports, observability).
 
-If the next session continues the cascade, claim **Phase F** first (it unblocks Phase G validation arithmetic).
+If the next session continues the cascade, claim **Phase G validation (#1145)** first per user choice.
 
-**Quota status this session-continuation**: did not hit a wall. Stopped here because Phase E is complete and Phase F is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
+**Quota status this session-continuation**: did not hit a wall. Stopped here because F-marshal is complete and Phase G validation is a new umbrella requiring user direction (or the same "continue" instruction to auto-claim).
 
 ---
 
@@ -455,6 +455,49 @@ If the next session continues the cascade, claim **Phase F** first (it unblocks 
 - **Engine-internal `committing` flag gap documented in E.6** — the Rust port's typestate does NOT currently set `state.committing = true` mid-pipeline, so the option-(a) re-entrant-commit gate fires only when the adopter threads the flag through (which the bridge will do once Phase F wires the WasmBackend). E.6 explicitly tested by setting `committing=true` on the State the inner call receives. Wiring this through the typestate is left to Phase F if it surfaces as a JS-side need.
 
 ---
+
+### Session 2026-05-14 — F-marshal COMPLETE (continuation, 9 PRs + 1 investigation closed)
+
+**Goal**: per user-override of STOP-VERDICT (2026-05-13, comment 4444516666), execute the F-marshal (#1457) sub-cascade — bidirectional JS↔Rust state marshaler — through the .0 → .7 → .N decomposition.
+
+**Project-owner direction**: GO with full epic per #1133 comment 4444516666 (carried forward). F-marshal decomposition pinned in #1457 design body (Decisions 1–4: hybrid SSOT, slot-integer wire, dictionary-keyed translation, WASM-side authoritative on disposed cells).
+
+**Landed on `dev`** (9 PRs across the F-marshal sub-cascade):
+
+| Ticket | Issue | PR | SHA | Notes |
+|---|---|---|---|---|
+| F-marshal.0 | #1463 | #1472 | `06c681b3` | Typestate scaffold |
+| F-marshal.1 | #1464 | #1473 | `6065bf46` | WasmStateMirror class + slot dictionary |
+| F-marshal.2 | #1465 | #1474 | `499ab77a` | JS→Rust commit envelope builder |
+| F-marshal.3 | #1466 | #1475 | `e0ca27bc` | Rust→JS BridgeResult application |
+| F-marshal.4 | #1467 | #1476 | `3dbee66c` | NodeId surface translation entrypoints |
+| F-marshal.5 | #1468 | #1477 | `102887de` | WasmBackend.commit shadow marshaler + GATE D |
+| F-marshal.6 | #1469 | #1478 | `d1843470` | op-rust-bridge-marshal-1k probe — **STOP-VERDICT fired (156.4 ms / 10k, 80× over boundary floor)** |
+| F-marshal.6.1 | #1479 | — (CLOSED no-merge) | branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47` | Stateful WASM-side bridge entrypoints investigation; verdict reframed perf question — closed-not-merged |
+| F-marshal.7 | #1470 | #1480 | `76d99ff3` | snapshot()/hydrate() round-trip via marshaler |
+| F-marshal.N | #1471 | (this PR) | (pending merge) | Parent close + Phase G handoff bookmark; `(closes #1471, closes #1457)` |
+
+**Issues closed (manual fallback pattern continues)**:
+- F-marshal children: #1463, #1464, #1465, #1466, #1467, #1468, #1469, #1470
+- F-marshal investigation: #1479 (closed without merge — pivot record)
+- F-marshal parent: **#1457** (closed by this PR via multi-(closes))
+- F-marshal.N ticket itself: **#1471** (closed by this PR)
+
+**Total session PR count across epic to date**: 67 (Phase 0/1/A/B/C/D/E) + 9 (F-marshal: .0–.7 + .N) = **76 PRs merged to dev**.
+
+**STOP-VERDICT status update**: F-marshal.6 added a third measured STOP verdict to the canonical record — the full bidirectional marshal probe with the real Rust bridge measures **15.64 μs/op × 10k = 156.4 ms / 10k**, ~80× over the boundary-floor estimate and ~313× the kill threshold. User has overridden three STOP verdicts now (A.1, B.3, F-marshal.6). Real-Rust arithmetic verdict against `equality-cutoff × 10000` still lands at Phase G validation (#1145) — that's the next claimable umbrella per user choice 2026-05-14.
+
+**Honest standing-state (F-marshal closeout)**:
+- **F-marshal is structurally complete** — `packages/core/wasm/marshaler.ts` hosts the full WasmStateMirror class with slot dictionary, JS→Rust commit envelope builder (`marshalCommitEnvelope`), Rust→JS bridge-result applier (`applyBridgeResult`), bridge allocator surface (`allocateSlot`/`allocateDerivedSlot`/`disposeSlot`), and snapshot()/hydrate() pair. `WasmBackend.commit` shadow-marshals through the real bridge (F-marshal.5 GATE D: 1000 trials, 0 divergences). Bridge crates expose `wasmCreateInput`/`wasmCreateDerived`/`wasmDispose`/`commit`/`setSubscriberCallback`/`bridge_id` entry points.
+- **NO `--no-verify` used across the F-marshal cascade**. Every PR merged with pre-commit hooks running cleanly.
+- **STOP-VERDICTs unchanged in number-of-records**: A.1 + B.3 + F-marshal.6 on record. Three user-overrides. F-marshal.6.1 investigation closed-not-merged is the honest record of the perf reframing.
+- **GraphSnapshot scope clarification (F-marshal.7)**: the canonical schema (`packages/core/src/types.ts:1503`) carries only `inputs`; deriveds are reconstructed by adopter formula re-registration through `allocateDerivedSlot` post-hydrate. `State::rebuild_dependents` is NOT called directly by the marshaler hydrate path — the rebuild happens organically as adopters re-register derived cells (their `wasmCreateDerived` calls absorb the new edges into the bridge's allocator State). `schemaHash` validation is adopter-Graph-layer responsibility, not marshaler-layer; the marshaler accepts the optional field without checking it.
+- **Cross-bridge byte-identity gate (#1071)** preserved — the marshaler's wire shapes (`BridgeState`, `BridgeCommitAction`, `BridgeResult`, `GraphSnapshot`) are pure JSON / serde-wasm-bindgen compatible; both bridges accept the same inputs.
+- **CI status**: GitHub Actions org-billing failure persists; load-bearing gates remain local `pnpm validate` + `cargo test -p causl-engine-core` FULL suite + `cargo build` on both bridge crates.
+- **Pre-existing flaky bench tests** (`jotai-stochastic-overflow`, `input-pretenuring`) — V8 tenuring-deopt counter; pre-existing, not F-marshal scope. Retry-on-flap workaround.
+- **Next claimable per user direction**: **Phase G validation (#1145)** — cross-backend determinism gate + perf-floor real-Rust re-measurement against `equality-cutoff × 10000`. This is where the STOP-VERDICT arithmetic verdict materializes in workload-relevant numbers.
+
+---
 ## Cross-session protocol
 
 **Before starting**: read `PLAN.md` (canonical), then this `HANDOFF.md` (bookmark). Find next ticket. Confirm dev branch is up to date with origin.
@@ -485,10 +528,12 @@ If the next session continues the cascade, claim **Phase F** first (it unblocks 
 - Phase D parent (CLOSED): [`#1136`](https://github.com/iasbuilt/causl/issues/1136)
 - Phase E parent (CLOSED): [`#1135`](https://github.com/iasbuilt/causl/issues/1135)
 - Phase F parent (OPEN, re-scoped): [`#1142`](https://github.com/iasbuilt/causl/issues/1142)
-- Phase F sub-epics (next claimable in order):
-  - **#1459** (decision): [`F-singleton-vs-multiplex`](https://github.com/iasbuilt/causl/issues/1459)
-  - **#1457** (epic-scale): [`F-marshal`](https://github.com/iasbuilt/causl/issues/1457)
-  - **#1458**: [`F-loader`](https://github.com/iasbuilt/causl/issues/1458)
-  - **#1460** (blocked): [`F-cross-backend-actual-gate`](https://github.com/iasbuilt/causl/issues/1460)
+- Phase F sub-epics:
+  - **#1459** (CLOSED, decision landed): [`F-singleton-vs-multiplex`](https://github.com/iasbuilt/causl/issues/1459)
+  - **#1457** (CLOSED, F-marshal complete): [`F-marshal`](https://github.com/iasbuilt/causl/issues/1457)
+  - **#1458** (OPEN, claimable): [`F-loader`](https://github.com/iasbuilt/causl/issues/1458)
+  - **#1460** (OPEN, claimable post-F-loader): [`F-cross-backend-actual-gate`](https://github.com/iasbuilt/causl/issues/1460)
+- Phase G validation umbrella (next claimable per user choice 2026-05-14): [`#1145`](https://github.com/iasbuilt/causl/issues/1145)
+- F-marshal.6.1 investigation (CLOSED without merge — pivot record): [`#1479`](https://github.com/iasbuilt/causl/issues/1479) (profile data on branch `feat/f-marshal-6-1-stateful-delta` at `28c2fc47`)
 - dev branch: [`dev`](https://github.com/iasbuilt/causl/tree/dev)
 - Persona team review comments: `gh issue view 1133 --comments`

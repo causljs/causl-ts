@@ -3410,6 +3410,107 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    */
   interface DerivedRollbackHolder {
     map: Map<NodeId, DerivedRollback> | undefined
+    // #1549 H-A2 — scalar single-slot fast path. The overwhelmingly
+    // common rollback-bearing commit recomputes exactly ONE derived
+    // (the `op-derived-rollback` / single-derived adopter shape). For
+    // that shape the `Map` wrapper + internal hash table + the
+    // `for…of` iterator the catch arm spins up is pure overhead: one
+    // entry never needs a hash map. The first recorded derived row
+    // lives in (`singleId`, `single`) with `map` still `undefined`;
+    // a SECOND distinct id promotes the scalar into `map` (preserving
+    // the first), restoring the pre-#1549 general path EXACTLY. This
+    // is a specialisation that is equivalent by construction: the set
+    // of recorded ids and their captured records are identical to
+    // what the always-Map path produced; only the container differs.
+    // Mirrors the existing #1010 `{ map: undefined }` lazy-mint
+    // discipline (one slot deeper). All reads/writes go through the
+    // `recordDerivedRollback` / `forEachDerivedRollback` /
+    // `derivedRollbackIsEmpty` helpers so both `commitInternal` and
+    // `simulate` (which share `recomputeAffected`) stay correct
+    // without either catch arm re-implementing the scalar/Map seam.
+    singleId: NodeId | undefined
+    single: DerivedRollback | undefined
+  }
+
+  /**
+   * Record a derived's pre-recompute rollback row into the holder,
+   * idempotently (a second record for the same id is a no-op — the
+   * FIRST capture is the genuine pre-commit byte-state, mirroring the
+   * pre-#1549 `if (!m.has(id))` guard). Lazily allocates the inner
+   * `Map` ONLY when a second distinct id arrives (#1549 H-A2); the
+   * single-derived shape never touches a Map. Equivalent by
+   * construction to the pre-#1549 `let m = rollback.map; if (m ===
+   * undefined) m = new Map(); if (!m.has(id)) m.set(id, makeRec())`.
+   *
+   * @internal
+   */
+  function recordDerivedRollback(
+    h: DerivedRollbackHolder,
+    id: NodeId,
+    makeRec: () => DerivedRollback,
+  ): void {
+    const m = h.map
+    if (m !== undefined) {
+      // Already promoted to Map — same dedup + set as pre-#1549.
+      if (!m.has(id)) m.set(id, makeRec())
+      return
+    }
+    if (h.singleId === undefined) {
+      // First derived rollback row this commit — scalar slot, no Map.
+      h.singleId = id
+      h.single = makeRec()
+      return
+    }
+    if (h.singleId === id) {
+      // Re-entry for the same id — idempotent, FIRST capture wins
+      // (exactly the `if (!m.has(id))` semantics).
+      return
+    }
+    // Second distinct id — promote: mint the Map, migrate the
+    // scalar's first row (preserving insertion order: scalar id
+    // first, then this id), then fall back to the general path for
+    // all subsequent rows. Post-promotion state is byte-identical to
+    // what the always-Map path would hold at this point.
+    const promoted = new Map<NodeId, DerivedRollback>()
+    promoted.set(h.singleId, h.single!)
+    promoted.set(id, makeRec())
+    h.map = promoted
+    h.singleId = undefined
+    h.single = undefined
+  }
+
+  /**
+   * `true` iff no derived rollback row was recorded this commit
+   * (neither the scalar slot nor the Map). Replaces the pre-#1549
+   * `derivedRollback.map !== undefined` catch-arm guard so the
+   * single-derived fast path (Map still `undefined`, scalar
+   * populated) is not mistaken for "nothing to roll back". (#1549)
+   *
+   * @internal
+   */
+  function derivedRollbackIsEmpty(h: DerivedRollbackHolder): boolean {
+    return h.map === undefined && h.singleId === undefined
+  }
+
+  /**
+   * Walk every recorded derived rollback row in insertion order —
+   * the scalar slot first (if populated), then every Map entry. The
+   * union is exactly the set of ids the pre-#1549 always-Map path
+   * iterated, each visited once, in the same order. Used by BOTH the
+   * `commitInternal` and `simulate` catch arms so the scalar/Map seam
+   * is implemented once. (#1549 H-A2)
+   *
+   * @internal
+   */
+  function forEachDerivedRollback(
+    h: DerivedRollbackHolder,
+    fn: (id: NodeId, prior: DerivedRollback) => void,
+  ): void {
+    if (h.singleId !== undefined) fn(h.singleId, h.single!)
+    const m = h.map
+    if (m !== undefined) {
+      for (const [id, prior] of m) fn(id, prior)
+    }
   }
 
   function recomputeAffected(
@@ -3649,22 +3750,22 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         // recompute that needs to record pre-state. Commits whose
         // Phase D short-circuits (e.g. `changedInputIds.length === 0`
         // gate at the call site) never enter this loop, so the
-        // `new Map()` allocation is amortised away on the empty-
-        // recompute fast path. Subsequent iterations within the same
-        // pass re-use the same Map (no re-mint).
-        let m = rollback.map
-        if (m === undefined) {
-          m = new Map<NodeId, DerivedRollback>()
-          rollback.map = m
-        }
-        if (!m.has(id)) {
-          m.set(id, {
-            value: e.value,
-            deps: e.deps,
-            computed: e.computed,
-            lastTime: e.lastTime,
-          })
-        }
+        // allocation is amortised away on the empty-recompute fast
+        // path. #1549 H-A2 — `recordDerivedRollback` extends this one
+        // slot deeper: the single-derived shape (the dominant
+        // rollback-bearing commit) stays in a scalar slot and never
+        // mints a Map at all; a second distinct id promotes to the
+        // Map, restoring the pre-#1549 path exactly. The capture is
+        // deferred behind `makeRec` so it is only materialised for an
+        // id that is actually recorded (mirrors the `if (!m.has(id))`
+        // dedup — re-entry for an already-recorded id keeps the FIRST,
+        // genuine pre-commit byte-state).
+        recordDerivedRollback(rollback, id, () => ({
+          value: e.value,
+          deps: e.deps,
+          computed: e.computed,
+          lastTime: e.lastTime,
+        }))
       }
       computeDerived(e)
       processedThisPass.add(id)
@@ -3764,27 +3865,23 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // recompute that needs to record pre-state. Phase F.5 is gated
       // on `commitMetadataIds.size > 0` at the call site, so adopters
       // who never opted into commit-metadata deriveds never enter
-      // this helper at all. Adopters who did, but whose Phase D
-      // already populated the holder, reuse the existing Map.
-      let m = rollback.map
-      if (m === undefined) {
-        m = new Map<NodeId, DerivedRollback>()
-        rollback.map = m
-      }
-      if (!m.has(id)) {
-        m.set(id, {
-          value: e.value,
-          // #703 Win 3 — capture by reference; `setDeps` swaps the
-          // reference rather than mutating in place, so the prior
-          // set stays a valid pre-recompute snapshot for the
-          // commit() catch-arm rollback. Same invariant as Phase D's
-          // capture site above; same property-test gate
-          // (`test/properties/setDeps-immutability.test.ts`).
-          deps: e.deps,
-          computed: e.computed,
-          lastTime: e.lastTime,
-        })
-      }
+      // this helper at all. #1549 H-A2 — routed through the shared
+      // `recordDerivedRollback` so a single-derived commit (Phase D
+      // recorded zero or one row) keeps the scalar fast path; if
+      // Phase D already promoted to the Map this re-uses it. Same
+      // FIRST-capture-wins dedup as the pre-#1549 `if (!m.has(id))`.
+      recordDerivedRollback(rollback, id, () => ({
+        value: e.value,
+        // #703 Win 3 — capture by reference; `setDeps` swaps the
+        // reference rather than mutating in place, so the prior
+        // set stays a valid pre-recompute snapshot for the
+        // commit() catch-arm rollback. Same invariant as Phase D's
+        // capture site above; same property-test gate
+        // (`test/properties/setDeps-immutability.test.ts`).
+        deps: e.deps,
+        computed: e.computed,
+        lastTime: e.lastTime,
+      }))
       computeDerived(e)
       if (!wasComputed || !Object.is(before, e.value)) {
         changedThisPhase.push(id)
@@ -4164,6 +4261,28 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     const inputRollbackEntries: InputEntry[] = []
     const inputRollbackPriorValues: unknown[] = []
     const inputRollbackPriorLastWrite: GraphTime[] = []
+    // #1549 H-A1 — single-input rollback scalar fast path. The
+    // dominant rollback-bearing commit shape (`op-commit-rollback`,
+    // and the no-throw arm of EVERY single-`tx.set` commit:
+    // linear-chain, equality-cutoff, op-commit-noderived, …) has
+    // exactly ONE distinct slow-path input and ZERO Phase A.5
+    // `#994`-fast-path rows. For that shape the pre-#1549 Phase B
+    // did a `length =`-grow → index-fill → `length =`-trim churn on
+    // THREE arrays every commit just to hold one row. These three
+    // scalars hold that single row instead; the three arrays are
+    // never touched (stay length 0). `fastInputRollbackActive`
+    // arms the Phase C.5 stamp + catch-arm restore to consult the
+    // scalar. This is a specialisation that is equivalent by
+    // construction: the scalar holds byte-exactly what array slot 0
+    // would have held, and the row's side effects (`e.value = v`,
+    // `inputSerializableMemo.delete`, `changedInputIds.push`) are
+    // performed identically. The general array path is left intact
+    // as the correctness fallback for every other shape (multi-
+    // input, any Phase A.5 `#994` fast-path row, `simulate`).
+    let fastInputRollbackActive = false
+    let fastInputRollbackEntry: InputEntry | undefined
+    let fastInputRollbackPriorValue: unknown
+    let fastInputRollbackPriorLastWrite: GraphTime = 0
     const beforeNow = now
     // `txAlive` enforces that `tx.set` cannot escape the synchronous `run` body.
     let txAlive = true
@@ -4286,8 +4405,14 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // not even call into the recompute helpers when their gates fail,
     // so the holder stays in its zero-allocation state and the catch
     // arm's `for` loop iterates an empty source. Mirrors #985's
-    // firedManyGroups lazy-mint pattern.
-    const derivedRollback: DerivedRollbackHolder = { map: undefined }
+    // firedManyGroups lazy-mint pattern. #1549 H-A2 — `singleId` /
+    // `single` start undefined too: the single-derived rollback shape
+    // fills the scalar slot and never mints the inner Map.
+    const derivedRollback: DerivedRollbackHolder = {
+      map: undefined,
+      singleId: undefined,
+      single: undefined,
+    }
     // Phase F / F.4 rollback bookkeeping: with Phase F.5
     // (commit-metadata recompute) inserted *after* the bounded history
     // append and the commitLog refresh, a throw escaping F.5 must roll
@@ -4408,7 +4533,41 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // mutated this commit.
       const stagedLen = stagedWriteEntries.length
       let rollbackLen = inputRollbackEntries.length
-      if (stagedLen > 0) {
+      // #1549 H-A1 — single-input rollback scalar fast path. Narrow
+      // shape: exactly one distinct slow-path staged input AND zero
+      // existing rollback rows (i.e. no Phase A.5 `#994`-fast-path
+      // survivor — `rollbackLen === 0` means `inputRollbackEntries`
+      // is provably empty). For that shape the general arm below
+      // would: `cap = 1`; grow 3 arrays to length 1; run a 1-trip
+      // loop that either (a) `!Object.is` → fills slot 0 with
+      // `(e, e.value, e.lastWriteTime)`, mutates `e.value = v`,
+      // `inputSerializableMemo.delete(e.id)`, `changedInputIds.push`,
+      // `rollbackLen = 1`; or (b) `Object.is` (equal-value collapse)
+      // → no row, `rollbackLen` stays 0; then trim to `rollbackLen`.
+      // This block performs EXACTLY those side effects against the
+      // closure scalars and leaves the three arrays untouched
+      // (length 0). It is equivalent by construction — the scalar
+      // holds byte-identically what array slot 0 would have held,
+      // and the Object.is collapse case is reproduced verbatim. The
+      // Phase C.5 stamp and catch-arm restore consult
+      // `fastInputRollbackActive`; the array-length-0 walks they
+      // also run are correct no-ops (nothing landed in the arrays).
+      if (stagedLen === 1 && rollbackLen === 0) {
+        const e = stagedWriteEntries[0]!
+        const v = stagedWriteValues[0]
+        if (!Object.is(e.value, v)) {
+          fastInputRollbackActive = true
+          fastInputRollbackEntry = e
+          fastInputRollbackPriorValue = e.value
+          fastInputRollbackPriorLastWrite = e.lastWriteTime
+          e.value = v
+          // Identical side effects to the general arm's row body.
+          inputSerializableMemo.delete(e.id)
+          changedInputIds.push(e.id)
+        }
+        // else: equal-value collapse — exactly the general arm's
+        // `Object.is` skip (no row, no mutation, arrays stay empty).
+      } else if (stagedLen > 0) {
         // Pre-size the rollback triple to its post-#993 worst case.
         // `Array.prototype.length =` extends with holes, but every
         // slot 0..rollbackLen-1 is already populated by Phase A.5
@@ -4466,6 +4625,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // `changedInputIds`, but holding the resolved InputEntry
       // reference) so the per-iteration `entries.get(id)` and
       // `kind === 'input'` recheck disappear.
+      // #1549 H-A1 — when the single-input scalar fast path is
+      // active the three arrays are empty (this loop is a 0-trip
+      // no-op); the one row lives in the scalar. Stamping it here
+      // is byte-identical to what `inputRollbackEntries[0]!.
+      // lastWriteTime = now` would have done in the general arm
+      // (the scalar entry IS the same `InputEntry` reference).
+      if (fastInputRollbackActive) {
+        fastInputRollbackEntry!.lastWriteTime = now
+      }
       for (let i = 0, n = inputRollbackEntries.length; i < n; i++) {
         inputRollbackEntries[i]!.lastWriteTime = now
       }
@@ -4797,6 +4965,21 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // their pre-commit state without re-resolving the entry. The
       // atomicity contract is unchanged: every byte Phase B mutated
       // is restored on throw.
+      // #1549 H-A1 — when the single-input scalar fast path is
+      // active the arrays are empty (loop below is a 0-trip no-op);
+      // the one mutated cell's pre-commit `(value, lastWriteTime)`
+      // lives in the scalars. Restoring it here — value, serializable
+      // memo invalidation, lastWriteTime — is byte-identical to the
+      // general arm's row body for slot 0, so SPEC §3 Theorem 3
+      // (atomicity: post-abort state byte-identical to pre-tx) holds
+      // exactly as on the general path. Order matches the general
+      // arm: value, then memo.delete, then lastWriteTime.
+      if (fastInputRollbackActive) {
+        const e = fastInputRollbackEntry!
+        e.value = fastInputRollbackPriorValue
+        inputSerializableMemo.delete(e.id)
+        e.lastWriteTime = fastInputRollbackPriorLastWrite
+      }
       for (let i = 0, n = inputRollbackEntries.length; i < n; i++) {
         const e = inputRollbackEntries[i]!
         e.value = inputRollbackPriorValues[i]
@@ -4825,13 +5008,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // Derived rollback: any node Phase D or Phase F.5 started
       // recomputing has its value, deps, computed flag, and lastTime
       // restored. `setDeps` keeps the reverse-dep adjacency map
-      // (`dependents`) consistent. #1010 — the inner Map is lazy-
-      // minted; if no derived ever entered recompute (Phase D
+      // (`dependents`) consistent. #1010 — the rollback store is
+      // lazy-minted; if no derived ever entered recompute (Phase D
       // short-circuited on empty-input gate or the empty-derivation
-      // fast path), `derivedRollback.map` is still `undefined` and
-      // the walk is skipped entirely.
-      if (derivedRollback.map !== undefined) {
-        for (const [id, prior] of derivedRollback.map) {
+      // fast path), it stays empty and the walk is skipped entirely.
+      // #1549 H-A2 — `forEachDerivedRollback` walks the scalar slot
+      // (single-derived shape — no Map allocated/iterated) then the
+      // Map; the restore body per row is byte-identical to pre-#1549.
+      if (!derivedRollbackIsEmpty(derivedRollback)) {
+        forEachDerivedRollback(derivedRollback, (id, prior) => {
           const e = entries.get(id)
           if (e && e.kind === 'derived') {
             e.value = prior.value
@@ -4849,7 +5034,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
             e.computed = prior.computed
             e.lastTime = prior.lastTime
           }
-        }
+        })
       }
       // Phase F / F.4 rollback (#452): only meaningful when at least
       // one commit-metadata derived is registered, because that is
@@ -5091,8 +5276,16 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // always unconditionally rolls back, so the finally arm walks
     // `derivedRollback.map` only when a Phase D recompute actually
     // populated it. A simulate that mutates only inputs (no derived
-    // dependents) skips the Map allocation entirely.
-    const derivedRollback: DerivedRollbackHolder = { map: undefined }
+    // dependents) skips the Map allocation entirely. #1549 H-A2 —
+    // `simulate` shares `recomputeAffected` with `commitInternal`, so
+    // its holder carries the same scalar slots; its catch arm reads
+    // them via the shared `forEachDerivedRollback` helper (below) so
+    // the scalar/Map seam is implemented once, not duplicated here.
+    const derivedRollback: DerivedRollbackHolder = {
+      map: undefined,
+      singleId: undefined,
+      single: undefined,
+    }
 
     let prediction: { c: Commit; derivedDiff: NodeId[] } | null = null
     let predictedError: unknown = null
@@ -5246,11 +5439,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
         inputSerializableMemo.delete(e.id)
         e.lastWriteTime = inputRollbackPriorLastWrite[i]!
       }
-      // #1010 — walk `derivedRollback.map` only when Phase D
+      // #1010 — walk the derived rollback store only when Phase D
       // populated it; a simulate with no derived recompute never
-      // allocated the inner Map and this entire branch no-ops.
-      if (derivedRollback.map !== undefined) {
-        for (const [id, prior] of derivedRollback.map) {
+      // recorded a row and this entire branch no-ops. #1549 H-A2 —
+      // `simulate` shares `recomputeAffected` (hence the same scalar/
+      // Map holder shape) with `commitInternal`, so it reads via the
+      // shared `forEachDerivedRollback`; the per-row restore is
+      // byte-identical to the pre-#1549 `for…of map` body.
+      if (!derivedRollbackIsEmpty(derivedRollback)) {
+        forEachDerivedRollback(derivedRollback, (id, prior) => {
           const e = entries.get(id)
           if (e && e.kind === 'derived') {
             e.value = prior.value
@@ -5261,7 +5458,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
             e.computed = prior.computed
             e.lastTime = prior.lastTime
           }
-        }
+        })
       }
       now = beforeNow
       txAlive = false

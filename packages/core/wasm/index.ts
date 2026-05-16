@@ -359,6 +359,27 @@ export const DEFAULT_WASM_ENGINE_MODE: WasmEngineMode = 'js-ssot'
 export const RUST_SSOT_DEFAULT_AFTER_N = 312
 
 /**
+ * V2.5 (#1544) — the consecutive-divergence threshold K at which an
+ * `engine: 'rust-ssot'` graph **sticky-downgrades to `'js-ssot'`**
+ * for the remainder of its lifetime (Decision 6 tier 2, V2-DESIGN
+ * §6).
+ *
+ * Pinned at **`1` (fail-safe)** per the V2-DESIGN §6 proposal: the
+ * JS engine is always correct (it is the synchronous per-commit SSOT
+ * — V2-DESIGN §1.2), so the very FIRST per-flush byte-divergence is
+ * sufficient evidence to permanently stop trusting the Rust
+ * post-state for that graph. There is no benefit to tolerating a
+ * second divergence — a single divergence is already a true
+ * determinism correctness signal (the V2.4 NO-GO condition); K=1
+ * minimises the window in which a divergent Rust post-state could
+ * reach the WASM-side mirror.
+ *
+ * Named as a constant so the V2.5 acceptance test and the
+ * `BatchedFlush` downgrade logic reference one source of truth.
+ */
+export const STICKY_DOWNGRADE_K = 1
+
+/**
  * Concurrent-safe module-level cache: multiple callers racing
  * `loadWasmBackend()` share one compile.
  *
@@ -510,6 +531,59 @@ export class WasmBackendUnavailableError extends Error {
         `pin backend: 'js' or use the default auto path which stays on the TS engine.`,
     )
     this.name = 'WasmBackendUnavailableError'
+  }
+}
+
+/**
+ * V2.5 (#1544) — the stable structured-error `code` constant the
+ * Decision 6 tier-2 sticky downgrade emits ONCE when an
+ * `engine: 'rust-ssot'` graph permanently falls back to `'js-ssot'`
+ * after a per-flush byte-divergence.
+ *
+ * Mirrors the {@link WasmBackendUnavailableError} `readonly code =
+ * '...' as const` dispatch pattern the SPEC §17.6 host-tier fallback
+ * contract already uses (CONSTRAINTS §1a row): adopters branch on
+ * `error.code === 'CAUSL_RUST_SSOT_DOWNGRADED'` to observe that a
+ * graph self-demoted off the Rust SSOT. The downgrade is FAIL-SAFE
+ * and LOSSLESS — the JS engine returned the canonical adopter-facing
+ * `Commit` synchronously all along (V2-DESIGN §1.2 / Decision 6), so
+ * the error is informational, never thrown to the adopter's
+ * `commit()` path.
+ */
+export const RUST_SSOT_DOWNGRADE_ERROR_CODE =
+  'CAUSL_RUST_SSOT_DOWNGRADED' as const
+
+/**
+ * V2.5 (#1544) — Decision 6 tier 2 structured error. Recorded ONCE
+ * into the #1493 C.5 `BatchedFlush.#error` seam (NOT thrown to the
+ * adopter) on the first per-flush byte-divergence under
+ * `engine: 'rust-ssot'`, at which point the graph **sticky-downgrades
+ * to `'js-ssot'`** for the remainder of its lifetime (proposed K=1
+ * fail-safe — the JS engine is always correct, so one divergence is
+ * sufficient to permanently stop trusting the Rust post-state).
+ *
+ * Carries the stable {@link RUST_SSOT_DOWNGRADE_ERROR_CODE} so an
+ * adopter's structured-error surface can dispatch on it exactly like
+ * the §17.6 `WasmBackendUnavailableError` `code` contract. No data
+ * loss: the JS engine's post-state is the authority and is already
+ * complete (V2-DESIGN §6).
+ */
+export class RustSsotDowngradedError extends Error {
+  readonly code = RUST_SSOT_DOWNGRADE_ERROR_CODE
+  constructor(divergenceDetail: string) {
+    super(
+      `@causl/core/wasm: engine: 'rust-ssot' graph sticky-downgraded to ` +
+        `'js-ssot' (Decision 6 tier 2, K=1 fail-safe) after a per-flush ` +
+        `byte-divergence. No further Rust promotion will be attempted for ` +
+        `this graph's lifetime; the JS engine remains the canonical ` +
+        `authority and the adopter-facing commit()/read()/subscribe() ` +
+        `results were the JS engine's all along (V2-DESIGN §1.2 / §6 — ` +
+        `the downgrade is FAIL-SAFE and LOSSLESS). To clear: omit ` +
+        `engine (or pass 'js-ssot') — Decision 6 tier 3 is a runtime ` +
+        `config flip, no redeploy (V2-DESIGN §2.2 default-off ` +
+        `byte-identity).\n${divergenceDetail}`,
+    )
+    this.name = 'RustSsotDowngradedError'
   }
 }
 
@@ -833,6 +907,31 @@ export class BatchedFlush {
   #divergedFlushCount = 0
 
   /**
+   * V2.5 (#1544) — Decision 6 tier 2 consecutive-divergence counter.
+   * Bumped on each diverging flush, reset to `0` on each promoting
+   * flush. When it reaches {@link STICKY_DOWNGRADE_K} the graph
+   * sticky-downgrades (proposed K=1 fail-safe — the very first
+   * divergence is sufficient because the JS engine is always
+   * correct). Stays `0` for the entire lifetime of a default
+   * `js-ssot` queue (the compare path is never entered).
+   */
+  #consecutiveDivergences = 0
+
+  /**
+   * V2.5 (#1544) — Decision 6 tier 2 STICKY flag. Once `true`, this
+   * queue permanently behaves as `js-ssot` for the remainder of the
+   * graph's lifetime: no further compare, no further promotion
+   * attempt (fail-safe — the JS engine is always correct). Set ONCE
+   * when {@link #consecutiveDivergences} reaches
+   * {@link STICKY_DOWNGRADE_K}; never cleared (the adopter clears it
+   * via the Decision 6 tier 3 runtime config flip — omit `engine` —
+   * which constructs a fresh queue). Stays `false` forever under
+   * default `js-ssot` and under a non-diverging `rust-ssot` graph
+   * (the V2.1/V2.2/V2.4 invariants are byte-unaffected).
+   */
+  #stickyDowngraded = false
+
+  /**
    * The `mirror.now` value the NEXT flush's envelope must start from
    * (the pre-batch clock). Set when the first commit is buffered so
    * the batch envelope's `state.now` matches what the SSOT TS engine
@@ -939,6 +1038,25 @@ export class BatchedFlush {
   }
 
   /**
+   * V2.5 (#1544) — Decision 6 tier 2: `true` once this `rust-ssot`
+   * queue has permanently sticky-downgraded to `'js-ssot'` after
+   * {@link STICKY_DOWNGRADE_K} consecutive byte-divergences. Once
+   * `true` the compare/promote path is never re-entered for the
+   * graph's lifetime (fail-safe — the JS engine is always correct);
+   * subsequent flushes behave byte-identically to default `js-ssot`.
+   * Stays `false` forever under default `js-ssot` and under a
+   * non-diverging `rust-ssot` graph (the V2.1/V2.2/V2.4 invariants
+   * are byte-unaffected).
+   *
+   * @internal Diagnostic seam; the adopter observes the downgrade via
+   *   the {@link RustSsotDowngradedError} `code` on the C.5 `error`
+   *   seam, not this boolean.
+   */
+  get stickyDowngraded(): boolean {
+    return this.#stickyDowngraded
+  }
+
+  /**
    * Captured flush error, if the most recent flush threw. Cleared on
    * the next successful flush. The cross-backend determinism gate
    * asserts this stays `undefined`.
@@ -984,7 +1102,18 @@ export class BatchedFlush {
     // rust-ssot (the `enqueue` caller gates this). The `#jsCommits`
     // length tracks `#buffer` 1:1 for the window so the compare can
     // index Rust record `i` against JS commit `i`.
-    if (this.#engineMode === 'rust-ssot' && jsCommit !== undefined) {
+    //
+    // V2.5 (#1544) — Decision 6 tier 2: STOP buffering JS commits once
+    // the graph has sticky-downgraded. The flush path is unarmed from
+    // that point (it behaves as `js-ssot`) so the parallel buffer
+    // would only grow unbounded with never-drained entries — gating
+    // the push here keeps the downgraded queue's memory profile
+    // byte-identical to a true `js-ssot` queue.
+    if (
+      this.#engineMode === 'rust-ssot' &&
+      !this.#stickyDowngraded &&
+      jsCommit !== undefined
+    ) {
       this.#jsCommits.push(jsCommit)
     }
     if (this.#buffer.length >= this.afterN) {
@@ -1052,15 +1181,25 @@ export class BatchedFlush {
     this.#cancelTimer()
     if (this.#buffer.length === 0) return []
     const batch = this.#buffer.splice(0, this.#buffer.length)
+    // V2.5 (#1544) — Decision 6 tier 2: once this rust-ssot queue has
+    // sticky-downgraded, it behaves byte-identically to `js-ssot` for
+    // the remainder of the graph's lifetime (fail-safe — the JS
+    // engine is always correct). `armed` is the single predicate the
+    // whole flush body branches on so the downgrade short-circuits
+    // BOTH the jsCommits drain and the compare/promote path; under
+    // default `js-ssot` it is false from construction (V2.1 #1522
+    // byte-identity invariant unchanged).
+    const armed =
+      this.#engineMode === 'rust-ssot' && !this.#stickyDowngraded
     // V2.2 (#1530) — drain the parallel JS-engine canonical Commit
-    // buffer for THIS window. Empty under default `js-ssot` (the
-    // `enqueue` caller never populated it) so this splice is a no-op
-    // and the compare path below is never entered — the load-bearing
-    // V2.1 #1522 default-off byte-identity invariant is preserved.
-    const jsCommits =
-      this.#engineMode === 'rust-ssot'
-        ? this.#jsCommits.splice(0, this.#jsCommits.length)
-        : []
+    // buffer for THIS window. Empty under default `js-ssot` AND once
+    // sticky-downgraded (the `enqueue` caller stops populating it) so
+    // this splice is a no-op and the compare path below is never
+    // entered — the load-bearing V2.1 #1522 default-off byte-identity
+    // invariant is preserved.
+    const jsCommits = armed
+      ? this.#jsCommits.splice(0, this.#jsCommits.length)
+      : []
     const baseNow = this.#pendingBaseNow ?? (this.#mirror.now as unknown as number)
     this.#pendingBaseNow = undefined
     try {
@@ -1076,7 +1215,7 @@ export class BatchedFlush {
           envelope.actions,
         ) as BatchBridgeResult
 
-        if (this.#engineMode !== 'rust-ssot') {
+        if (!armed) {
           // Default `js-ssot` — UNCHANGED from V2.1/V2.2 (the
           // load-bearing #1522 byte-identity invariant). The Rust
           // post-state is applied to the shadow mirror exactly as
@@ -1084,8 +1223,18 @@ export class BatchedFlush {
           // for the C.3 implicit-flush callers. No compare, no
           // promote, no rollback — zero overhead, byte-identical to
           // dev `8405b783`. Promotion is rust-ssot-only.
+          //
+          // V2.5 (#1544) — a sticky-downgraded rust-ssot graph
+          // ALSO takes this path (Decision 6 tier 2): after the
+          // first divergence it is permanently demoted to `js-ssot`
+          // behaviour (fail-safe). The `RustSsotDowngradedError` was
+          // already recorded ONCE into `#error` on the downgrading
+          // flush; subsequent flushes must NOT clear it (the adopter
+          // can still observe the sticky downgrade via `error.code`)
+          // — so a downgraded queue preserves `#error` instead of
+          // resetting it.
           const commits = applyBatchBridgeResult(this.#mirror, result)
-          this.#error = undefined
+          if (!this.#stickyDowngraded) this.#error = undefined
           return commits
         }
 
@@ -1130,6 +1279,15 @@ export class BatchedFlush {
           // canonical for the mirror (it is already applied; honour
           // it). This is the load-bearing flip.
           this.#promotedFlushCount += 1
+          // V2.5 (#1544) — Decision 6 tier 2: a promoting flush is
+          // evidence the Rust post-state is again byte-identical, so
+          // reset the CONSECUTIVE-divergence counter. (`armed` cannot
+          // be true once `#stickyDowngraded` is set, so a promoting
+          // flush never occurs after a sticky downgrade — the reset
+          // is for the pre-K-threshold transient-divergence case the
+          // K>1 design would have used; with K=1 fail-safe it is
+          // simply correct bookkeeping.)
+          this.#consecutiveDivergences = 0
           this.#error = undefined
           return commits
         }
@@ -1144,16 +1302,36 @@ export class BatchedFlush {
         this.#mirror.inputs.clear()
         for (const [k, v] of preInputs) this.#mirror.inputs.set(k, v)
         this.#divergedFlushCount += 1
-        this.#error = new Error(
+        const divergenceDetail =
           `V2.4 promote byte-compare DIVERGED — Rust commit_batch ` +
-            `projection != JS-engine canonical Commit[]; the Rust ` +
-            `post-state was NOT promoted, the mirror was rolled back ` +
-            `to the JS-engine-equivalent post-state (Decision 6 tier ` +
-            `1). This is a NO-GO (a true determinism correctness ` +
-            `bug — the V2.4 GO/NO-GO gate HALTS here).\n` +
-            `JS   = ${cmp.js}\n` +
-            `RUST = ${cmp.rust}`,
-        )
+          `projection != JS-engine canonical Commit[]; the Rust ` +
+          `post-state was NOT promoted, the mirror was rolled back ` +
+          `to the JS-engine-equivalent post-state (Decision 6 tier ` +
+          `1). This is a NO-GO (a true determinism correctness ` +
+          `bug — the V2.4 GO/NO-GO gate HALTS here).\n` +
+          `JS   = ${cmp.js}\n` +
+          `RUST = ${cmp.rust}`
+
+        // V2.5 (#1544) — Decision 6 tier 2 sticky downgrade. Bump the
+        // CONSECUTIVE-divergence counter; on reaching
+        // STICKY_DOWNGRADE_K (=1, fail-safe) the graph permanently
+        // sticky-downgrades to `js-ssot` for the remainder of its
+        // lifetime and the structured `RustSsotDowngradedError`
+        // (carrying the stable `RUST_SSOT_DOWNGRADE_ERROR_CODE`) is
+        // recorded ONCE into the C.5 `#error` seam (NOT thrown to the
+        // adopter — the JS engine is SSOT and already returned its
+        // Commit synchronously, V2-DESIGN §1.2). Subsequent flushes
+        // take the (now-unarmed) `js-ssot` path and preserve this
+        // `#error` so `error.code` stays observable.
+        this.#consecutiveDivergences += 1
+        if (this.#consecutiveDivergences >= STICKY_DOWNGRADE_K) {
+          this.#stickyDowngraded = true
+          this.#error = new RustSsotDowngradedError(divergenceDetail)
+        } else {
+          // K>1 transient-divergence case (unreachable with the K=1
+          // fail-safe default; kept correct for a future K override).
+          this.#error = new Error(divergenceDetail)
+        }
         // The adopter-facing return is empty: the JS engine already
         // returned the SSOT Commit synchronously; the mirror was NOT
         // promoted, so there is no Rust projection to surface.
@@ -1176,7 +1354,11 @@ export class BatchedFlush {
         ) as BridgeResult
         commits.push(applyBridgeResult(this.#mirror, singleResult))
       }
-      this.#error = undefined
+      // V2.5 (#1544) — preserve a recorded sticky-downgrade error so
+      // `error.code` stays observable even on a no-batched-extern
+      // bridge after the downgrade fired (consistent with the armed
+      // path's preservation contract).
+      if (!this.#stickyDowngraded) this.#error = undefined
       return commits
     } catch (err) {
       // Shadow-path failure — captured for the determinism gate.

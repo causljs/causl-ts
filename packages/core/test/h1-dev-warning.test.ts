@@ -229,13 +229,27 @@ describe('H1 hazard dev-only warning (#1155 / #1241, SPEC §15.1)', () => {
    * `NODE_ENV=production` keeps the warning suppressed even when the
    * adopter holds the read across the commit boundary AND tries to
    * opt in. The H1 apparatus is tree-shaken in production builds
-   * (#1241 fix C); at runtime the `process.env.NODE_ENV` guard in
-   * `read()` short-circuits the WeakRef push regardless of the
-   * opt-in flag.
+   * (#1241 fix C).
+   *
+   * #1549 Part B — the NODE_ENV gate is now read ONCE at module
+   * load (`src/env.ts`'s `NODE_ENV_IS_PRODUCTION`, imported by the
+   * engine), NOT per-read, to remove a ~93 ns/read `process.env`
+   * host-object access that was ~95% of `op-read-cold`'s cost. This
+   * matches the universal `const __DEV__` idiom and #1241's own
+   * build-time-constant model: "production" is established at
+   * build/import time, not by mutating `process.env` at runtime.
+   * So this test re-imports the engine under
+   * `NODE_ENV=production` via `vi.resetModules()` + dynamic import
+   * (the standard vitest pattern for an import-time env constant),
+   * which is the honest analogue of a real production bundle.
    */
-  it('does NOT warn in production (NODE_ENV=production), even with opt-in', () => {
+  it('does NOT warn in production (NODE_ENV=production), even with opt-in', async () => {
+    vi.resetModules()
     process.env.NODE_ENV = 'production'
-    const g = createCausl({ enableH1HazardWarning: true })
+    const { createCausl: createCauslProd } = await import(
+      '../src/index.js'
+    )
+    const g = createCauslProd({ enableH1HazardWarning: true })
     const a = g.input('a', 0)
     const obj = g.derived('obj', (get) => ({ a: get(a) }))
     const held = g.read(obj)

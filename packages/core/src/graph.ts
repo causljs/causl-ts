@@ -89,38 +89,14 @@ import type {
   ValueMap,
 } from './types.js'
 
-/**
- * Ambient `process` declaration for the bundler-replacement
- * `process.env.NODE_ENV !== 'production'` literal gate used by the
- * H1 hazard tree-shake region (#1241 fix C). `@causl/core`'s
- * tsconfig does not include `@types/node` so the type-checker
- * cannot resolve `process` from the Node global; this minimal
- * declaration is the smallest patch that makes the literal
- * expression typecheck.
- *
- * @remarks
- * Critically, the declaration is a literal `const` rather than a
- * `function` or method access. esbuild / terser / webpack
- * substitute the literal string `'production'` for
- * `process.env.NODE_ENV` at build time (the
- * `DefinePlugin` / `--define:process.env.NODE_ENV='"production"'`
- * conventions every major JS bundler honours) iff the access is
- * shape `process.env.NODE_ENV` exactly. Any indirection
- * (`globalThis.process`, `import.meta.env`, etc.) defeats the
- * substitution. So this file uses the bare `process.env.NODE_ENV`
- * form and relies on this declaration to keep the TS source
- * typecheck-clean for adopters whose tsconfig does not include
- * `@types/node`.
- *
- * At runtime (when no bundler substitution has happened — e.g.
- * Vitest's source-on-the-fly transform), `process.env.NODE_ENV`
- * is the actual Node global, which is always present in the
- * supported runtime matrix (Node ≥ 22 per
- * `package.json#engines.node`). In browser bundles consumers go
- * through a bundler that substitutes `process.env.NODE_ENV`
- * anyway.
- */
-declare const process: { env: { NODE_ENV?: string } }
+// #1241 / #1549 Part B — the NODE_ENV production gate. `process.env`
+// is read EXACTLY ONCE, in `./env.ts`, and the cached boolean is
+// imported here. The engine MUST NOT read `process.env.NODE_ENV`
+// directly anywhere — see `./env.ts` for the full rationale (the
+// per-read `process.env` host-object access was ~95% of
+// `op-read-cold`'s cost; the const-of-literal form still preserves
+// #1241's bundler DCE via cross-module const propagation).
+import { NODE_ENV_IS_PRODUCTION } from './env.js'
 
 /**
  * Internal alias used everywhere the engine needs to refer to a node whose value
@@ -1054,15 +1030,15 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     readonly nodeId: NodeId
     readonly capturedAt: GraphTime
   }
-  // #1241 — wrap the H1 hazard allocation in a literal
-  // `process.env.NODE_ENV !== 'production'` block so esbuild / terser
-  // can DCE the WeakRef apparatus in production builds. The bundler
-  // sees the constant `'production'` after substitution; the dead
-  // branch (and every helper closure inside) drops from the prod
-  // bundle. In dev / test the branch evaluates to true, and the
-  // tracker materialises iff `enableH1HazardWarning` opted in.
+  // #1241 — gate the H1 hazard allocation on the hoisted
+  // `NODE_ENV_IS_PRODUCTION` const so esbuild / terser DCE the
+  // WeakRef apparatus in production builds (the const folds to
+  // `true` after bundler substitution and propagates here; the dead
+  // branch and every helper closure inside drop from the prod
+  // bundle). In dev / test it is `false`, and the tracker
+  // materialises iff `enableH1HazardWarning` opted in.
   let h1HazardTrack: H1HazardRecord[] | null = null
-  if (process.env.NODE_ENV !== 'production') {
+  if (!NODE_ENV_IS_PRODUCTION) {
     h1HazardTrack = enableH1HazardWarning ? [] : null
   }
   // #1241 — adapter-exemption seam. Canonical `@causl/react` hooks
@@ -3154,9 +3130,11 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     //
     //   1. `h1HazardTrack === null` → instrumentation disabled
     //      (production default, or adopter did not opt in). Single
-    //      null check, no work. The whole branch is wrapped in
-    //      `process.env.NODE_ENV !== 'production'` so esbuild /
-    //      terser DCE the body in prod (#1241 fix C).
+    //      null check, no work. The whole branch is wrapped in the
+    //      hoisted `!NODE_ENV_IS_PRODUCTION` const so esbuild /
+    //      terser still DCE the body in prod (#1241 fix C) WITHOUT
+    //      the per-read `process.env` host-object access that
+    //      dominated `op-read-cold` (#1549 Part B).
     //   2. `activeReadTracker !== null` → we are inside a tracking
     //      projection (subscribeReads). Those reads are engine-
     //      internal and re-run on every commit by construction, so
@@ -3173,7 +3151,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     //      desynchronise from a backing cell because they ARE the
     //      cell value — H1 only bites when the engine's
     //      structurally-cloned object reference identity changes.
-    if (process.env.NODE_ENV !== 'production') {
+    if (!NODE_ENV_IS_PRODUCTION) {
       if (
         h1HazardTrack !== null &&
         activeReadTracker === null &&
@@ -3221,7 +3199,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * cap plus one commit's burst.
    */
   function pruneH1HazardTrack(): void {
-    if (process.env.NODE_ENV === 'production') return
+    if (NODE_ENV_IS_PRODUCTION) return
     if (h1HazardTrack === null) return
     let write = 0
     for (let read = 0; read < h1HazardTrack.length; read++) {
@@ -3244,7 +3222,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * "still-current" and produce no warnings.
    */
   function checkH1HazardOnCommit(): void {
-    if (process.env.NODE_ENV === 'production') return
+    if (NODE_ENV_IS_PRODUCTION) return
     if (h1HazardTrack === null || h1HazardTrack.length === 0) return
     let write = 0
     for (let read = 0; read < h1HazardTrack.length; read++) {
@@ -3293,7 +3271,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * @internal
    */
   function runInAdapterReadMode<T>(fn: () => T): T {
-    if (process.env.NODE_ENV === 'production') {
+    if (NODE_ENV_IS_PRODUCTION) {
       // In production the H1 apparatus is tree-shaken away; the
       // depth counter is a no-op and the helper degenerates to
       // calling `fn()` directly. Keeping the function reachable
@@ -4938,11 +4916,12 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
       // the desired behaviour: H1 hazards are scoped to commits
       // that actually advanced the clock.
       //
-      // #1241 — the dispatch is wrapped in
-      // `process.env.NODE_ENV !== 'production'` so esbuild /
-      // terser DCE both the call site AND the function body in
-      // prod bundles; the H1 apparatus drops entirely.
-      if (process.env.NODE_ENV !== 'production') {
+      // #1241 — the dispatch is gated on the hoisted
+      // `!NODE_ENV_IS_PRODUCTION` const so esbuild / terser DCE both
+      // the call site AND the function body in prod bundles (the
+      // const folds to `true` post-substitution and propagates
+      // here); the H1 apparatus drops entirely.
+      if (!NODE_ENV_IS_PRODUCTION) {
         if (h1HazardTrack !== null) checkH1HazardOnCommit()
       }
 

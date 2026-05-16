@@ -485,6 +485,136 @@ If you have a specific reason to exercise the batched wire path early
 `afterN` to your target window and use `backend.flush()` at
 quiescence boundaries. Otherwise, leave it unset.
 
+## 4a. The v2.x `engine: 'rust-ssot'` opt-in (epic #1515)
+
+> **Read this framing first — it is verbatim and load-bearing.**
+> `engine: 'rust-ssot'` delivers **ZERO adopter-visible performance
+> change at current WASM maturity**. It is **opt-in only and is NOT
+> the production default**, and it will **not** become the default
+> until a documented maturity tripwire clears (it has not). **The
+> #1133 median falsification STANDS — it is NOT refuted by v2.x.** If
+> you are looking for "make causl faster", this option is not it.
+
+### What it is
+
+Epic #1515 (the v2.x Rust-SSOT cutover) built — on top of the §4
+batched-flush scaffolding — a per-graph opt-in that promotes the
+Rust engine's post-state as canonical for the WASM-side mirror at
+each flush boundary, **after** a per-flush byte-compare against the
+always-on JS-engine shadow:
+
+```ts
+import { loadWasmBackend } from '@causl/core/wasm'
+
+const backend = await loadWasmBackend({
+  engine: 'rust-ssot', // opt-in; default is 'js-ssot'
+})
+```
+
+…or on the `backend: 'auto'` path, `createCausl({ backend: 'auto',
+engine: 'rust-ssot' })`. `engine: 'rust-ssot'` implies the
+batched-flush queue; if you do not also pass `batchedFlush`, v2.x
+installs the `afterN: 312` window (the #1484 §3 / C.6 ≤50 ns
+crossing-floor window) so the *crossing* tax is amortised — this
+does **not** amortise the *engine-exec* tax (see below).
+
+### What does NOT change (the contract you can rely on)
+
+`engine: 'rust-ssot'` preserves every adopter-facing contract
+verbatim (SPEC §19 V2-final "NO amendment" trail row; V2-DESIGN
+§5). The JS engine stays the **synchronous per-commit source of
+truth**: `commit()` still returns a frozen `Commit` synchronously,
+`graph.now` still advances exactly one tick per commit, subscribers
+still fire per-commit synchronously, `read()` still returns the JS
+engine's authoritative value. **Omitting `engine` (or passing
+`'js-ssot'`) is byte-identical to a default WASM graph** — the
+load-bearing V2.1 acceptance property (epic #1515). The opt-in is
+per-graph, additive, zero-codemod, zero-deprecation.
+
+### The honest performance picture
+
+`engine: 'rust-ssot'` does **not** make causl faster at current WASM
+maturity. The honest re-measurement
+(`docs/epic-1515/v2.3-rust-ssot-remeasure.md`) recorded:
+
+- **The Rust-engine-in-WASM per-commit execution cost is ~85× the
+  TS engine** (~17 μs vs ~0.2 μs; F-marshal.6.1 #1479 comment
+  4455257530) — *even with zero boundary crossing*. This is the
+  binding constraint. It is a property of *today's* WASM runtime (no
+  GC GA, limited baseline JIT, no SIMD on the hot path), **not** of
+  the bridge architecture. #1493's batching provably cannot amortise
+  it (batching amortises only the *crossing* tax, 1/N — the
+  engine-exec gap is downstream of every boundary optimisation).
+- **The #1133 median falsification STANDS / is NOT refuted.** Any
+  reader who comes away thinking "v2.x makes causl faster today" has
+  misread it.
+
+### The present value: large-tree GC-survival (#1525)
+
+What `engine: 'rust-ssot'` *does* deliver today is **large-tree
+GC-survival**, the present, non-maturity-gated axis the #1525 gate
+empirically confirmed on the real serde-wasm engine. On a 50k-node
+tree the real Rust-in-WASM engine survives where the TS-SSOT path
+GC-destabilises — the **43→1 natural-major-GC collapse**. The
+**corrected** #1525 figures (carried verbatim from the V2.3
+re-measure, narrowing the earlier synthetic #1518 numbers):
+
+- **p99.9 latency flattening is ~16.6×** — **not** the synthetic
+  ~437×.
+- the raw heap slope is **transient (serde marshal envelope), not
+  retained, and NOT ≈0** — **not** the synthetic ≈0.
+
+These narrowings are honest and do **not** weaken the #1133 /
+V2-DESIGN §0 framing one bit. GC-survival is a *robustness* property
+for very large trees, not a median-latency win.
+
+### When (not) to turn it on
+
+You generally should **not**, in production, today. Turn it on only
+if you are (a) validating the v2.x cutover in a staging harness, or
+(b) running a very large tree where the GC-survival axis matters
+more to you than median latency and you have measured your own
+workload. If a per-flush byte-divergence ever occurs, the graph
+**fail-safe sticky-downgrades to `js-ssot`** for its remaining
+lifetime (V2.5 Decision 6 tier 2) and surfaces a structured error
+you can dispatch on:
+
+```ts
+// V2.5 (#1544) — Decision 6 tier 2 structured-error code.
+if (err?.code === 'CAUSL_RUST_SSOT_DOWNGRADED') {
+  // This graph self-demoted off the Rust SSOT after a divergence.
+  // No data loss — the JS engine was the canonical authority all
+  // along (V2-DESIGN §1.2). Lossless, fail-safe.
+}
+```
+
+To roll back entirely (Decision 6 tier 3 — **free**, no redeploy):
+just omit `engine` (or pass `'js-ssot'`). It is a per-graph runtime
+config flip, byte-identical to a default WASM graph the moment the
+flag is gone.
+
+### The maturity tripwire (when it could become the default)
+
+Promotion of `engine: 'rust-ssot'` to the **production default** is
+a **separate, tripwire-gated, SPEC-amending future decision
+explicitly out of epic #1515's scope**. It becomes a *candidate*
+only when a **conjunctive** four-axis tripwire clears on one
+measurement run:
+
+| Axis | Threshold | Current |
+| --- | --- | --- |
+| **T1** Rust-in-WASM engine-exec vs TS | ≤ 3× | ~85× — **NOT cleared** (binding axis) |
+| **T2** WASM GC GA on SPEC §17.6 host floor | GA, unflagged | **NOT cleared** (browser-vendor timeline) |
+| **T3** C.5 determinism gate, Rust promoted | 1000 trials × 0 byte diffs | **GREEN** (🚦V2.4 GO verified) |
+| **T4** crossing tax @ N=312 | ≤ 50 ns/op | 50.1 ns/op — **clears** (informational; T1 binding) |
+
+T1 needs a **~28× WASM-runtime improvement** (85× → 3×) that no
+current runtime delta delivers. The full, re-runnable monitor is
+`docs/epic-1515/v2-final-tripwire-checklist.md` (a **manual**
+re-measurement checklist by design — the binding axis moves on the
+WASM-runtime-vendor calendar, not on causl's PR cycle). Until all
+four clear, `engine: 'rust-ssot'` stays opt-in only.
+
 ## 5. Where to read the host-tier matrix
 
 The authoritative host-tier compatibility matrix lives in two
@@ -511,7 +641,20 @@ README for the implementation detail.
 - SPEC §17.6 — the host-tier elaboration, feature-detection
   checklist, bundle-size impact, fall-through fallback.
 - SPEC §19 — the amendment trail rows for #690 (host-tier matrix)
-  and #1124 (read-reference identity, ratified via PR #1129).
+  and #1124 (read-reference identity, ratified via PR #1129), plus
+  the #1493 C.7 and the V2-final (#1546) "NO amendment" rows (v2.x
+  requires no SPEC amendment; the future promotion-to-default does).
+- `docs/epic-1515/V2-DESIGN.md` — the v2.x Rust-SSOT cutover design
+  pin (§0 honest framing, §3 the maturity tripwire, §6 the rollback
+  story).
+- `docs/epic-1515/v2.3-rust-ssot-remeasure.md` — the honest
+  re-measurement under `engine: 'rust-ssot'` (the ~85× T1 axis; the
+  corrected #1525 GC-survival figures).
+- `docs/epic-1515/v2-final-tripwire-checklist.md` — the manual,
+  re-runnable maturity-tripwire checklist (T1∧T2∧T3∧T4).
+- EPIC #1515 — the v2.x Rust-SSOT cutover (**OPEN**; tracks the
+  tripwire-gated promotion-to-default + child #1541). The #1133
+  falsification STANDS; `engine: 'rust-ssot'` is opt-in only.
 - `packages/core/wasm/README.md` — entry-point reference, bridge
   picker behaviour, bundler interop.
 - `docs/wasm-backend-adopter-audit.md` (#695, **merged**) — the

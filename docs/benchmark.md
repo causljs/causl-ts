@@ -13,7 +13,7 @@ Fair benchmarking between state libraries with different mutation semantics is h
 - **In-process microbenchmarks** measure the cost of state operations themselves: a commit, a derived recompute, a subscriber notification, an equality cutoff. Every library is loaded into the same Node.js process via dynamic import; every benchmark is run with [`tinybench`](https://github.com/tinylibs/tinybench) using a 200ms warm-up and a 1000-iteration sample, with the median reported and the noise floor recorded. No DOM, no React, no scheduler interference — just the engine doing what it claims to do.
 - **DOM-rendering benchmarks** measure end-to-end React mount and update cost using Playwright against a production build. Each library renders the same scenario component tree; the harness counts dropped frames at 60 Hz, measures wall time from `commit` (or equivalent mutation) to `requestIdleCallback` settling, and reports per-frame paint cost from the Chrome DevTools Protocol's `Performance.metrics`.
 
-Both layers run under the same Node version, the same `react@^18.3` (and a separate sweep on `react@19.0` once stable), the same machine class (Apple Silicon M-series for the `[TBD]` headline numbers; x64 Linux for the `[TBD]` reproduction in CI). Every library is loaded from npm at its latest stable release on the day the run was made, and the resolved versions are recorded in the JSON output. Source code for all benchmarks lives in [`packages/bench/`](https://github.com/iasbuilt/causl/tree/main/packages/bench), and the benchmark can be reproduced in Docker via `python tools/bench/run-bench.py`.
+Both layers run under the same Node version, the same `react@^18.3` (and a separate sweep on `react@19.0` once stable), the same machine class (Apple Silicon M-series for the `[TBD]` headline numbers; x64 Linux for the `[TBD]` reproduction in CI). Every library is loaded from npm at its latest stable release on the day the run was made, and the resolved versions are recorded in the JSON output. Source code for all benchmarks lives in [`packages/bench/`](https://github.com/iasbuilt/causl/tree/main/packages/bench), and the full 4-library + `causl-wasm` benchmark pipeline can be reproduced via `python tools/bench/run-bench.py` (the 4-library sweep runs in a pinned Docker image; see [Reproducer pipeline](#reproducer-pipeline--the-default-1552)).
 
 ## The Workloads
 
@@ -154,13 +154,44 @@ pnpm --filter @causl/bench exec tsx test/regen-baseline.ts
 git add packages/bench/fixtures/baseline.json
 ```
 
-Larger scales (1k / 10k / 100k) are not enforced at the unit-test layer — running the full 4 libs × 7 scenarios × 100k matrix on every PR is a denial-of-service attack on CI. Larger-scale regressions are caught by the comparative bench job (`tools/bench/run-bench.py`), whose output is committed under `benchmarks/results/`.
+Larger scales (1k / 10k / 100k) are not enforced at the unit-test layer — running the full 4 libs × 7 scenarios × 100k matrix on every PR is a denial-of-service attack on CI. Larger-scale regressions are caught by the comparative bench job (`tools/bench/run-bench.py`), whose dashboard refresh is committed to `causl-org/pages/benchmarks/history.json`.
+
+### Reproducer pipeline — the default (#1552)
+
+`tools/bench/run-bench.py` is a **multi-step pipeline orchestrator**. A bare invocation
+
+```
+python3 tools/bench/run-bench.py
+```
+
+runs, by default, ALL benchmarks for ALL libraries AND engines — **including `causl-wasm`** — and then refreshes the dashboard so a reload shows the latest data. The steps, in order:
+
+1. **`bench:report`** — the 4-library full default sweep (`causl-ts` / `jotai` / `redux-toolkit` / `mobx` × all SCENARIOS × scales ≤ 10k, `enforceQuiescentMachine()`). Writes `packages/bench/report/*` and self-appends one run to `packages/bench/report/benchmark_history.json`. This step runs inside the pinned Docker image (below) unless `--no-docker`.
+2. **`bench:cross-library-all`** — the REAL serde-wasm `causl-wasm` all-scenarios sweep (#1538 part-3). It is detached-capable, checkpointed, resumable and **honest-DNF**: a GC-livelocked / timed-out cell is recorded as a DNF in `packages/bench/report/cross-library-all-scenarios.checkpoint.json` and the sweep **continues** — it is **never fabricated, estimated, or extrapolated**. A DNF is therefore **not** a launcher failure (it is the correct #1525-demonstrating outcome); the pipeline proceeds. A re-run resumes from the checkpoint. This step runs on the host even in Docker mode so its OS-level SIGTERM→SIGKILL wall-clock kill (the #1525-honest DNF mechanism) is not swallowed by the container.
+3. **publish converters** — `bench:publish-all-scenarios` (the #1538 part-3 `causl-wasm` converter: OK cells AS-IS, DNF honestly excluded — **no fake bar**) followed by `bench:publish-cross-library` (the #1536 5-cell `causl-wasm`/`causl-ts` converter). Both append to the git-tracked `causl-org/pages/benchmarks/history.json`, which the dashboard fetches with `cache:'no-cache'` on every page load.
+
+Net: after a default run the local dashboard history.json is refreshed, so a **local** dashboard reload renders the latest 4-library + `causl-wasm` data. The runner does **not** auto-commit/push (side-effecting; out of a benchmark runner's remit) — it prints the explicit next step: commit `causl-org/pages/benchmarks/history.json` to `dev` to surface the refreshed data on the deployed dashboard.
+
+**Honest scope (non-negotiable).** `causl-wasm` is ~720 ms/op, GC-livelock-prone (#1525) and its full sweep is multi-hour. That cost is the deliberate trade — the launcher does **not** fabricate, shortcut, or fake `causl-wasm` results to make it fast. `causl-wasm` medians are emitted **AS-IS** (~85–390× slower than `causl-ts` by design — see the #1133/#1525 dashboard callout). The #1133 median-falsification framing **stands**.
+
+### Opt-out: skipping the `causl-wasm` engine sweep
+
+The default includes `causl-wasm` (the explicit ask). For contributors who do not want the multi-hour DNF-prone sweep, the escape hatch — mirroring the `--no-docker` philosophy — is:
+
+```
+python3 tools/bench/run-bench.py --no-wasm      # JS engines only
+python3 tools/bench/run-bench.py --engines js   # alias of --no-wasm
+```
+
+`--no-wasm` / `--engines js` skips step 2 (the `bench:cross-library-all` sweep) **and** the part-3 `causl-wasm` publish; the 4-library sweep + the #1536 publish still run, so the dashboard still carries the 4-library data plus any previously published `causl-wasm` run.
 
 ### Reproducer Docker image
 
-`tools/bench/run-bench.py` invokes `pnpm --filter @causl/bench bench` inside a pinned Docker image (`tools/bench/Dockerfile`) by default. The image pins the Node major version (selected via `--node`, currently 20 / 22 / 24), pins pnpm via corepack, and defaults `NODE_OPTIONS=--expose-gc` so the bench's typed `MissingExposeGcError` never fires inside the official image. The launcher builds the image on first invocation; subsequent runs reuse the cached tag (`causl-bench:node<major>`). The repo is bind-mounted at `/work` and the lockfile is the source of truth — `node_modules` is not baked into the image.
+The `bench:report` step (step 1) runs inside a pinned Docker image (`tools/bench/Dockerfile`) by default. The image pins the Node major version (selected via `--node`, currently 20 / 22 / 24), pins pnpm via corepack, and defaults `NODE_OPTIONS=--expose-gc` so the bench's typed `MissingExposeGcError` never fires inside the official image. The launcher builds the image on first invocation; subsequent runs reuse the cached tag (`causl-bench:node<major>`). The repo is bind-mounted at `/work` and the lockfile is the source of truth — `node_modules` is not baked into the image. The `causl-wasm` sweep and the publish converters always run on the host (step 2's wall-clock kill must not be swallowed by the container; step 3 is pure JSON I/O).
 
 The host-mode path (`--no-docker`) is preserved for contributors without Docker, but host-mode numbers do **not** carry the reproducibility guarantee. Published numbers in this article are produced by the Docker path; PR-time bench reruns should match it.
+
+Other flags: `--seed <n>` is forwarded as `CAUSL_FUZZ_SEED` to every pnpm step (and via `-e` into the Docker step) for deterministic fast-check. `--out <path>` ALSO copies the refreshed dashboard history.json to `<path>` for snapshotting (the canonical `causl-org/pages/benchmarks/history.json` is always refreshed in place regardless of `--out`).
 
 ### Reproducer exit codes
 
@@ -168,17 +199,20 @@ The host-mode path (`--no-docker`) is preserved for contributors without Docker,
 
 | Code | Meaning |
 |---:|---|
-| `0` | Success — JSON results written to `benchmarks/results/YYYY-MM-DD.json` |
-| `10` | Config / usage error (unsupported `--node`, negative `--seed`, etc.) |
-| `11` | The bench harness itself failed (`pnpm --filter @causl/bench bench` exited non-zero). The child's actual returncode is logged on stderr; the launcher always returns `11` so the typed boundary stays unambiguous. |
-| `12` | JSON parse / validation failed on bench stdout |
-| `13` | Output JSON write failed (disk full, permission denied) |
+| `0` | Success — the dashboard `causl-org/pages/benchmarks/history.json` is refreshed (and copied to `--out` if given) |
+| `10` | Config / usage error (unsupported `--node`, negative `--seed`, unknown `--engines` value, etc.) |
+| `11` | The 4-library `bench:report` step failed (`pnpm --filter @causl/bench bench:report` exited non-zero). The child's actual returncode is logged on stderr; the launcher always returns `11` so the typed boundary stays unambiguous. |
+| `12` | The refreshed dashboard `history.json` is unreadable / not a non-empty JSON array |
+| `13` | `--out` snapshot write failed (disk full, permission denied) |
 | `14` | Docker invocation failed (`docker` not on `PATH`, daemon unreachable, image build failed) |
+| `15` | A publish converter step failed (could not refresh `causl-org/pages/benchmarks/history.json`) |
 | `20` | Environment guard failed (CPU governor wrong, host probe failed, etc. — slot reserved for forthcoming guards) |
+
+The `bench:cross-library-all` step is honest-DNF **by contract**: a non-zero / partial state (a GC-livelocked or SIGKILL'd cell) is **not** mapped to a hard exit — the pipeline logs it and proceeds to publish whatever OK + already-checkpointed cells exist (DNF cells stay honestly absent — **never** a fabricated bar). This is the correct #1525-demonstrating outcome, not a failure.
 
 The launcher deliberately does not propagate the child's raw returncode — a child's `1` would collide with launcher-level failures and CI could not branch reliably. The original code is always written to stderr for operator forensics.
 
-Source code for all benchmarks lives in [`packages/bench/`](https://github.com/iasbuilt/causl/tree/main/packages/bench). The benchmark can be reproduced in Docker via `python tools/bench/run-bench.py`. Result history is committed to `packages/bench/report/benchmark_history.json` per release; SVG charts are regenerated on every nightly CI run and stored at `packages/bench/report/chart_*.svg`.
+Source code for all benchmarks lives in [`packages/bench/`](https://github.com/iasbuilt/causl/tree/main/packages/bench). The benchmark can be reproduced via `python tools/bench/run-bench.py` (default: full 4-library + `causl-wasm` pipeline). Result history is committed to `packages/bench/report/benchmark_history.json` per release and the dashboard feed to `causl-org/pages/benchmarks/history.json`; SVG charts are regenerated on every nightly CI run and stored at `packages/bench/report/chart_*.svg`.
 
 ## Per-PR Perf-Evidence Protocol (#679 / #997 / #1011)
 

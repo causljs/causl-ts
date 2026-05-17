@@ -2,7 +2,7 @@
  * @packageDocumentation
  *
  * Phase 3 acceptance demo — 100-cell spreadsheet diamond. The suite wires
- * a 10×10 grid through `@causl/core` via the formula adapter and
+ * a 10×10 grid through `@causljs/core` via the formula adapter and
  * exercises diamond dependencies, atomic propagation, observer-fire
  * counting, and a SUM-over-range variant. Together these tests certify
  * that the adapter preserves transactional commit semantics and produces
@@ -29,7 +29,7 @@
  *   E1    = 4·385 + 2·55 = 1540 + 110 = 1650
  */
 
-import { createCausl, type Node } from '@causl/core'
+import { createCausl, type Node } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   cellId,

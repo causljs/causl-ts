@@ -157,7 +157,7 @@ describe('graph.subscribe(node, observer)', () => {
 
   /**
    * After an input is released through the adapter-layer `dispose`
-   * hook (`@causl/core/internal`), `subscribe` must surface
+   * hook (`@causljs/core/internal`), `subscribe` must surface
    * `NodeDisposedError` — the typed disposal error distinct from
    * `UnknownNodeError` — so adapter code can branch on "released"
    * vs. "never registered". SPEC §9.1's use-after-dispose row names

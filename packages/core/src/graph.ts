@@ -916,7 +916,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // {@link shouldMigrate} heuristic trips. The wrapper module is
   // imported lazily-via-direct-import here (not dynamic-import) so
   // the wrapper's source is part of the main bundle but the
-  // `@causl/core/wasm` entry point it lazy-loads on migration stays
+  // `@causljs/core/wasm` entry point it lazy-loads on migration stays
   // out of the main bundle. The wrapper re-enters `createCausl` with
   // the `backend` field stripped, so this dispatch is non-recursive.
   if (options.backend === 'auto') {
@@ -987,7 +987,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   //
   // #1241 — the default is now **`false`** (opt-in). PR #1238
   // originally shipped with an auto-detected dev/prod default, but
-  // the canonical `@causl/react` adapter retains the `read()` return
+  // the canonical `@causljs/react` adapter retains the `read()` return
   // inside `useSyncExternalStore`'s snapshot cache for tearing
   // detection — that single retained reference triggered the
   // warning on every commit for any adapter usage. Adopters who
@@ -995,7 +995,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // `createCausl({ enableH1HazardWarning: true })`. The
   // adapter-exemption seam below (the `adapterReadDepth` counter)
   // keeps the opt-in path honest for adopters who legitimately want
-  // the warning AND use `@causl/react`'s canonical hooks: the
+  // the warning AND use `@causljs/react`'s canonical hooks: the
   // adapters bracket their `getSnapshot` boundary so reads inside
   // are exempted from H1 tracking.
   const enableH1HazardWarning =
@@ -1041,7 +1041,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   if (!NODE_ENV_IS_PRODUCTION) {
     h1HazardTrack = enableH1HazardWarning ? [] : null
   }
-  // #1241 — adapter-exemption seam. Canonical `@causl/react` hooks
+  // #1241 — adapter-exemption seam. Canonical `@causljs/react` hooks
   // call `graph.read(node)` from inside `useSyncExternalStore`'s
   // `getSnapshot` callback, which React invokes during render AND
   // retains across commits for tearing detection. The retention is
@@ -1057,7 +1057,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // compose correctly — a hook that reads through another hook's
   // selector still suppresses tracking for the whole sub-tree.
   //
-  // The seam is INTERNAL: it lives behind `@causl/core/internal`'s
+  // The seam is INTERNAL: it lives behind `@causljs/core/internal`'s
   // `__causlAdapterRead(graph, fn)` helper and is NOT part of the
   // public `Graph` interface. Adopters MUST NOT depend on the
   // shape — the next adapter primitive (e.g., a fence around
@@ -3141,7 +3141,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     //      they never represent an adopter-cached reference.
     //   3. `adapterReadDepth > 0` → the read originates inside a
     //      canonical adapter's snapshot boundary (#1241 fix B). The
-    //      adapter — e.g. `@causl/react`'s `useCauslNode` — wraps
+    //      adapter — e.g. `@causljs/react`'s `useCauslNode` — wraps
     //      its `getSnapshot` callback in `__causlAdapterRead`, which
     //      enters this counter for the duration of the body. The
     //      retention is intrinsic to `useSyncExternalStore`'s
@@ -3256,9 +3256,9 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * unconditional via `finally`, so a throwing `fn` cannot leave
    * the counter sticky.
    *
-   * Reachable only through `@causl/core/internal`'s
+   * Reachable only through `@causljs/core/internal`'s
    * `__causlAdapterRead(graph, fn)` helper. Canonical adapters
-   * (`@causl/react`'s `useCauslNode`, `useCausl`, `useCauslShallow`,
+   * (`@causljs/react`'s `useCauslNode`, `useCausl`, `useCauslShallow`,
    * `useCauslTypedArrayNode`) wrap their `getSnapshot` body in
    * that helper so `useSyncExternalStore`'s snapshot-retention
    * contract does not produce a false-positive H1 warning.
@@ -6577,9 +6577,9 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    *   same graph.
    *
    * @internal Not part of the public adopter surface. Reachable only
-   *   through `@causl/core/internal`'s `_migrateFrom(graph, snap)`
+   *   through `@causljs/core/internal`'s `_migrateFrom(graph, snap)`
    *   helper. Adopters use {@link Graph.hydrate}; the migration
-   *   path exists for the auto-adapt wrapper (`@causl/core/wasm`'s
+   *   path exists for the auto-adapt wrapper (`@causljs/core/wasm`'s
    *   `WasmBackend`) and the cross-backend determinism property test
    *   (#1090).
    */
@@ -6938,7 +6938,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * the public surface throws {@link NodeDisposedError}. Idempotent.
    *
    * @remarks
-   * Reachable only via `dispose(graph, node)` from `@causl/core/internal`;
+   * Reachable only via `dispose(graph, node)` from `@causljs/core/internal`;
    * not part of the public {@link Graph} interface. Disposal is an adapter-
    * level concern — the React `useCauslFamily` hook owns the concept of
    * "this node's lifetime is bounded by a component's mount" — and no
@@ -7245,7 +7245,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
     // point landed by issue #1068 as the deferred-from-#698 work. The
     // default implementation lives in `./statechart-evaluator.ts` and
     // mirrors the sync-side reducers (`reduceConflict` /
-    // `reduceResource` in `@causl/sync/src/statechart-reducers.ts`)
+    // `reduceResource` in `@causljs/sync/src/statechart-reducers.ts`)
     // structurally. A cross-backend determinism gate verifies the two
     // implementations stay byte-equivalent; the WASM backend's
     // `evaluateStatechart` (Sub-D of EPIC #680) replaces this with a
@@ -7275,7 +7275,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   // `commitLog` subscribers outside a commit boundary would violate §5.
   // Disposal is NOT on this public surface: it is an adapter-level concern
   // published to the internal-dispatch registry below and is reachable only
-  // via `@causl/core/internal`'s `dispose(graph, node)`.
+  // via `@causljs/core/internal`'s `dispose(graph, node)`.
   //
   // The BackendEngine-listed methods (`read`, `subscribe`,
   // `subscribeCommits`, `snapshot`, `hydrate`, `exportModel`, `readAt`,
@@ -7331,7 +7331,7 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   }
 
   // Publish the dispose closure to the private dispatch registry so
-  // `@causl/core/internal`'s `dispose(graph, node)` can reach it without
+  // `@causljs/core/internal`'s `dispose(graph, node)` can reach it without
   // widening the public Graph interface — disposal is an adapter-level
   // concern that no application code should call directly. The
   // dispatch routes through {@link BackendEngine.dispose} so the seam
@@ -7348,10 +7348,10 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
   })
 
   // Publish the disposed-tombstone size accessor to the parallel
-  // testing-only dispatch registry so `@causl/core/testing`'s
+  // testing-only dispatch registry so `@causljs/core/testing`'s
   // `disposedTombstoneSize(graph)` can read engine state without
   // routing a test-only seam through the adapter-facing
-  // `@causl/core/internal` surface (#376).
+  // `@causljs/core/internal` surface (#376).
   registerTestingDispatch(graph, {
     disposedTombstoneSize: () => disposed.size,
     commitLogConsumerCount: () => commitLogConsumerCount,

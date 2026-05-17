@@ -192,7 +192,7 @@ For existing adopter code (which assumes sync commit-land):
    Adopters who want the batched-mode wire amortisation set it
    explicitly. The `Graph` surface returned is unchanged.
 3. **Per-graph, not global**. Default and override both live on
-   `createCausl(options)` so multi-graph adopters (`@causl/sync`,
+   `createCausl(options)` so multi-graph adopters (`@causljs/sync`,
    embedded use-cases) can opt in per graph without cross-graph
    coupling.
 
@@ -388,7 +388,7 @@ Option (c) is the only candidate that ships in **a single sprint**.
 | --- | --- | --- |
 | Can N=1 be the default? | **Yes**. At N=1 the queue holds one action and flushes immediately. Byte-identical to dev `336ec6bd` behaviour. | §2.3, §3.1 |
 | Do adopters opt in to N>1? | **Yes**, via `createCausl({ batchedFlush: { afterN: N, intervalMs: M } })`. No global opt-in; configuration is per-graph. | §2.3 |
-| Per-graph or global? | **Per-graph**. `@causl/sync` and multi-graph adopters opt in per graph without coupling. | §2.3 |
+| Per-graph or global? | **Per-graph**. `@causljs/sync` and multi-graph adopters opt in per graph without coupling. | §2.3 |
 | Does the existing `auto-adapt` surface need to flip on batched mode? | **No, but it could later**. `shouldMigrate(stats)` (`packages/core/src/auto-adapt.ts`) is the natural seam; v1.x ships explicit opt-in only. A future `AdaptThresholds.batchedFlushAfterN` field could promote workloads automatically. | §1b CONSTRAINTS migratable surface |
 | Does `commit()` change shape? | **No**. Returns `Commit` synchronously. The only thing that batches is the wire crossing, not the commit semantics. | §2.1 Answer C |
 | Does `graph.now` advance per-commit? | **Yes, always**. SPEC §3 Theorem 4 invariant preserved. | §3.1 |
@@ -407,7 +407,7 @@ Column "Option (c) batched commit" filled below. Format: **(answer)
 | **§1b Migratable surface — codemods + lints required** | **NO codemod needed**. Only opt-in `createCausl({ batchedFlush })`; existing adopter code unaffected at default `afterN=1`. The #1484 §1b row "`commit()`-as-synchronous vs `commit()`-as-batched" resolves to "synchronous preserved" — §2.1 Answer C. |
 | **§2 Browser deployment** | **YES** — inherits today's WASM bridge artefacts; no change to `loadWasmBackend()` host-detection or CSP posture. §17.6 host-tier matrix unchanged. |
 | **§2 Node deployment** | **YES** — inherits. SSR `Hydrate` and bench / determinism / property-suite host paths run today's path. |
-| **§2 Native deployment (per-platform binary)** | **N/A** — option (c) does not introduce a native engine. The `@causl/checker-{darwin,linux,win32}-*` per-platform binaries remain unchanged. |
+| **§2 Native deployment (per-platform binary)** | **N/A** — option (c) does not introduce a native engine. The `@causljs/checker-{darwin,linux,win32}-*` per-platform binaries remain unchanged. |
 | **§2 Cloudflare Workers / edge** | **YES** — inherits the universal `serde-json` bridge; Workers run today's path with `commit_batch` added as a peer extern. |
 | **§2 Embedded runtimes (RN, Hermes) — TS fallback floor preserved** | **YES** — TS engine remains the SSOT under Answer C; the §17.6 commitment-14 floor is unchanged. |
 | **§3 Per-commit perf — ≤ 50 ns per op boundary tax on every contract-bearing cell** | **PARTIAL — depends on N**. At N=312 every cell meets the floor; at N=100 four of six cells meet the floor; at N=1 (default) no cell meets the floor. The architecture *enables* the floor; adopters opt in by configuring N. See §1.2 table. |

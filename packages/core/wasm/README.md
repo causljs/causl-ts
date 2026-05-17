@@ -1,4 +1,4 @@
-# `@causl/core/wasm`
+# `@causljs/core/wasm`
 
 > ⚠️ **Phase-1 state (0.9.0)** — the `WasmBackend` returned by
 > `loadWasmBackend()` is currently a TS engine wrapped in the FFI
@@ -35,7 +35,7 @@
 > (PRs #1087 / #1062). Until #1133's GO criteria fire, the wrapper
 > is the shipping `WasmBackend`.
 
-Opt-in WebAssembly backend entry point for `@causl/core`.
+Opt-in WebAssembly backend entry point for `@causljs/core`.
 
 ## When to use
 
@@ -68,8 +68,8 @@ heuristic (#686) wires this trade-off into `createCausl({ backend:
 
 | Surface                                     | Cost                                                                                                                                                                    |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@causl/core` main bundle                   | Tiny loader stub (~1 KB). No WASM import.                                                                                                                               |
-| `@causl/core/wasm` (this)                   | Loader interface + bridge picker (~2 KB).                                                                                                                               |
+| `@causljs/core` main bundle                   | Tiny loader stub (~1 KB). No WASM import.                                                                                                                               |
+| `@causljs/core/wasm` (this)                   | Loader interface + bridge picker (~2 KB).                                                                                                                               |
 | WASM artifact (fetched lazy)                | 60–213 KB raw / 45–66 KB Brotli (GC-builtins ≈ 45 KB Brotli; serde-json **66 KB Brotli, 13 KB over the §17.6 80 KB target** — see Issue #1150 / PR #1161).              |
 | First-use migration round-trip              | ~50–200 ms on a 10k-node graph.                                                                                                                                         |
 | Per-commit boundary cost (Phase-1, wrapper) | **2.23 ms / 10k commits** (PRs #1087 / #1062). Same TS pipeline runs under the FFI shape — relative-to-serde framing applies only to the future real-Rust port (#1133). |
@@ -128,10 +128,10 @@ For hosts with strict `connect-src`, expose a CDN fallback via
 `WasmBackendOptions.wasmBaseUrl`:
 
 ```ts
-import { loadWasmBackend } from '@causl/core/wasm'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend({
-  wasmBaseUrl: 'https://cdn.jsdelivr.net/npm/@causl/core@<version>/wasm/pkg/',
+  wasmBaseUrl: 'https://cdn.jsdelivr.net/npm/@causljs/core@<version>/wasm/pkg/',
 })
 ```
 
@@ -162,7 +162,7 @@ producing a working build.
 ## API
 
 ```ts
-import { loadWasmBackend, detectBridge, WasmBackendUnavailableError } from '@causl/core/wasm'
+import { loadWasmBackend, detectBridge, WasmBackendUnavailableError } from '@causljs/core/wasm'
 
 // Default — auto-detects the fastest bridge supported by the host.
 const backend = await loadWasmBackend()
@@ -205,7 +205,7 @@ sub-tasks that originally gated this entry point landed under epic
 - #693 — `serde_json` + UTF-8 fallback bridge (the universal baseline). **Merged.**
 - #691 — Pluggable Bridge interface + feature-detection harness. **Merged.**
 - #681 — `BackendEngine` interface in TS. **Merged.**
-- #684 — JS bindings + lazy-load loader + `@causl/core/wasm` entry. **Merged (PR #1031).**
+- #684 — JS bindings + lazy-load loader + `@causljs/core/wasm` entry. **Merged (PR #1031).**
 - #685 / #687 / #689 / #690 — determinism gate, migration envelope, bundle hygiene, host-tier matrix. **Merged.**
 
 EPIC: [#680](https://github.com/iasbuilt/causl/issues/680) — **closed**.

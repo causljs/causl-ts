@@ -41,7 +41,7 @@ import {
   buildPropertyDag,
   propertyDag,
   propertyTrials,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 import { createCausl, type Node } from '../../src/index.js'
 
 describe('property: subscribe emission count (#409)', () => {

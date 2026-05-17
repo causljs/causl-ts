@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Smoke test verifying the `@causl/sync` package barrel is wired up
+ * Smoke test verifying the `@causljs/sync` package barrel is wired up
  * and ships a version placeholder. Acts as the canary for the package
  * scaffolding so that build or export-mapping regressions surface
  * immediately rather than only when a downstream test imports a real
@@ -14,7 +14,7 @@ import { VERSION } from '../src/index.js'
 /**
  * Suite exercising the package scaffolding and exported metadata.
  */
-describe('@causl/sync scaffolding', () => {
+describe('@causljs/sync scaffolding', () => {
   /**
    * Confirms the barrel exports a string-typed `VERSION` constant.
    */

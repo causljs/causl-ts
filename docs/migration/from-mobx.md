@@ -2,7 +2,7 @@
 
 Companion to `from-jotai.md` and `from-redux.md`. The contract that
 backs this guide is `docs/migration/RULE_CATALOGUE.md`; the drift
-detector `causl-migration-check` (see `packages/migration-check`)
+detector `causljs-migration-check` (see `packages/migration-check`)
 flags un-migrated patterns in CI by rule ID. There is no codemod
 and we do not plan to ship one — the migration is hand-written
 under the rule catalogue's guidance. The drift detector classifies
@@ -47,8 +47,8 @@ class TodoStore {
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causl/core'
-import { createUpdate, useCausl } from '@causl/react'
+import { createCausl } from '@causljs/core'
+import { createUpdate, useCausl } from '@causljs/react'
 
 const graph = createCausl()
 const todos = graph.input<readonly Todo[]>('todos', [])
@@ -176,7 +176,7 @@ filing against `MEDIAN_BAND_INVARIANTS` in
 - `@observable` class fields without explicit `runInAction` boundaries
   — the migration is fundamentally a refactor, not a rewrite.
 - MobX-React's `Provider` / `inject` — those are component-level
-  patterns; `causl-migration-check` flags them and the reviewer
+  patterns; `causljs-migration-check` flags them and the reviewer
   rewires through `<CauslProvider>` by hand. See
   `docs/migration/RULE_CATALOGUE.md` for the rule IDs.
 - `when(predicate, effect)` — manual; usually expressible as a

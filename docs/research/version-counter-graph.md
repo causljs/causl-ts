@@ -212,7 +212,7 @@ strictly metadata stamped on a write and projected to explain output.
 | --- | --- | --- |
 | §3 [registrationTime, ∞) domain | `derivedRegisteredAt` field, separate from `lastTime` | Domain anchor is *separate* from the recompute stamp; epoch swap leaves it untouched |
 | §11 explain (`Explanation.computedAt`, `DepFrame.contributedAt`) | `buildExplanation`, lines 5130–5174 | Names the GraphTime the derivation last moved at |
-| §11 whyUpdated / whyNotUpdated lineage | `@causl/devtools-bridge` reads `computedAt` | Derives "this commit recomputed it / a prior commit produced it" by comparing `computedAt` to the commit window |
+| §11 whyUpdated / whyNotUpdated lineage | `@causljs/devtools-bridge` reads `computedAt` | Derives "this commit recomputed it / a prior commit produced it" by comparing `computedAt` to the commit window |
 | Phase F.4 lazy-rebuild guard | `readEntry`, line 1527 | Compares `lastTime < now` to skip rebuilds on quiescent engines |
 | §15.1 replay determinism | Indirect: `lastTime` is *not* on the wire (`ir.ts` confirms), so it's a pure observability field | A replay reconstructs `lastTime` deterministically from the recompute schedule; the field is not part of the byte-identical contract |
 

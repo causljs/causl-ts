@@ -19,7 +19,7 @@
  * `Loading → Stale` edge instead of `Loading → Loaded`.
  */
 
-import type { Graph, GraphTime, InputNode, Node, NodeId } from '@causl/core'
+import type { Graph, GraphTime, InputNode, Node, NodeId } from '@causljs/core'
 import { reduceResource } from './statechart-reducers.js'
 
 /**

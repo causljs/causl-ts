@@ -78,7 +78,7 @@
  * ## Usage
  *
  * ```ts
- * import { arbAdversarialValue } from '@causl/core/testing'
+ * import { arbAdversarialValue } from '@causljs/core/testing'
  *
  * fc.assert(
  *   fc.property(arbAdversarialValue(), (v) => {

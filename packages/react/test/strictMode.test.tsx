@@ -15,7 +15,7 @@
  *     promise* — the contract is to dedup by Object.is, full stop).
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { act, render, screen } from '@testing-library/react'
 import { StrictMode, useRef, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

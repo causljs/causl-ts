@@ -1,7 +1,7 @@
 // Post-migration causl counter (from MobX). No MobX imports;
 // no transitional bridge. See docs/migration/from-mobx.md.
-import { createCausl } from '@causl/core'
-import { createUpdate } from '@causl/react'
+import { createCausl } from '@causljs/core'
+import { createUpdate } from '@causljs/react'
 
 type Msg = { kind: 'inc' }
 

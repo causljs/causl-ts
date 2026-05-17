@@ -28,8 +28,8 @@
  * enforces that floor.
  */
 
-import { createCausl, type Graph } from '@causl/core'
-import { propertyTrials } from '@causl/core-testing-internal'
+import { createCausl, type Graph } from '@causljs/core'
+import { propertyTrials } from '@causljs/core-testing-internal'
 import fc from 'fast-check'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools } from '../../src/index.js'

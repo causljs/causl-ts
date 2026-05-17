@@ -34,7 +34,7 @@
  * internals.
  *
  * Trial count is the 1000-trial property-based fuzz floor enforced by
- * `propertyTrials()` from the @causl/core/testing seam — §15.2. A
+ * `propertyTrials()` from the @causljs/core/testing seam — §15.2. A
  * deterministic generator under that floor undersells the floor; the
  * letrec generator restores its real coverage.
  */
@@ -45,7 +45,7 @@ import {
   type Graph,
   type InputNode,
   type Node,
-} from '@causl/core'
+} from '@causljs/core'
 import {
   assertConsistentGraphTime,
   assertResultStability,
@@ -53,7 +53,7 @@ import {
   propertyTrials,
   ResultInstability,
   type TraceEntry,
-} from '@causl/core/testing'
+} from '@causljs/core/testing'
 import { act, cleanup, render } from '@testing-library/react'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'

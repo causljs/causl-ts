@@ -1,5 +1,5 @@
 /**
- * @causl/devtools-bridge — `connectDevtools`.
+ * @causljs/devtools-bridge — `connectDevtools`.
  *
  * Wires a {@link Graph} to the Redux DevTools Extension over the
  * extension's monitor protocol. When the extension is absent the
@@ -55,7 +55,7 @@
  * `(msg as ...)` casts survive past the decode boundary.
  */
 
-import type { Graph, GraphSnapshot, GraphTime, Unsubscribe } from '@causl/core'
+import type { Graph, GraphSnapshot, GraphTime, Unsubscribe } from '@causljs/core'
 
 /**
  * Capability slice handed to {@link connectDevtools}.
@@ -78,7 +78,7 @@ import type { Graph, GraphSnapshot, GraphTime, Unsubscribe } from '@causl/core'
  * Narrowing is type-level. A real `Graph` is still assignable, so the
  * call site keeps working; the discipline is enforced at compile time
  * inside the implementation. The Proxy-based runtime gate
- * `narrowCapability` from `@causl/core/internal` is *not* applied
+ * `narrowCapability` from `@causljs/core/internal` is *not* applied
  * here because it deliberately omits `snapshot` / `snapshotAt` (its
  * allow-list is `read` / `subscribe` / `subscribeCommits` / `now` —
  * the read-only slice for application code), and the bridge's
@@ -440,7 +440,7 @@ function buildHandlers(ctx: HandlerContext): Handlers {
     /**
      * TOGGLE_PERSIST — flip the advisory persistence flag the panel
      * surfaces. The bridge does not own persistence; downstream
-     * adapters (e.g. `@causl/persistence`) read `ctx.state.persist`.
+     * adapters (e.g. `@causljs/persistence`) read `ctx.state.persist`.
      */
     TOGGLE_PERSIST: () => {
       ctx.state.persist = !ctx.state.persist

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public entry point for `@causl/devtools`.
+ * Public entry point for `@causljs/devtools`.
  *
  * I won't make the engine "live" by bolting a devtools panel onto the
  * side. The engine is inspectable through its own primitives:
@@ -19,7 +19,7 @@
  * commit-log buffer, node inspector, statechart configuration view,
  * lineage explainers (`whyUpdated` / `whyNotUpdated`), live-derivation
  * REPL handles, and snapshot export/import. Each export is a thin
- * surface over `@causl/core` so a devtools UI can render directly on
+ * surface over `@causljs/core` so a devtools UI can render directly on
  * top of the engine without a parallel state model.
  */
 

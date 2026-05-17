@@ -5,9 +5,9 @@
 
   The numbers below are captured by
   `packages/bench/scripts/gc-pressure-real-engine.ts`
-  (`pnpm --filter @causl/bench bench:gc-pressure-real`) against the
+  (`pnpm --filter @causljs/bench bench:gc-pressure-real`) against the
   REAL `causl-engine-bridge-serde` crate compiled to wasm by
-  `pnpm --filter @causl/bench wasm:build`, and pinned in
+  `pnpm --filter @causljs/bench wasm:build`, and pinned in
   `packages/bench/report/gc-pressure-real-engine.json`. The §2 table
   is transcribed verbatim from that JSON's generated
   `comparisonTableMarkdown` (doc == artefact by construction).
@@ -41,7 +41,7 @@ falsification. The #1133 falsification STANDS.**
   **not** measure a real Rust engine's absolute bytes/commit.
 - This gate replaces that synthetic bridge with the **real
   `causl-engine-bridge-serde` crate compiled to wasm** (`pnpm
-  --filter @causl/bench wasm:build` → `wasm-pack build
+  --filter @causljs/bench wasm:build` → `wasm-pack build
   tools/engine-rs-bridge-serde --release --target nodejs`), loaded in
   the bench JS host via `wasm-stub-loader.commit_batch`. The commit
   stream crosses the **real `serde-wasm-bindgen` FFI marshal
@@ -67,7 +67,7 @@ falsification. The #1133 falsification STANDS.**
 The serde-wasm artefact builds **cleanly on clean dev**:
 
 ```
-pnpm --filter @causl/bench wasm:build
+pnpm --filter @causljs/bench wasm:build
 # = wasm-pack build tools/engine-rs-bridge-serde --release \
 #       --target nodejs --out-dir packages/bench/wasm-stub-pkg
 ```
@@ -86,7 +86,7 @@ defends against this with a stale-artefact guard
 (`typeof mod.commit_batch !== 'function'` → `UNABLE-TO-CONFIRM`) and a
 pre-sweep smoke round-trip that proves the real engine and the JS
 marshaler agree on the wire contract before any timed cell. A fresh
-`pnpm --filter @causl/bench wasm:build` produced a correct artefact;
+`pnpm --filter @causljs/bench wasm:build` produced a correct artefact;
 the smoke round-trip passed (`bridge_id=serde-json`, real
 `commit_batch` round-trips through `marshalBatchEnvelope` /
 `applyBatchBridgeResult`). `CommitRecord` carries
@@ -263,8 +263,8 @@ the #1133 / V2-DESIGN §0 framing one bit.**
 ## 5. Reproduce
 
 ```
-pnpm --filter @causl/bench wasm:build          # build the real artefact first
-pnpm --filter @causl/bench bench:gc-pressure-real
+pnpm --filter @causljs/bench wasm:build          # build the real artefact first
+pnpm --filter @causljs/bench bench:gc-pressure-real
 # matrix override:    GC_PRESSURE_TREE_SIZES=1000,10000,50000
 # deeper 50k tail:     GC_PRESSURE_COMMITS_50000=20000
 ```

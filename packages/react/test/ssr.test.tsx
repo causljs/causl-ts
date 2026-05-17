@@ -12,7 +12,7 @@
  * so any divergence between `getServerSnapshot` and `getSnapshot`
  * trips React's console.error rather than silently passing.
  *
- * `assertConsistentGraphTime` from `@causl/core/testing` locks the
+ * `assertConsistentGraphTime` from `@causljs/core/testing` locks the
  * SPEC §3 invariant — across (server snapshot × client commit × hydrate)
  * every observation in one render frame must resolve at one GraphTime.
  *
@@ -30,8 +30,8 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createCausl, type Graph, type GraphSnapshot } from '@causl/core'
-import { assertConsistentGraphTime, type TraceEntry } from '@causl/core/testing'
+import { createCausl, type Graph, type GraphSnapshot } from '@causljs/core'
+import { assertConsistentGraphTime, type TraceEntry } from '@causljs/core/testing'
 import { render, screen } from '@testing-library/react'
 import { act, type JSX } from 'react'
 import { hydrateRoot } from 'react-dom/client'

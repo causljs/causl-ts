@@ -8,7 +8,7 @@
  * commit boundary."
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it, vi } from 'vitest'
 import { resource } from '../../src/index.js'
 

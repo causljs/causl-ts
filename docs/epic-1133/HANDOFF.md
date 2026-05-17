@@ -276,7 +276,7 @@ I cannot make this decision on the user's behalf. The honest framing of the user
 
 **Acceptance status**:
 - [x] (a) `cargo test -p causl-engine-core --test ffi_smoke` — 4 PASS.
-- [x] (b) `pnpm --filter @causl/bench exec vitest run test/ffi-roundtrip.test.ts` — 1 PASS / 4 skipped (artefact absent in local env; wasm:build path covered by `.github/workflows/wasm.yml`).
+- [x] (b) `pnpm --filter @causljs/bench exec vitest run test/ffi-roundtrip.test.ts` — 1 PASS / 4 skipped (artefact absent in local env; wasm:build path covered by `.github/workflows/wasm.yml`).
 - [x] (c) Bundle baseline cited in PR body — ~213 KB raw / ~66 KB Brotli for the serde-bridge `wasm-stub-pkg` artefact (PR #1112 measurement; A.0 adds ~20 LoC of Rust sharing the same crate deps, no new transitive crates).
 - [x] (d) `transition_phased_stub` still callable — pinned by the Rust smoke `transition_phased_stub_still_callable_for_back_compat` + the bridge entry point itself.
 - [x] (e) Corpus categories `tx-set-intent-roundtrip` (id 3) + `transition-phased-return-shape-is-tuple` (id 17) observable via `CAUSL_BACKEND=rust-stub` — 20/20 failures match `CAUSL_BACKEND=stub` exactly (stub mode is unchanged red gate).
@@ -465,7 +465,7 @@ If the next session continues the cascade, claim **Phase G validation (#1145)** 
 - E.5 (#1445, PR #1446) — Observer-throw routing: `ObserverError { node, observer, message }` struct; trait widened to return `Vec<ObserverError>`. New `dispatch_per_node_subscribers_with_error_hook(..., on_observer_error: &dyn Fn)`. Both bridges interpret the JS callback's optional return value as a `Vec<ObserverError>`; uncaught JS throws synthesise a single error on the first firing. Continuation invariant: every firing still runs.
 - E.6 (#1447, PR #1448) — Re-entrant commit option (a) pinned: 3 contract tests confirming the A.1 precondition gate fires `Err(CommitInProgress)` when a subscriber callback attempts an inner `transition_phased(Commit{...})`. Negative test: Tick still allowed.
 - E.7 (#1449, PR #1450) — Deterministic fire-order spec: 6 tests pinning across-nodes/within-node/D.3-fire-once axes. Reference walker re-implements the spec independently; proptest fuzz (tier-gated via `CAUSL_RUST_FUZZ_TIER`) verifies engine ≡ reference for every shape.
-- E.8 (#1451, PR #1452) — Bench harness wiring: 3 e2e roundtrip tests via `WasmBackend.subscribe(node, observer)` + `commit()` on the Phase-1 wrapper. Added `@causl/core/wasm` alias to `packages/bench/vitest.config.ts`. Pure adopter-side integration.
+- E.8 (#1451, PR #1452) — Bench harness wiring: 3 e2e roundtrip tests via `WasmBackend.subscribe(node, observer)` + `commit()` on the Phase-1 wrapper. Added `@causljs/core/wasm` alias to `packages/bench/vitest.config.ts`. Pure adopter-side integration.
 - E.9 (#1453, PR #1454) — Cross-backend fire-order gate (TS half): 6 tests pinning TS engine's fire-order on 5 canonical seeds + permutation property test. Documented TS vs Rust shared-observer-id divergence (TS fires per-`SubscriptionEntry`; Rust D.3 dedups by `ObserverId`; bridge resolves by minting fresh ids per `subscribe()` call).
 - E.10 (#1455, this PR) — Phase E parent close + Phase F handoff bookmark; pure docs (HANDOFF.md). `(closes #1455, closes #1135)`
 

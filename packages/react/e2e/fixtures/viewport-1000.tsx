@@ -4,9 +4,9 @@
  * Source for the 1000-cell React viewport fixture (#869, extending the
  * causl-only #765 / PR #800 gate to all four canonical libraries).
  * This module is bundled by the e2e `build` script (`pnpm --filter
- * @causl/react test:e2e:build`) into a single browser ESM file that
+ * @causljs/react test:e2e:build`) into a single browser ESM file that
  * the harness HTML page imports. React, react-dom/client, and the
- * four state libraries (`@causl/core` + `@causl/react`, `jotai`,
+ * four state libraries (`@causljs/core` + `@causljs/react`, `jotai`,
  * `@reduxjs/toolkit` + `react-redux`, `mobx` + `mobx-react-lite`)
  * are all baked into the bundle so the harness runs from a static
  * `python3 -m http.server` with no importmap or UMD shim plumbing.
@@ -49,8 +49,8 @@
  *     commit-issue → next-rAF observation).
  */
 
-import { createCausl, type Graph, type InputNode } from '@causl/core'
-import { CauslProvider, useCauslNode } from '@causl/react'
+import { createCausl, type Graph, type InputNode } from '@causljs/core'
+import { CauslProvider, useCauslNode } from '@causljs/react'
 import {
   configureStore,
   createSlice,

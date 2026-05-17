@@ -1,7 +1,7 @@
 # Bundler interop fixtures (#689)
 
-Three minimal fixture apps that import `@causl/core` (main barrel) and
-dynamically import `@causl/core/wasm` (lazy-load entry point per #684).
+Three minimal fixture apps that import `@causljs/core` (main barrel) and
+dynamically import `@causljs/core/wasm` (lazy-load entry point per #684).
 CI builds each on every PR; failures attributable to a specific
 bundler are labelled by matrix-leg name.
 
@@ -17,11 +17,11 @@ size-limit + tier-matrix residuals subsequently retired by #1063
 
 ## What each fixture asserts
 
-1. **`@causl/core` main barrel bundles cleanly** — the package exports
+1. **`@causljs/core` main barrel bundles cleanly** — the package exports
    only TypeScript / JS; no native or WASM deps reachable.
-2. **`@causl/core/wasm` lazy import produces a separate chunk** — the
+2. **`@causljs/core/wasm` lazy import produces a separate chunk** — the
    loader from #684 (`packages/core/wasm/index.ts`) is reachable via a
-   `import('@causl/core/wasm')` call without bundle-time errors. Phase-1
+   `import('@causljs/core/wasm')` call without bundle-time errors. Phase-1
    `loadWasmBackend()` now returns a `WasmBackend` that wraps a TS
    engine (the wasm-pkg artefacts produced by #682/#683/#693 have
    landed; per #1063 Sub-E closeout the runtime path is exercised by
@@ -40,20 +40,20 @@ size-limit + tier-matrix residuals subsequently retired by #1063
 ## Why these aren't pnpm workspace members
 
 The fixtures install their own deps (webpack / vite / esbuild) on CI to
-mirror how an external adopter consumes `@causl/core`. Pulling them
+mirror how an external adopter consumes `@causljs/core`. Pulling them
 into the workspace would let them resolve workspace devDependencies
 they would not have access to in the wild, defeating the purpose of
 the gate.
 
-Each fixture references the workspace `@causl/core` via a `file:`
+Each fixture references the workspace `@causljs/core` via a `file:`
 specifier in its `package.json`, so the CI step
-`pnpm --filter @causl/core build` runs first and the bundler picks up
+`pnpm --filter @causljs/core build` runs first and the bundler picks up
 the freshly-built `dist/` directly.
 
 ## Run locally
 
 ```sh
-pnpm --filter @causl/core build
+pnpm --filter @causljs/core build
 cd e2e/bundler-interop/webpack5-app && npm install && npm run build
 cd ../vite5-app && npm install && npm run build
 cd ../esbuild-app && npm install && npm run build

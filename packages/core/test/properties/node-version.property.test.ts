@@ -68,7 +68,7 @@
  *
  * ## Trial budget
  *
- * Routes through `tieredPropertyTrials` from `@causl/core/testing`,
+ * Routes through `tieredPropertyTrials` from `@causljs/core/testing`,
  * which honours `CAUSL_FUZZ_TIER` (default: 1000 trials, PR: 5000,
  * nightly: 100 000). This keeps the floor at the SPEC §15.2 1000
  * trials per CI run and lets the nightly tier exercise the long tail
@@ -82,7 +82,7 @@
 
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { tieredPropertyTrials } from '@causl/core-testing-internal'
+import { tieredPropertyTrials } from '@causljs/core-testing-internal'
 import {
   createCausl,
   type Graph,

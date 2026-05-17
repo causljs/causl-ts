@@ -19,12 +19,12 @@
  * deriveds (or fails to wake the right ones) trips the assertion.
  *
  * SPEC.async names this test `packages/sync/test/perf-resource-recompute.test.ts`
- * and the script `pnpm --filter @causl/sync run test:perf-invariant`
+ * and the script `pnpm --filter @causljs/sync run test:perf-invariant`
  * — the script wiring is the responsibility of #583's CI follow-on
  * (this file ships the test; the script ships when #583 closes).
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../src/index.js'
 

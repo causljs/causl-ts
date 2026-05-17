@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Behavioural tests for the snapshot subsystem of `@causl/devtools`.
+ * Behavioural tests for the snapshot subsystem of `@causljs/devtools`.
  * Exercises {@link exportSnapshot} / {@link importSnapshot} together with
  * their JSON convenience wrappers, ensuring captured state round-trips
  * across graph instances, that imports collapse into a single commit, and
@@ -9,7 +9,7 @@
  * forward/backward evolution.
  */
 
-import { createCausl, type InputNode } from '@causl/core'
+import { createCausl, type InputNode } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   exportSnapshot,

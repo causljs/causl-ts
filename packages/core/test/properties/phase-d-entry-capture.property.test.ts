@@ -44,7 +44,7 @@ import {
   propertyDag,
   propertyTrials,
   type DagSpec,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 import { createCausl } from '../../src/index.js'
 
 /**

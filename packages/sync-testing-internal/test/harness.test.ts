@@ -3,8 +3,8 @@
  *
  * Tests for the SPEC.async §15.0 harness factories (#578).
  *
- * The harness factories must wrap a LIVE @causl/core Graph with
- * a real @causl/sync Resource / ConflictRegistry — replacing the
+ * The harness factories must wrap a LIVE @causljs/core Graph with
+ * a real @causljs/sync Resource / ConflictRegistry — replacing the
  * pre-#578 model-state simulation. These tests pin that
  * structural property so a future regression that swaps the
  * harness back to a model-state shadow trips at PR time.

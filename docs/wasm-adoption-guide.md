@@ -67,7 +67,7 @@ migration today, not the day after.**
 
 ```tsx
 import { useEffect, useState, useMemo } from 'react'
-import { useCausl } from '@causl/react'
+import { useCausl } from '@causljs/react'
 
 function Dashboard({ userNode }) {
   const user = useCausl(userNode) // user: { name, email, ... }
@@ -95,7 +95,7 @@ across the FFI boundary:
 
 ```tsx
 import { useMemo } from 'react'
-import { useCausl, useCauslCommit } from '@causl/react'
+import { useCausl, useCauslCommit } from '@causljs/react'
 
 function Dashboard({ userNode }) {
   const user = useCausl(userNode)
@@ -139,7 +139,7 @@ per-node version counter `EngineTelemetry` surfaces:
 
 ```ts
 import { useMemo } from 'react'
-import { useCausl, useEngineTelemetry } from '@causl/react'
+import { useCausl, useEngineTelemetry } from '@causljs/react'
 
 function ExpensiveTransform({ node }) {
   const value = useCausl(node)
@@ -240,13 +240,13 @@ Rust crate version.
 
 ## 2. Dynamic-import patterns for vendoring
 
-`@causl/core/wasm` ships with a default loader that resolves the
+`@causljs/core/wasm` ships with a default loader that resolves the
 `.wasm` artefact via the package's `exports` map. Adopters who
 host their own copy (CDN, S3, intranet asset server) override the
 base URL through `WasmBackendOptions.wasmBaseUrl`:
 
 ```ts
-import { loadWasmBackend } from '@causl/core/wasm'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend({
   wasmBaseUrl: 'https://cdn.example.com/causl/0.0.0/wasm-pkg/',
@@ -261,22 +261,22 @@ a trailing slash**; the loader does not normalise.
 ### Versioned vendoring
 
 Every causl release pins the WASM artefacts at the package's
-version string (`VERSION` exported from `@causl/core`). A
-deployment-time script that copies `node_modules/@causl/core/wasm-pkg/`
+version string (`VERSION` exported from `@causljs/core`). A
+deployment-time script that copies `node_modules/@causljs/core/wasm-pkg/`
 into your asset server should preserve the version segment so the
 SRI hashes in the preload links stay correct:
 
 ```sh
 # deploy-time
-VERSION=$(node -e "console.log(require('@causl/core').VERSION)")
-cp -r node_modules/@causl/core/wasm-pkg ./public/causl/$VERSION/wasm-pkg
+VERSION=$(node -e "console.log(require('@causljs/core').VERSION)")
+cp -r node_modules/@causljs/core/wasm-pkg ./public/causl/$VERSION/wasm-pkg
 ```
 
 And at runtime:
 
 ```ts
-import { VERSION } from '@causl/core'
-import { loadWasmBackend } from '@causl/core/wasm'
+import { VERSION } from '@causljs/core'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend({
   wasmBaseUrl: `/causl/${VERSION}/wasm-pkg/`,
@@ -313,8 +313,8 @@ _acceleration_, not _substitution_. The structured fallback
 contract is:
 
 ```ts
-import { createCausl } from '@causl/core'
-import { loadWasmBackend, WasmBackendUnavailableError } from '@causl/core/wasm'
+import { createCausl } from '@causljs/core'
+import { loadWasmBackend, WasmBackendUnavailableError } from '@causljs/core/wasm'
 
 async function makeBackend() {
   try {
@@ -383,7 +383,7 @@ const backend = await loadWasmBackend({ bridge: 'wasmgc-builtins' })
 const graph = createCausl({ backend: 'js' })
 ```
 
-The `backend: 'js'` short-circuit never imports `@causl/core/wasm`
+The `backend: 'js'` short-circuit never imports `@causljs/core/wasm`
 at all — adopters who pin the TS engine pay zero bundle cost for
 the WASM entry stub.
 
@@ -406,7 +406,7 @@ shadow commit-wire crossing and flushes it as one batched envelope
 instead of one envelope per commit:
 
 ```ts
-import { loadWasmBackend } from '@causl/core/wasm'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend({
   batchedFlush: { afterN: 100, intervalMs: 16 },
@@ -416,7 +416,7 @@ const backend = await loadWasmBackend({
 …or, on the `backend: 'auto'` path:
 
 ```ts
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 
 const graph = createCausl({
   backend: 'auto',
@@ -463,7 +463,7 @@ scaffolding" callout; option-c doc §2.1 Answer C):
 
 The opt-in is **per-graph** (not a global flag) and **additive** (no
 deprecation cycle, no lint, no RC track). Multi-graph adopters
-(`@causl/sync`, embedded use-cases) opt in per graph without
+(`@causljs/sync`, embedded use-cases) opt in per graph without
 cross-graph coupling.
 
 ### Why turn it on at all, then?
@@ -504,7 +504,7 @@ each flush boundary, **after** a per-flush byte-compare against the
 always-on JS-engine shadow:
 
 ```ts
-import { loadWasmBackend } from '@causl/core/wasm'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend({
   engine: 'rust-ssot', // opt-in; default is 'js-ssot'

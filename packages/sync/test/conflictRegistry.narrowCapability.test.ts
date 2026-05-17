@@ -30,7 +30,7 @@
  * existing conflict suites. This file is a compile-time gate.
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causljs/core'
 import { describe, it } from 'vitest'
 import type {
   ConflictRegistry,

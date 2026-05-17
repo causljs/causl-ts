@@ -4,10 +4,10 @@
  * Engine-side registry for test-only seams. Mirrors the shape of
  * `internal-dispatch.ts` (the adapter-facing seam used by `dispose`)
  * but is kept strictly separate so adapter code never reaches it: the
- * production `@causl/core/internal` entrypoint exposes adapter
+ * production `@causljs/core/internal` entrypoint exposes adapter
  * primitives, while this registry is consumed only by the
- * `@causl/core-testing-internal` package surfaced as
- * `@causl/core/testing`. Splitting the two registries keeps §12.3
+ * `@causljs/core-testing-internal` package surfaced as
+ * `@causljs/core/testing`. Splitting the two registries keeps §12.3
  * honest — the adapter surface does not grow rows whose justification
  * begins "adapter code has no production use for it" (#376).
  *
@@ -114,7 +114,7 @@ export function lookupTestingDispatch(graph: Graph): TestingDispatch {
   if (!d) {
     throw new Error(
       'Graph was not produced by createCausl() — testing dispatch unavailable. ' +
-        'Did you pass an unrelated object to an @causl/core/testing helper?',
+        'Did you pass an unrelated object to an @causljs/core/testing helper?',
     );
   }
   return d;

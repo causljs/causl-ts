@@ -2,7 +2,7 @@
  * @packageDocumentation
  *
  * Property test pinning the JSON-roundtrip stability of the formula
- * wire-IR exported from `@causl/formula` (canonically declared in
+ * wire-IR exported from `@causljs/formula` (canonically declared in
  * `src/ir.ts`). The carve-out from issue #697 promises that the AST
  * shape is a pure-data structure encoded as plain JSON objects with
  * no methods, no closures, no symbols — meaning

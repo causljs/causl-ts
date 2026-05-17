@@ -2,14 +2,14 @@
  * @packageDocumentation
  *
  * Tests for the statechart introspection helpers exposed by
- * `@causl/devtools`. Covers {@link statechart}, which materialises an
+ * `@causljs/devtools`. Covers {@link statechart}, which materialises an
  * engine configuration snapshot (engine phase, `GraphTime`, commit count),
  * and {@link renderStatechartMermaid}, which projects that configuration
  * into a Mermaid `stateDiagram-v2` source string for documentation and
  * debugger surfaces.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { renderStatechartMermaid, statechart } from '../src/index.js'
 

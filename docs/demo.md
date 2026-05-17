@@ -6,7 +6,7 @@ SPEC §11 commits to a load-bearing claim:
 
 > If I cannot demo "edit a derivation while it's running, watch the change propagate," I have not earned the comparison to spreadsheets.
 
-`pnpm demo:spreadsheet` runs that demo locally. It builds `@causl/core`, `@causl/devtools`, and `@causl/formula`, then serves a static page (`packages/formula/demo/index.html`) on `http://127.0.0.1:4173`.
+`pnpm demo:spreadsheet` runs that demo locally. It builds `@causljs/core`, `@causljs/devtools`, and `@causljs/formula`, then serves a static page (`packages/formula/demo/index.html`) on `http://127.0.0.1:4173`.
 
 The page wires the same 100-cell diamond the Phase 3 acceptance suite already exercises (`packages/formula/test/spreadsheetDemo.test.ts`):
 
@@ -63,7 +63,7 @@ Each classification is rooted in the engine's own primitives (`graph.explain` an
 | Field | What it is |
 | --- | --- |
 | `graph` | The live `Graph` instance. |
-| `replaceMany` | Re-exported from `@causl/devtools`. |
+| `replaceMany` | Re-exported from `@causljs/devtools`. |
 | `commitLog` | Live `DerivedNode<readonly Commit[]>` projection, capacity 50. |
 | `whyUpdated(name)` | Shorthand against the live cell named `name`. |
 | `cells` | Map of cell name → live derivation handle + current formula text. |

@@ -32,7 +32,7 @@ import type {
   Graph,
   InputNode,
   NodeId,
-} from '@causl/core'
+} from '@causljs/core'
 import type { StorageAdapter } from './storage.js'
 
 /**

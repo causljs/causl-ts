@@ -71,7 +71,7 @@ import {
   buildPropertyDag,
   propertyDag,
   tieredPropertyTrials,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 import { createCausl, type Node, type Unsubscribe } from '../../src/index.js'
 
 /**

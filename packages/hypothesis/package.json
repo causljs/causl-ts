@@ -1,16 +1,22 @@
 {
-  "name": "@causl/hypothesis",
+  "name": "@causljs/hypothesis",
   "version": "0.0.0",
-  "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC §16.5).",
+  "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC \u00a716.5).",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
     "test": "vitest",
@@ -25,5 +31,9 @@
     "tsup": "^8.5.0",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }

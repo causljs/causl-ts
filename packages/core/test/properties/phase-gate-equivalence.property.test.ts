@@ -45,7 +45,7 @@
  * — the §15.2 1000-trial floor, deterministic seeds, failing inputs
  * shrink to regression cases under `CAUSL_FUZZ_SEED`. The DAG
  * generator is the shared `propertyDag` from
- * `@causl/core-testing-internal`, so a future generator change
+ * `@causljs/core-testing-internal`, so a future generator change
  * propagates here automatically.
  *
  * The eager-baseline "oracle" for each property is analytic, not
@@ -63,7 +63,7 @@ import {
   buildPropertyDag,
   propertyDag,
   propertyTrials,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 import { createCausl, type Commit } from '../../src/index.js'
 
 describe('property: §5.1 Amendment 1 phase-gate equivalence (#753)', () => {

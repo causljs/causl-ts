@@ -6,13 +6,13 @@
  * explicit double-render scenarios.
  */
 
-import { createCausl, type Graph } from '@causl/core'
+import { createCausl, type Graph } from '@causljs/core'
 import {
   assertConsistentGraphTime,
   assertResultStability,
   propertyTrials,
   type TraceEntry,
-} from '@causl/core/testing'
+} from '@causljs/core/testing'
 import { act, render, screen } from '@testing-library/react'
 import fc from 'fast-check'
 import { StrictMode, useState } from 'react'

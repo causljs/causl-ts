@@ -2,14 +2,14 @@
   "name": "@causl-fixture/esbuild-app",
   "private": true,
   "version": "0.0.0",
-  "description": "esbuild bundler-interop fixture for @causl/core + @causl/core/wasm (#689).",
+  "description": "esbuild bundler-interop fixture for @causljs/core + @causljs/core/wasm (#689).",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "verify": "node verify.mjs"
   },
   "dependencies": {
-    "@causl/core": "file:../../../packages/core"
+    "@causljs/core": "file:../../../packages/core"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"

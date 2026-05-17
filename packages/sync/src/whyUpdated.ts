@@ -73,7 +73,7 @@ export type WhyNotUpdatedReason = 'no-dep-overlap' | 'object-is-deduped'
 
 /**
  * Minimal commit shape the decoders consume. The full {@link Commit}
- * type lives in `@causl/core` and carries more fields; the decoders
+ * type lives in `@causljs/core` and carries more fields; the decoders
  * only need `intent`, so we accept the structural subset to avoid
  * an avoidable cross-package import on the helper surface.
  */

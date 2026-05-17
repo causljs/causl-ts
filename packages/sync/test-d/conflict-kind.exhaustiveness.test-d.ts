@@ -1,5 +1,5 @@
 /**
- * Compile-time exhaustiveness fixture for `@causl/sync`'s
+ * Compile-time exhaustiveness fixture for `@causljs/sync`'s
  * `ConflictKind` discriminated union (#581).
  *
  * Pins the closed four-arm shape: `open | resolved | ignored |

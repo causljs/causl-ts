@@ -1,7 +1,7 @@
 // webpack 5 bundler-interop fixture (#689).
 //
 // The gate this fixture defends is "an adopter using webpack 5 can
-// bundle @causl/core and lazy-import @causl/core/wasm without
+// bundle @causljs/core and lazy-import @causljs/core/wasm without
 // configuration gymnastics beyond `experiments.asyncWebAssembly`".
 //
 // What we exercise:
@@ -9,7 +9,7 @@
 //   - `experiments.asyncWebAssembly: true` — required by the
 //     `new URL('./pkg/...', import.meta.url)` pattern in
 //     packages/core/wasm/index.ts for `.wasm` asset rewriting.
-//   - Code splitting on dynamic `import('@causl/core/wasm')` — the
+//   - Code splitting on dynamic `import('@causljs/core/wasm')` — the
 //     loader stub MUST land in a separate chunk, not the main entry.
 //
 // Output goes to `./dist/`. CI's `verify.mjs` step asserts:

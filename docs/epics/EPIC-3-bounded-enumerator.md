@@ -9,7 +9,7 @@
 **Dependencies:**
 - **EPIC-1 (Schema 3 IR)** — required for `model.events`, `model.scopes`, `node.graph_id`. The §16A.2 PR-A "Schema 3 foundation" is the hard prerequisite; the enumerator's `transition` reads the same fields the four new lint passes ride on. If EPIC-1 slips, EPIC-3 slips with it; we do not start without schema-3 IR types in `tools/checker/src/ir.rs`.
 - **EPIC-2 (lint passes)** — share the SARIF infrastructure but do not block. The enumerator's `--format sarif` reuses `tools/checker/src/sarif.rs` from EPIC-2 if it has landed; otherwise this EPIC ships a parallel module under `tools/enumerator/src/sarif.rs` and EPIC-2 reconciles the two when both are green.
-- **`@causl/core` schema-3 exporter** — `graph.exportModel()` must serialize `events`, `scopes`, and per-node `graph_id`. EPIC-1's PR-A lands this; the enumerator depends on it through the worker pool (the Node worker imports `@causl/core` to evaluate `compute` bodies).
+- **`@causljs/core` schema-3 exporter** — `graph.exportModel()` must serialize `events`, `scopes`, and per-node `graph_id`. EPIC-1's PR-A lands this; the enumerator depends on it through the worker pool (the Node worker imports `@causljs/core` to evaluate `compute` bodies).
 
 ## What I'm shipping
 
@@ -50,7 +50,7 @@ Where the design might be wrong. We are surfacing the four worst objections we c
 The §16.4 narrative names the figure (line 1311: "concretely 5–20 in realistic scripts") but does not show its work. We sampled:
 
 - Two scripts pulled from `packages/core/test/integration/` give us 3 and 7 actions per inter-commit seam respectively.
-- One fixture from `@causl/sync/test/integration/` gives us 14.
+- One fixture from `@causljs/sync/test/integration/` gives us 14.
 - The mean across the existing test suite is 6.8.
 
 Realistic, not aspirational, *for the scripts we have*. The risk is the adopter who writes a script with 50 active observers and 30 in-flight resources:
@@ -330,8 +330,8 @@ The double-check determinism oracle runs each compute request twice on a 1% Bern
 The Node worker boots with:
 
 ```ts
-import { evalCompute } from '@causl/core/eval';
-import { freezeGlobals } from '@causl/core/sandbox';
+import { evalCompute } from '@causljs/core/eval';
+import { freezeGlobals } from '@causljs/core/sandbox';
 freezeGlobals(process.env.CAUSL_FROZEN_CLOCK ?? 0);
 // hand-rolled line-delimited JSON read loop on stdin
 ```
@@ -348,7 +348,7 @@ The worker exits with code 0 on EOF, code 137 on `SIGKILL`, code 1 on uncaught e
 ### TASK 3.5 — Oracle trait + RaceClass enum + per-§9.1-row implementations
 **Files:** `tools/enumerator/src/oracle.rs`, `tools/enumerator/src/oracles/glitch.rs`, `tools/enumerator/src/oracles/subscribe.rs`, `tools/enumerator/src/oracles/cycle.rs`, `tools/enumerator/src/oracles/replay.rs`, `tools/enumerator/src/oracles/dispose.rs`, `tools/enumerator/src/oracles/dynamic_dep.rs`, `tools/enumerator/src/oracles/observer.rs`, `tools/enumerator/src/oracles/monotonicity.rs`, `tools/enumerator/src/differential/apalache.rs`, `packages/core/src/testing/index.ts` (shared predicate exports), `tools/enumerator/tests/oracle_independence.rs`, `tools/enumerator/tests/oracle_predicate_parity.rs`, `tools/enumerator/tests/oracle_no_false_positive.rs`, `tools/enumerator/tests/oracle_cycle_detection_rate.rs`
 
-Per §16.4.1's `Oracle` trait: `fn check(&self, s: &State, prev: Option<&State>, a: &Action) -> Vec<RaceClass>` plus `fn name(&self) -> &'static str`. One oracle per §9.1 row the MODEL layer claims (rows 5, 7, 8 partial — see §16A.1 line 2018–2021). The oracles share predicate code with `packages/core/test/properties/` via a shared `@causl/core/testing` export — `glitch-freedom.test.ts` calls `assertGlitchFree(trace)` and the Rust oracle reuses the same predicate via the worker pool's RPC channel (the predicate runs in Node, not Rust, so adopters who write custom property-test predicates get them automatically picked up by the enumerator).
+Per §16.4.1's `Oracle` trait: `fn check(&self, s: &State, prev: Option<&State>, a: &Action) -> Vec<RaceClass>` plus `fn name(&self) -> &'static str`. One oracle per §9.1 row the MODEL layer claims (rows 5, 7, 8 partial — see §16A.1 line 2018–2021). The oracles share predicate code with `packages/core/test/properties/` via a shared `@causljs/core/testing` export — `glitch-freedom.test.ts` calls `assertGlitchFree(trace)` and the Rust oracle reuses the same predicate via the worker pool's RPC channel (the predicate runs in Node, not Rust, so adopters who write custom property-test predicates get them automatically picked up by the enumerator).
 
 The eight oracles for v1.x. Each one is one Rust file under `tools/enumerator/src/oracles/`; each one has a paired fixture under `tools/enumerator/tests/fixtures/§9.1-row-{N}/` and a paired test in the matching test file.
 
@@ -402,7 +402,7 @@ The `differential::apalache` scaffold registers an alternate oracle source: an `
 
 #### 5 core concerns
 1. **Oracle independence** — each oracle returns its own `Vec<RaceClass>`; oracles do not share state. The `Oracle` trait's `check` signature takes `&self` (read-only), and our impls use no internal `RefCell` / `Mutex`. Test `oracle_independence.rs::parallel_check_equals_serial`: an oracle whose result depends on call order would fail `assert_eq!(parallel_check(oracles, s, prev, a), serial_check(oracles, s, prev, a))`. Property test 1000 trials.
-2. **Predicate sharing with §15** — the oracle for "glitch-freedom" calls into the same predicate as `packages/core/test/properties/glitch-freedom.test.ts` via a shared `@causl/core/testing` export. The shared module exports `assertGlitchFree(state: SerializableState): null | { violation: GlitchViolation }`; the property test calls it directly, the enumerator calls it via the worker pool's `evaluate-predicate` RPC verb. Test `oracle_predicate_parity.rs::glitch_oracle_matches_property_test` runs both sides on the same fixture and asserts byte-identical violation reports. A divergence is a bug in one of them — exactly the §16.5 differential-testing claim made executable.
+2. **Predicate sharing with §15** — the oracle for "glitch-freedom" calls into the same predicate as `packages/core/test/properties/glitch-freedom.test.ts` via a shared `@causljs/core/testing` export. The shared module exports `assertGlitchFree(state: SerializableState): null | { violation: GlitchViolation }`; the property test calls it directly, the enumerator calls it via the worker pool's `evaluate-predicate` RPC verb. Test `oracle_predicate_parity.rs::glitch_oracle_matches_property_test` runs both sides on the same fixture and asserts byte-identical violation reports. A divergence is a bug in one of them — exactly the §16.5 differential-testing claim made executable.
 3. **No false-positive over the bounded run** — if the script is provably race-free and within bound, no oracle fires. Tested in `oracle_no_false_positive.rs` with three hand-written race-free fixtures (a single-input-single-derived graph in `tests/fixtures/race-free/single-derived.json`, a diamond graph with stable deps in `tests/fixtures/race-free/diamond-stable.json`, an async resource fetch with deterministic resolution in `tests/fixtures/race-free/async-deterministic.json`); all three must produce `report.races.is_empty()` under all eight oracles. The bar is hard but achievable because race-free fixtures exist; if any oracle fires, we either fix the oracle or move the fixture out of "race-free".
 4. **MIRI not applicable** — oracle predicates are pure (the heavy `unsafe`-using infra lives in `bfs::*` and `worker::*`, tested under MIRI in TASK 3.3 and 3.4 respectively). We name the absence here so a reviewer who notices "no `enumerator-miri-oracle` job" knows it is deliberate. The oracle modules forbid `unsafe_code` at the module level via `#![forbid(unsafe_code)]` even though the crate-level forbid would suffice — belt and suspenders.
 5. **Property test** — for a random schema-3 IR with a known cycle injected, `cycle::ReachableCycleOracle` fires within `K_prefix=8` steps with >99% probability over 1000 trials. The 1% miss budget is for cycles that lie deeper than `K_prefix` and are revealed only by the suffix-random extension; under Tier 2 (`K_prefix=12`) the miss rate drops to <0.1%. Tracked in the report as a coverage delta against §9.1 — the row is "MODEL-caught" only when the empirical detection rate clears the 99% bar at Tier 1. Test `oracle_cycle_detection_rate.rs::cycle_caught_at_99_percent_tier1`.
@@ -415,7 +415,7 @@ Per §16A.3 CI tier hierarchy (line 2385: "PR with `[model-check]` label, push t
 CLI surface:
 
 - Reads IR from `--ir <path>` (default `./causl-model.json`).
-- Reads script from `--script <path>` (default `./script.causl.ts` compiled via the `@causl/core` exporter).
+- Reads script from `--script <path>` (default `./script.causl.ts` compiled via the `@causljs/core` exporter).
 - Reads bounds from `--bound K_prefix=N --bound depth=N --bound visited_cap=N --bound suffix_random=N`.
 - Reads tier from `--tier=cycles-only|async-and-msg|full` (matches `Tier` enum in §16.4.1 line 1593).
 - Reads seed from `--seed=0xHHHH` (hex, 64-bit).
@@ -460,7 +460,7 @@ Each rule has a `helpUri` pointing at the §9.1 row in `docs/race-catalogue.md`.
 
 `tools/enumerator/tests/acceptance/§16.6-milestone-1.rs` — runs the BFS over a known-cycle fixture (`tests/fixtures/conditional-cycle-row-8.json`); asserts `cycle::ReachableCycleOracle` fires with `RaceClass::ReachableCycle { path }`; the `path` is the minimal cycle (Tarjan's SCC output, sorted lex, then trimmed to the first edge that closes the loop). §16.6's milestone 1 is "BFS skeleton + cycle row coverage", and rows 1, 4, 8 of §9.1 are caught on the known-race fixture; rows 5, 7 are caught on the property-suite scaffolding (the `differential::apalache` predicate-sharing path from TASK 3.5). The test refuses to compile if any of the five §9.1 rows the milestone names lack a fixture in `tests/fixtures/§9.1-row-{1,4,5,7,8}/`.
 
-A second acceptance gate covers milestone 2 (async resolution + Msg trajectory): `tools/enumerator/tests/acceptance/§16.6-milestone-2.rs` exercises `Action::ResolvePending`, `Action::BeginFetch`, `Action::DispatchMsg` against an `@causl/sync` resource fixture and asserts §9.1 rows 2 and 6 oracles fire correctly. (Row 6 is RUNTIME-ONLY per §16A.1 line 2019, so the milestone-2 acceptance does not assert detection of row 6 — it asserts the *absence* of false positives on a row-6-equivalent runtime-only scenario.)
+A second acceptance gate covers milestone 2 (async resolution + Msg trajectory): `tools/enumerator/tests/acceptance/§16.6-milestone-2.rs` exercises `Action::ResolvePending`, `Action::BeginFetch`, `Action::DispatchMsg` against an `@causljs/sync` resource fixture and asserts §9.1 rows 2 and 6 oracles fire correctly. (Row 6 is RUNTIME-ONLY per §16A.1 line 2019, so the milestone-2 acceptance does not assert detection of row 6 — it asserts the *absence* of false positives on a row-6-equivalent runtime-only scenario.)
 
 The acceptance gates are the §16.6 milestone entry conditions for milestones 3, 4, 5. A green `§16.6-milestone-1.rs` plus `§16.6-milestone-2.rs` is the merge gate for opening EPIC-4 (hypothesis grammar) and EPIC-7 (Apalache corpus). Milestone 3 (the hypothesis evaluator) is EPIC-4's acceptance; milestone 4 (the shrinker) is EPIC-4's acceptance; milestone 5 (the coverage-gate ratchet) is the cross-EPIC docs ratchet that turns `docs/checker-coverage.md`'s coverage column from yellow to green.
 
@@ -470,9 +470,9 @@ The acceptance gates are the §16.6 milestone entry conditions for milestones 3,
 - **Schema 3 IR (EPIC-1).** Already a hard dependency. The enumerator's `transition` reads `model.events`, `model.scopes`, `model.nodes[i].graph_id` — none of those exist in schema 2. EPIC-1 must land first; if EPIC-1 slips, EPIC-3 slips with it.
 - **§9.1 rows 6, 9, 10.** Runtime-only by §16A.1's classification — network-dependent (row 6) or multi-user (rows 9, 10). The enumerator does not target them and the report's coverage column does not claim them. Per §16A.1 line 2032, `RUNTIME-ONLY = 4 (rows 6, 9, 10, plus row 3 until the four-state union ships)`.
 - **Coverage-gate ratchet milestone 5.** §16.6 milestone 5 ("docs/checker-coverage.md reports ≥90% across STATIC + PROPERTY + MODEL") is a documentation-and-fixtures task that opens after milestones 1–4 are green. Tracked under EPIC-3-followup-coverage-ratchet. The §17 commitment 8 ratchet pin against the coverage column moves only when this follow-up lands.
-- **`@causl/sync` resource integration deeper than `BeginFetch`/`ResolvePending`.** The §16.6 milestone 2 work that adds `Action::ResourceTransition { rid, event ∈ {startLoad, resolve, fail, markStale} }` and the corresponding `ResourceState` sub-statechart is a follow-up EPIC. Today the enumerator handles `BeginFetch` and `ResolvePending` only; the four-way transition lattice opens with milestone 2 inside this EPIC, but the deeper `@causl/sync` integration (cancellation, retry, exponential backoff modelling) is EPIC-6.
+- **`@causljs/sync` resource integration deeper than `BeginFetch`/`ResolvePending`.** The §16.6 milestone 2 work that adds `Action::ResourceTransition { rid, event ∈ {startLoad, resolve, fail, markStale} }` and the corresponding `ResourceState` sub-statechart is a follow-up EPIC. Today the enumerator handles `BeginFetch` and `ResolvePending` only; the four-way transition lattice opens with milestone 2 inside this EPIC, but the deeper `@causljs/sync` integration (cancellation, retry, exponential backoff modelling) is EPIC-6.
 - **eslint-plugin-causl rules** — the `no-impure-compute` rule named in the brutal-critical review's "Worker-pool RPC" objection is EPIC-5 (lint plugin). This EPIC does not ship lint rules.
-- **Per-platform binary distribution** — §16.7 names `optionalDependencies` per-platform packages (`@causl/checker-{linux-x64, ...}`). Adding `--features enumerator` to those release builds is a release-checker.yml change tracked under EPIC-3-followup-release. This EPIC ships the source; the release lockstep is a separate PR.
+- **Per-platform binary distribution** — §16.7 names `optionalDependencies` per-platform packages (`@causljs/checker-{linux-x64, ...}`). Adding `--features enumerator` to those release builds is a release-checker.yml change tracked under EPIC-3-followup-release. This EPIC ships the source; the release lockstep is a separate PR.
 - **Plumbing for adopter-supplied custom oracles.** A future `Oracle` impl an adopter writes (a non-§9.1-row predicate) is not covered. The trait is public but the registration mechanism (a discovery convention, a `register_oracle!` macro, a config-file-driven loader) is not designed in this EPIC. We name this gap so an adopter who reads "Oracle is `pub trait`" does not assume custom oracles are first-class.
 
 ## Cross-task dependency graph
@@ -569,7 +569,7 @@ A nightly job (`enumerator-telemetry`, in `.github/workflows/checker-nightly.yml
 | R5 | Apalache differential corpus disagrees on a property | Low | Blocks release until reconciled | EPIC-7 |
 | R6 | `compute` impurity rate >1% in adopter code | Medium | `ReplayDivergenceOracle` floods the report | EPIC-5 (eslint plugin) |
 | R7 | LRU cache memory blow-up on Linux runners | Low | CI OOM | TASK 3.3 owner |
-| R8 | Predicate-sharing surface (`@causl/core/testing`) drifts | Medium | TASK 3.5 oracles diverge from §15 properties | shared owner with §15 lead |
+| R8 | Predicate-sharing surface (`@causljs/core/testing`) drifts | Medium | TASK 3.5 oracles diverge from §15 properties | shared owner with §15 lead |
 
 R1 is the only schedule-blocker; the rest are work-around-able with a named owner. The mitigations are written into the task body where applicable; the register is the at-a-glance summary the engineering manager reviews weekly.
 

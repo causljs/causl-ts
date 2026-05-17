@@ -11,7 +11,7 @@
  * `packages/sync/test/properties/origin-bound-resolution.property.test.ts`
  * for the property witness, assert it exists, has it() blocks,
  * and threads the 1000-trial floor (via propertyTrials or the
- * @causl/sync local seam).
+ * @causljs/sync local seam).
  *
  * Lifts commitment 5 from PROPERTY toward MECHANICAL: this script
  * proves the witness is structurally sound; the actual property

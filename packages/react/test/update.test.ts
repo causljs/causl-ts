@@ -16,7 +16,7 @@
  * fail loudly rather than silently no-opping.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { createUpdate, runMessages, type Update } from '../src/index.js'
 

@@ -24,7 +24,7 @@
  * demonstrate that the application surface §8 promises is real, not
  * documentation-only. The MVU primitives are defined inline so the
  * core acceptance gate stays free of any binding-package dependency
- * (the React binding ships the same shape under `@causl/react`,
+ * (the React binding ships the same shape under `@causljs/react`,
  * but §8 is a claim about the engine itself).
  */
 
@@ -145,7 +145,7 @@ describe('SPEC §10 worked example', () => {
    *
    * The MVU types are declared inline so the engine's acceptance
    * gate has no binding-package dependency. The `Update` signature
-   * matches `@causl/react`'s today (`(msg, graph) => graph`); to
+   * matches `@causljs/react`'s today (`(msg, graph) => graph`); to
    * stay agnostic of any upstream signature flux the handlers issue
    * `graph.commit(...)` against the captured `graph` and the runner
    * simply ignores any return value, so the same test would pass
@@ -164,7 +164,7 @@ describe('SPEC §10 worked example', () => {
     // Graph. The runner is allowed to call `graph.commit(...)`; the
     // *returned* handle is the same Graph instance, whose `now` has
     // advanced by exactly one. Declaring the type inline mirrors the
-    // shape `@causl/react` ships and matches §8's listing.
+    // shape `@causljs/react` ships and matches §8's listing.
     type Update<M, G extends Graph = Graph> = (msg: M, graph: G) => G
 
     // Assemble the worked-example graph. The structure is identical
@@ -201,7 +201,7 @@ describe('SPEC §10 worked example', () => {
 
     // The dispatch loop is the runner: messages are sequenced into
     // commits one at a time, with no batching. Equivalent to
-    // `runMessages(update, graph, [...])` from `@causl/react`.
+    // `runMessages(update, graph, [...])` from `@causljs/react`.
     const messages: readonly Msg[] = [
       { kind: 'bump-a', value: 10 },
       { kind: 'bump-both', a: 100, b: 200 },

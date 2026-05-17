@@ -58,7 +58,7 @@ import {
   __isPhase1WasmBackendForTests,
   __createWasmBackendSyncForTests,
   type BackendEngine,
-} from '@causl/core/wasm'
+} from '@causljs/core/wasm'
 import { describe, expect, it } from 'vitest'
 
 /**

@@ -3,7 +3,7 @@
   "generated_by": "tools/release/release.py",
   "packages": [
     {
-      "name": "@causl/core",
+      "name": "@causljs/core",
       "version": "0.2.0",
       "slug": "causl-core",
       "bytes": 305790,
@@ -14,7 +14,7 @@
       "compression": "brotli"
     },
     {
-      "name": "@causl/sync",
+      "name": "@causljs/sync",
       "version": "0.2.0",
       "slug": "causl-sync",
       "bytes": 20518,
@@ -25,7 +25,7 @@
       "compression": "brotli"
     },
     {
-      "name": "@causl/react",
+      "name": "@causljs/react",
       "version": "0.2.0",
       "slug": "causl-react",
       "bytes": 57544,
@@ -36,7 +36,7 @@
       "compression": "brotli"
     },
     {
-      "name": "@causl/formula",
+      "name": "@causljs/formula",
       "version": "0.2.0",
       "slug": "causl-formula",
       "bytes": 54030,

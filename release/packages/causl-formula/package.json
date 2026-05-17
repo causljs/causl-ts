@@ -1,5 +1,5 @@
 {
-  "name": "@causl/formula",
+  "name": "@causljs/formula",
   "version": "0.2.0",
   "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
   "license": "MIT",
@@ -18,7 +18,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@causl/core": "^0.2.0"
+    "@causljs/core": "^0.2.0"
   },
   "sideEffects": false
 }

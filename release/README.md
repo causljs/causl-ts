@@ -1,7 +1,7 @@
 # causl 0.2.0 — release bundle
 
 This directory is built by `tools/release/release.py`. It contains the
-minimum viable subset of `@causl/*` packages needed to ship a real
+minimum viable subset of `@causljs/*` packages needed to ship a real
 TypeScript application against the causl engine — the **TypeScript-only
 path**; no WASM artefacts, no native checker binaries.
 
@@ -9,10 +9,10 @@ path**; no WASM artefacts, no native checker binaries.
 
 | Package | Runtime (brotli) | + Types (brotli) | Raw on disk |
 | --- | ---: | ---: | ---: |
-| **@causl/core** v0.2.0 (`packages/causl-core/`) | 21.70 KiB | 47.50 KiB | 298.6 KiB |
-| **@causl/sync** v0.2.0 (`packages/causl-sync/`) | 3.83 KiB | 2.38 KiB | 20.0 KiB |
-| **@causl/react** v0.2.0 (`packages/causl-react/`) | 2.27 KiB | 12.73 KiB | 56.2 KiB |
-| **@causl/formula** v0.2.0 (`packages/causl-formula/`) | 5.03 KiB | 9.22 KiB | 52.8 KiB |
+| **@causljs/core** v0.2.0 (`packages/causl-core/`) | 21.70 KiB | 47.50 KiB | 298.6 KiB |
+| **@causljs/sync** v0.2.0 (`packages/causl-sync/`) | 3.83 KiB | 2.38 KiB | 20.0 KiB |
+| **@causljs/react** v0.2.0 (`packages/causl-react/`) | 2.27 KiB | 12.73 KiB | 56.2 KiB |
+| **@causljs/formula** v0.2.0 (`packages/causl-formula/`) | 5.03 KiB | 9.22 KiB | 52.8 KiB |
 | **TOTAL** | **32.83 KiB** | 71.83 KiB | 427.6 KiB |
 
 **Runtime (brotli)** is the headline number — the compressed `.js`
@@ -48,13 +48,13 @@ pnpm add ./packages/causl-core/causl-core-0.2.0.tgz
 
 ## What's excluded vs the source workspace
 
-- All WASM artefacts (`@causl/core/wasm` subpath; `@causl/core` exports
+- All WASM artefacts (`@causljs/core/wasm` subpath; `@causljs/core` exports
   the TypeScript engine only in this bundle).
-- `@causl/checker` and its platform-specific native binary shards.
-- `@causl/sync`, `@causl/persistence`, `@causl/devtools`,
-  `@causl/devtools-bridge`, `@causl/hypothesis`,
-  `@causl/migration-check`, `@causl/sync-testing-internal`.
-- The `./internal` and `./testing` subpath exports on `@causl/core`
+- `@causljs/checker` and its platform-specific native binary shards.
+- `@causljs/sync`, `@causljs/persistence`, `@causljs/devtools`,
+  `@causljs/devtools-bridge`, `@causljs/hypothesis`,
+  `@causljs/migration-check`, `@causljs/sync-testing-internal`.
+- The `./internal` and `./testing` subpath exports on `@causljs/core`
   (these are reserved for cross-package internals and test helpers).
 - Source maps (`*.map`) and the `//# sourceMappingURL=...` trailers
   in `.js` files.

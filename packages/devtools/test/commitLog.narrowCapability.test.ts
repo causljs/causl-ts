@@ -18,7 +18,7 @@
  * directives stop being errors and this file fails to type-check.
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causljs/core'
 import { describe, it } from 'vitest'
 import type { CommitLogGraph, commitLog } from '../src/index.js'
 

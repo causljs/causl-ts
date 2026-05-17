@@ -13,7 +13,7 @@
  * graph misuse is rejected loudly.
  */
 
-import { createCausl, type Compute } from '@causl/core'
+import { createCausl, type Compute } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { liveDerived, replaceMany, type LiveDerivedHandle } from '../src/index.js'
 

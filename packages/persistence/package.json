@@ -1,16 +1,22 @@
 {
-  "name": "@causl/persistence",
+  "name": "@causljs/persistence",
   "version": "0.0.0",
-  "description": "UI-preference persistence for Causl — persistedInput() and storage adapters.",
+  "description": "UI-preference persistence for Causl \u2014 persistedInput() and storage adapters.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
     "test": "vitest",
@@ -30,11 +36,11 @@
     }
   },
   "peerDependencies": {
-    "@causl/core": "workspace:*"
+    "@causljs/core": "workspace:*"
   },
   "devDependencies": {
-    "@causl/core": "workspace:*",
-    "@causl/core-testing-internal": "workspace:*",
+    "@causljs/core": "workspace:*",
+    "@causljs/core-testing-internal": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "eslint": "^9.39.4",
@@ -43,5 +49,9 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }

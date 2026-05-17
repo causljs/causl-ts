@@ -5,7 +5,7 @@
 
   The measured numbers below are captured by
   `packages/bench/scripts/gc-pressure-tree-scaling.ts`
-  (`pnpm --filter @causl/bench bench:gc-pressure`) and pinned in
+  (`pnpm --filter @causljs/bench bench:gc-pressure`) and pinned in
   `packages/bench/report/gc-pressure-tree-scaling.json`. The §2 table
   is transcribed verbatim from that JSON's own generated
   `comparisonTableMarkdown` (doc == artefact by construction).
@@ -286,7 +286,7 @@ V2-DESIGN §0 framing one bit.**
 ## 5. Reproduce
 
 ```
-pnpm --filter @causl/bench bench:gc-pressure
+pnpm --filter @causljs/bench bench:gc-pressure
 # matrix override:    GC_PRESSURE_TREE_SIZES=1000,10000,50000
 # deeper operator run: GC_PRESSURE_COMMITS_50000=20000  (etc.)
 ```

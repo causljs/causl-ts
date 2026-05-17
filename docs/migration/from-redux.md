@@ -2,7 +2,7 @@
 
 Companion to `from-jotai.md` and `from-mobx.md`. The contract that
 backs this guide is `docs/migration/RULE_CATALOGUE.md`; the drift
-detector `causl-migration-check` (see `packages/migration-check`)
+detector `causljs-migration-check` (see `packages/migration-check`)
 flags un-migrated patterns in CI by rule ID. There is no codemod
 and we do not plan to ship one — the migration is hand-written
 under the rule catalogue's guidance. The drift detector classifies
@@ -29,7 +29,7 @@ convention is `{ kind: 'action', ...fields }` — `kind` because
 "type" is overloaded with TypeScript's word, and flat fields because
 discriminated unions are simpler to exhaust over than `payload`-as-bag.
 Apply the shape change by hand; the drift detector
-(`causl-migration-check`) reports `payload`-shaped messages,
+(`causljs-migration-check`) reports `payload`-shaped messages,
 middleware, and async thunks by rule ID — see
 `docs/migration/RULE_CATALOGUE.md`.
 
@@ -51,8 +51,8 @@ const counterSlice = createSlice({
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causl/core'
-import { createUpdate } from '@causl/react'
+import { createCausl } from '@causljs/core'
+import { createUpdate } from '@causljs/react'
 
 const graph = createCausl()
 const counter = graph.input('counter', 0)
@@ -92,14 +92,14 @@ const update = createUpdate<Msg>({
 
 `createAsyncThunk` orchestrates a fetch-and-store-result lifecycle
 keyed off action types. Causl splits the two concerns: the
-`resource` primitive from `@causl/sync` owns the lifecycle as a
+`resource` primitive from `@causljs/sync` owns the lifecycle as a
 tagged-union node on the graph, and `useCauslSuspense` from
-`@causl/react` projects the same node into Suspense semantics at
+`@causljs/react` projects the same node into Suspense semantics at
 the React boundary. Both ship today.
 
 ```ts
-import { resource } from '@causl/sync'
-import { useCausl, useCauslSuspense } from '@causl/react'
+import { resource } from '@causljs/sync'
+import { useCausl, useCauslSuspense } from '@causljs/react'
 
 // Before
 const fetchUser = createAsyncThunk('user/fetch', async (id: string) => {
@@ -162,7 +162,7 @@ version counter `EngineTelemetry` surfaces. Cross-link:
 naturally to `useCauslFamily(key, factory)` — the family hook gives
 you a stable `Node<T>` per entity id within a provider, with refcount-
 driven disposal when the last consumer unmounts. This shipped in
-PR #209 and is exported from `@causl/react`.
+PR #209 and is exported from `@causljs/react`.
 
 ```ts
 // Before
@@ -185,7 +185,7 @@ function UserRow({ id }: { id: string }) {
   case-by-case.
 - `createSelector` (reselect). Causl's derived nodes already
   memoize by identity, so the wrapper is usually unnecessary;
-  `causl-migration-check` flags occurrences by rule ID — see
+  `causljs-migration-check` flags occurrences by rule ID — see
   `docs/migration/RULE_CATALOGUE.md` (rule `R-05`).
-- Redux DevTools — replaced wholesale by `@causl/devtools-bridge`
+- Redux DevTools — replaced wholesale by `@causljs/devtools-bridge`
   (#142), which speaks the same protocol.

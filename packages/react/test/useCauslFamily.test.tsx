@@ -3,7 +3,7 @@
  *
  * Behavioural contract for {@link useCauslFamily}: stable per-key
  * node identity within a single provider, isolated namespaces across
- * providers, refcount-driven disposal via `@causl/core/internal`,
+ * providers, refcount-driven disposal via `@causljs/core/internal`,
  * and StrictMode-safe deferred dispose.
  *
  * The disposal channel routes through the internal entrypoint
@@ -22,7 +22,7 @@ import {
   NodeDisposedError,
   type Graph,
   type Node,
-} from '@causl/core'
+} from '@causljs/core'
 import { act, render, renderHook } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -206,7 +206,7 @@ describe('useCauslFamily — per-provider isolation', () => {
 })
 
 /**
- * Disposal contract — disposal goes through `@causl/core/internal`
+ * Disposal contract — disposal goes through `@causljs/core/internal`
  * (no public-Graph leak) and is deferred via microtask so StrictMode
  * does not destroy and recreate the node.
  */

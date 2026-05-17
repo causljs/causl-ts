@@ -2,7 +2,7 @@
  * Phase-1 wrapper-not-Rust disclosure gate (#1126).
  *
  * Per Beck/Metz ship-verdict panel: the load-bearing risk in shipping
- * `@causl/core` 0.9.0 is adopters reading "WASM substrate" as "WASM
+ * `@causljs/core` 0.9.0 is adopters reading "WASM substrate" as "WASM
  * perf" and shipping `causl-wasm` into a hot path expecting the
  * Rust-engine win that isn't there yet. The mitigation lives at the
  * top of `packages/core/wasm/README.md` as a Phase-1 callout block

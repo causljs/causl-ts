@@ -96,7 +96,7 @@ describe('extractWitnessPaths (#565 regex fix)', () => {
 describe('check-commitment-11 script integration', () => {
   test('invokes successfully from workspace root regardless of cwd', () => {
     // Regression for the workflow-side bug: the original quarterly-audit.yml
-    // ran `pnpm --filter @causl/core exec tsx "$script"`, which reset cwd
+    // ran `pnpm --filter @causljs/core exec tsx "$script"`, which reset cwd
     // to packages/core/. The script SHOULD be cwd-resilient via __dirname
     // resolution. This test exercises that property by invoking from a
     // subdirectory and asserting non-zero S-rows are reported.

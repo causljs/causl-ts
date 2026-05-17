@@ -436,7 +436,7 @@ function readBridgeOverride(): 'gc' | 'serde' | 'auto' | undefined {
 function makeSerdeJsonPlaceholder(): Bridge {
   const placeholderError = (): Error =>
     new Error(
-      '[@causl/core] serde-json bridge is a placeholder pending #693. ' +
+      '[@causljs/core] serde-json bridge is a placeholder pending #693. ' +
         'Real implementation lands with the wasm-pack pipeline.',
     )
   const features: BridgeFeatures = Object.freeze({
@@ -549,7 +549,7 @@ export async function detectBridge(): Promise<Bridge> {
  *
  * @remarks
  * **STUB pending #692.** Returns the placeholder. The real
- * implementation will dynamic-import `@causl/core/wasm-gc-builtins`
+ * implementation will dynamic-import `@causljs/core/wasm-gc-builtins`
  * and instantiate the wasm-pack-produced module.
  */
 async function loadGcBridge(_features: BridgeFeatures): Promise<Bridge> {
@@ -571,7 +571,7 @@ async function loadGcBridge(_features: BridgeFeatures): Promise<Bridge> {
  *
  * @remarks
  * **STUB pending #692.** Returns the placeholder. The real
- * implementation will dynamic-import `@causl/core/wasm-gc-classic`.
+ * implementation will dynamic-import `@causljs/core/wasm-gc-classic`.
  */
 async function loadGcClassicBridge(_features: BridgeFeatures): Promise<Bridge> {
   await Promise.resolve()
@@ -583,7 +583,7 @@ async function loadGcClassicBridge(_features: BridgeFeatures): Promise<Bridge> {
  *
  * @remarks
  * **STUB pending #693.** Returns the placeholder. The real
- * implementation will dynamic-import `@causl/core/wasm-serde` and
+ * implementation will dynamic-import `@causljs/core/wasm-serde` and
  * instantiate the wasm-pack-produced module.
  */
 function loadSerdeBridge(_features: BridgeFeatures): Bridge {

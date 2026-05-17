@@ -35,7 +35,7 @@ wiring confirm this:
    `'js' | 'auto'`.** The `backend: 'wasm'` value the bench wants to
    pin through `createCausl` is not in the union. Adopters who want
    WASM unconditionally must drive `loadWasmBackend()` from
-   `@causl/core/wasm` directly. The bench harness does not.
+   `@causljs/core/wasm` directly. The bench harness does not.
 
 3. **`packages/core/wasm/index.ts:538-601` — `WasmBackend.commit()`
    SSOT is still the TS engine.** Post-F-marshal.5 (PR #1477),
@@ -260,7 +260,7 @@ it.
   (post-F-marshal.N, F-marshal sub-epic CLOSED).
 - Toolchain: `cargo 1.89.0`, `rustc 1.89.0`, `wasm-pack 0.14.0`,
   `node v25.9.0`.
-- Bench harness: `@causl/bench` workspace package; `n=15` measured
+- Bench harness: `@causljs/bench` workspace package; `n=15` measured
   samples per trial; `DEFAULT_WARMUP_ITERATIONS = 5`; `--expose-gc`
   enforced via `assertExposeGc`.
 - Machine: macOS Darwin 25.4.0 (developer workstation; not a dedicated

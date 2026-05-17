@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * `@causl/hypothesis` — temporal-logic hypothesis combinators for
+ * `@causljs/hypothesis` — temporal-logic hypothesis combinators for
  * the Causl bounded enumerator.
  *
  * Per SPEC §16.5.1, the surface is the closed grammar:

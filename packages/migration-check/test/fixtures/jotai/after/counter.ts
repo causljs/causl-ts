@@ -2,8 +2,8 @@
 // findings.length === 0 for this file (no Jotai imports, no
 // transitional bridge package). See docs/migration/from-jotai.md
 // for the worked example this fixture mirrors.
-import { createCausl } from '@causl/core'
-import { useCausl, useDispatch, createUpdate } from '@causl/react'
+import { createCausl } from '@causljs/core'
+import { useCausl, useDispatch, createUpdate } from '@causljs/react'
 
 type Msg = { kind: 'inc' } | { kind: 'set'; value: number }
 

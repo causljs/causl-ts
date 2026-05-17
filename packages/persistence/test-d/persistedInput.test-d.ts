@@ -21,7 +21,7 @@
  * `persistedInput(g, 'k', 0, opts)` could ship green by accident.
  */
 
-import { createCausl, type InputNode } from '@causl/core'
+import { createCausl, type InputNode } from '@causljs/core'
 import { expectAssignable, expectError } from 'tsd'
 import { memoryAdapter, persistedInput } from '../src/index.js'
 

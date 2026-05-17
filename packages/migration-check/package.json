@@ -1,15 +1,25 @@
 {
-  "name": "@causl/migration-check",
+  "name": "@causljs/migration-check",
   "version": "0.0.0",
-  "description": "Migration drift detector — finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase. Rule contract: docs/migration/RULE_CATALOGUE.md.",
+  "description": "Migration drift detector \u2014 finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase. Rule contract: docs/migration/RULE_CATALOGUE.md.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "causl-migration-check": "./dist/cli.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "files": ["dist", "README.md"],
+  "bin": {
+    "causljs-migration-check": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
     "typescript": "^5.6.3"
   },
@@ -29,5 +39,9 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }

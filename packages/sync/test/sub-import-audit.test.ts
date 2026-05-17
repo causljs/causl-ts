@@ -4,7 +4,7 @@
  * EPIC-11 / TASK 11.4 — bundle-audit smoke test.
  *
  * Exercises the per-primitive sub-imports the EPIC-11 PR introduced
- * (`@causl/sync/resource`, `@causl/sync/conflict`) and asserts they
+ * (`@causljs/sync/resource`, `@causljs/sync/conflict`) and asserts they
  * re-export the same symbols as the full barrel. The CI-gated
  * `size-limit` ceilings live in the root `package.json` per
  * SPEC.async §14.2; this file is the runtime smoke test that the
@@ -17,7 +17,7 @@ import * as resourceEntry from '../src/resource-entry.js'
 import * as conflictEntry from '../src/conflict-entry.js'
 
 describe('SPEC.async §14.2 — bundle audit', () => {
-  it('@causl/sync/resource re-exports the resource primitive', () => {
+  it('@causljs/sync/resource re-exports the resource primitive', () => {
     expect(typeof resourceEntry.resource).toBe('function')
     expect(resourceEntry.resource).toBe(fullBarrel.resource)
     expect(resourceEntry.ForbiddenResourceTransitionError).toBe(
@@ -25,7 +25,7 @@ describe('SPEC.async §14.2 — bundle audit', () => {
     )
   })
 
-  it('@causl/sync/conflict re-exports the conflict primitive', () => {
+  it('@causljs/sync/conflict re-exports the conflict primitive', () => {
     expect(typeof conflictEntry.createConflictRegistry).toBe('function')
     expect(conflictEntry.createConflictRegistry).toBe(
       fullBarrel.createConflictRegistry,

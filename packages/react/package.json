@@ -1,7 +1,7 @@
 {
-  "name": "@causl/react",
+  "name": "@causljs/react",
   "version": "0.2.0",
-  "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
+  "description": "React bindings for Causl \u2014 useCausl, useDispatch, CauslProvider.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -32,8 +32,8 @@
     "react": "^18.3.0 || ^19.0.0"
   },
   "dependencies": {
-    "@causl/core": "workspace:*",
-    "@causl/sync": "workspace:*"
+    "@causljs/core": "workspace:*",
+    "@causljs/sync": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
@@ -58,5 +58,9 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
 }

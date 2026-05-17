@@ -1,8 +1,8 @@
 {
-  "name": "@causl/sync-testing-internal",
+  "name": "@causljs/sync-testing-internal",
   "private": true,
   "version": "0.0.0",
-  "description": "Internal: shared test helpers for @causl/sync property suites. Mirrors @causl/core-testing-internal for the adapter surface (SPEC.async §15.0 API sketch).",
+  "description": "Internal: shared test helpers for @causljs/sync property suites. Mirrors @causljs/core-testing-internal for the adapter surface (SPEC.async §15.0 API sketch).",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -11,11 +11,11 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@causl/core": "workspace:*",
-    "@causl/sync": "workspace:*"
+    "@causljs/core": "workspace:*",
+    "@causljs/sync": "workspace:*"
   },
   "devDependencies": {
-    "@causl/core-testing-internal": "workspace:*",
+    "@causljs/core-testing-internal": "workspace:*",
     "fast-check": "^3.20.0",
     "vitest": "^2.0.0"
   }

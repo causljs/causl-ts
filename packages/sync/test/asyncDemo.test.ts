@@ -10,7 +10,7 @@
  * derived view that exposes items only when loaded for the current selection.
  */
 
-import { createCausl, type Graph, type InputNode } from '@causl/core'
+import { createCausl, type Graph, type InputNode } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { resource, type ResourceState } from '../src/index.js'
 

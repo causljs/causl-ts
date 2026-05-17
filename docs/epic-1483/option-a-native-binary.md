@@ -19,8 +19,8 @@
 ## 0. TL;DR
 
 Option (a) ships a native Rust engine binary per platform — same
-distribution shape as `@causl/checker-{darwin,linux,win32}-*` today —
-and loads it from `@causl/core` through either an **N-API in-process**
+distribution shape as `@causljs/checker-{darwin,linux,win32}-*` today —
+and loads it from `@causljs/core` through either an **N-API in-process**
 or **IPC out-of-process** Node binding.
 
 - **Boundary tax projection.** N-API in-process at the per-commit
@@ -42,7 +42,7 @@ or **IPC out-of-process** Node binding.
   WASM/JS fallback alongside the native binary (Path A1 — F-marshal
   infrastructure becomes the maintained browser path) or files a
   §17.6 amendment dropping the browser as a target (Path A2 —
-  collapses the `@causl/react` value proposition). Recommended:
+  collapses the `@causljs/react` value proposition). Recommended:
   **Path A1**, with the framing that native is acceleration for the
   Node tier and WASM stays the browser floor.
 - **Reuse from #1133.** ~12 k LOC of `tools/engine-rs-core/` carries
@@ -181,8 +181,8 @@ bridges and toolchain.
 | Engine-core tests | `tools/engine-rs-core/tests/` | ~4,000 | `transition_phased` property tests, NodeId-disposal property tests (#1151), JSON-value round-trip tests (#1078). All target the kernel, not the bridge; carries over verbatim. |
 | Cross-backend determinism gate | `packages/core/test/properties/cross-backend-determinism.property.test.ts` | ~500 | F-marshal.5 1000-trials × 0-byte-differences gate. Plugs into Option (a) through a new `NativeBackend` shape that implements `BackendEngine`; runs unchanged. |
 | SPEC §3 / §5.1 / §15.1 / §17.5 / §17.6 amendments | `SPEC.md` (multiple) | (text) | Every amendment that names the FFI-boundary contract (Theorem 2 uninterruptibility, Phase G IndexMap pin, reference-identity-not-contractual, §17.5 residual band, §17.6 host-tier matrix) stands; Option (a) inherits them by construction. |
-| `@causl/checker-{darwin,linux,win32}-*` distribution pattern | `packages/checker-*` | (model) | Per-platform binary published as `optionalDependencies` of the npm wrapper. Five packages (darwin-arm64, darwin-x64, linux-arm64, linux-x64, win32-x64) — proven, in production. Option (a)'s native engine reuses this pattern verbatim. |
-| `@causl/core` adopter API surface | `packages/core/src/index.ts`, `types.ts` | (no change) | The §1a non-negotiable surface (`createCausl`, `graph.input` / `derived` / `commit` / `read` / `subscribe` / `explain` / `simulate` / `snapshot` / `hydrate`, the React hooks, the error catalogue) is unchanged. Option (a) plugs in beneath the `BackendEngine` interface. |
+| `@causljs/checker-{darwin,linux,win32}-*` distribution pattern | `packages/checker-*` | (model) | Per-platform binary published as `optionalDependencies` of the npm wrapper. Five packages (darwin-arm64, darwin-x64, linux-arm64, linux-x64, win32-x64) — proven, in production. Option (a)'s native engine reuses this pattern verbatim. |
+| `@causljs/core` adopter API surface | `packages/core/src/index.ts`, `types.ts` | (no change) | The §1a non-negotiable surface (`createCausl`, `graph.input` / `derived` / `commit` / `read` / `subscribe` / `explain` / `simulate` / `snapshot` / `hydrate`, the React hooks, the error catalogue) is unchanged. Option (a) plugs in beneath the `BackendEngine` interface. |
 | `BackendEngine` plug-in interface | `packages/core/wasm/index.ts:177-197` | (no change) | The cross-backend determinism gate (#685) runs against this shape. Option (a) implements it with a new `NativeBackend` adapter (~150 LOC, see §3.2). |
 
 **Total reuse: ~16,500 LOC of engine code + 4,500 LOC of tests + ~50
@@ -205,7 +205,7 @@ SPEC commitments + the entire adopter API surface.**
 | WASM bridge crates (both) | `tools/engine-rs-bridge-serde/`, `tools/engine-rs-bridge-gc/` | ~2,100 (813 serde + 1,281 gc) | **Path A2 (drop browser): delete.** **Path A1 (keep browser fallback): maintained as the browser path; no further investment but kept on the shelf.** |
 | TS-side marshaler | `packages/core/wasm/marshaler.ts` | 725 | Same as bridges: Path A2 delete; Path A1 keep maintained. |
 | WASM build toolchain | `tools/wasm-build/build.mjs` | 557 | Same as bridges. |
-| `@causl/core/wasm` substrate distribution | `packages/core/wasm-pkg/` | (build artefact) | Same as bridges. |
+| `@causljs/core/wasm` substrate distribution | `packages/core/wasm-pkg/` | (build artefact) | Same as bridges. |
 | F-marshal sub-cascade gains (LOC + perf engineering hours, F-marshal.0 through F-marshal.N) | `docs/epic-1133/F-MARSHAL-*.md` | (work effort) | The 715-test post-F-marshal.5 1000-trial-clean determinism gate is **kept** (it's the test, not the bridge). The *engineering investment* in the F-marshal sub-cascade — getting from F-marshal.0 to F-marshal.6's 15.64 μs / op figure — is **sunk cost.** No further marshal-tax-reduction work makes sense for Option (a) because N-API replaces the marshal envelope. |
 | `wasm-pack` and `wasm-bindgen` build-time dependencies | `Cargo.toml`, root `package.json` `wasm:build` script | (toolchain) | Path A2 delete; Path A1 frozen at the current version (no further wasm-bindgen upgrades). |
 | Bundle-size CI gates for `wasm-pkg` (cells in root `package.json` `size-limit`) | root `package.json` | (cells) | Path A2 delete; Path A1 keep. |
@@ -221,12 +221,12 @@ no longer be on the critical path.**
 
 ## 4. Deployment story
 
-### 4.1. The `@causl/checker-{platform}-{arch}` model — proven, reused
+### 4.1. The `@causljs/checker-{platform}-{arch}` model — proven, reused
 
 The repo already ships per-platform binaries for `causl-check` (the
 Rust IR linter) via `optionalDependencies`. The model:
 
-- One npm wrapper package (`@causl/checker`) declares the platform-
+- One npm wrapper package (`@causljs/checker`) declares the platform-
   binary packages as `optionalDependencies`. npm/pnpm/yarn resolve
   only the binary matching the current `process.platform` +
   `process.arch`; the others fail their `os` / `cpu` gate in the
@@ -234,7 +234,7 @@ Rust IR linter) via `optionalDependencies`. The model:
 - Each per-platform package contains a single prebuilt binary
   (`bin/causl-check`) declared in `bin`, files-listed in `files`.
 - The npm wrapper's `bin/causl-check.js` shim resolves the actual
-  binary at runtime via `require.resolve('@causl/checker-darwin-
+  binary at runtime via `require.resolve('@causljs/checker-darwin-
   arm64/bin/causl-check')` and execs it.
 
 **Concrete shapes from the repo today** (anchored at dev `336ec6bd`):
@@ -242,7 +242,7 @@ Rust IR linter) via `optionalDependencies`. The model:
 ```json
 // packages/checker-darwin-arm64/package.json (excerpt)
 {
-  "name": "@causl/checker-darwin-arm64",
+  "name": "@causljs/checker-darwin-arm64",
   "os": ["darwin"],
   "cpu": ["arm64"],
   "bin": { "causl-check": "./bin/causl-check" },
@@ -253,13 +253,13 @@ Rust IR linter) via `optionalDependencies`. The model:
 ```json
 // packages/checker/package.json (excerpt)
 {
-  "name": "@causl/checker",
+  "name": "@causljs/checker",
   "optionalDependencies": {
-    "@causl/checker-linux-x64": "workspace:*",
-    "@causl/checker-linux-arm64": "workspace:*",
-    "@causl/checker-darwin-x64": "workspace:*",
-    "@causl/checker-darwin-arm64": "workspace:*",
-    "@causl/checker-win32-x64": "workspace:*"
+    "@causljs/checker-linux-x64": "workspace:*",
+    "@causljs/checker-linux-arm64": "workspace:*",
+    "@causljs/checker-darwin-x64": "workspace:*",
+    "@causljs/checker-darwin-arm64": "workspace:*",
+    "@causljs/checker-win32-x64": "workspace:*"
   }
 }
 ```
@@ -267,13 +267,13 @@ Rust IR linter) via `optionalDependencies`. The model:
 Option (a)'s engine reuses this **verbatim**, with one substitution:
 the `bin/causl-check` artefact becomes `lib/causl-engine.node` (a
 `.node` C-addon, which is the napi-rs output shape), and the runtime
-resolver in `@causl/core`'s native loader does
-`require('@causl/engine-darwin-arm64/lib/causl-engine.node')` rather
+resolver in `@causljs/core`'s native loader does
+`require('@causljs/engine-darwin-arm64/lib/causl-engine.node')` rather
 than spawning a child process.
 
 ### 4.2. Prebuilt-binary install path (the hot path)
 
-Adopter does `npm i @causl/core`. npm walks
+Adopter does `npm i @causljs/core`. npm walks
 `optionalDependencies`; only the matching platform resolves; one
 ~2–5 MB `.node` artefact ends up on disk per project. Install time:
 sub-second post-fetch. No `cargo`, no `rustc`, no `wasm-pack` on the
@@ -298,10 +298,10 @@ supports a `napi build` source-compile fallback. The adopter needs:
 - ~30–60 seconds of cargo build time on first install.
 
 This is gated behind an `optionalDependencies` miss: if no per-
-platform package resolves, `@causl/core`'s install script
+platform package resolves, `@causljs/core`'s install script
 (`postinstall`) attempts `napi build` from a vendored source tree
-shipped inside `@causl/core`. If that fails (no `rustup`, no
-network), `@causl/core` falls through to the WASM/JS path (Path A1)
+shipped inside `@causljs/core`. If that fails (no `rustup`, no
+network), `@causljs/core` falls through to the WASM/JS path (Path A1)
 or surfaces `CAUSL_NATIVE_UNAVAILABLE` (Path A2).
 
 **Path A1's source-compile is non-load-bearing** because the WASM/JS
@@ -311,7 +311,7 @@ platforms — which sharpens the §17.6 amendment requirement.
 
 ### 4.4. Cross-platform matrix
 
-Same five rows as `@causl/checker-*` today:
+Same five rows as `@causljs/checker-*` today:
 
 | Triple | Status | Notes |
 | --- | --- | --- |
@@ -324,26 +324,26 @@ Same five rows as `@causl/checker-*` today:
 **Not in the matrix** (source-compile via napi-rs, or WASM/JS
 fallback): aarch64-windows (Windows ARM), Linux x32, FreeBSD, illumos,
 musl variants beyond Alpine x64 (Alpine ships its own musl glibc).
-napi-rs can produce musl builds; for v1 we follow `@causl/checker`
+napi-rs can produce musl builds; for v1 we follow `@causljs/checker`
 exactly (no musl prebuilt; source-compile path covers it).
 
 ### 4.5. GitHub Actions release pipeline cost estimate
 
-The `@causl/checker` pipeline today runs a per-platform matrix on
+The `@causljs/checker` pipeline today runs a per-platform matrix on
 release. Option (a) needs the same shape:
 
 | Workflow | Matrix | Estimated CI cost per release |
 | --- | --- | --- |
 | `release-native-engine.yml` (new) | 5 platforms × 1 build + 1 test job each | ~30–45 min × 5 = 2.5–3.75 runner-hours |
 | `publish-native-engine.yml` (new) | Single job, post-build artefact aggregation | ~10 min |
-| Existing `release.yml` (`@causl/core`, `@causl/react`, etc.) | unchanged | unchanged |
+| Existing `release.yml` (`@causljs/core`, `@causljs/react`, etc.) | unchanged | unchanged |
 
 **Per-release CI cost**: an additional ~3.5–4 runner-hours, roughly
-equivalent to the existing `@causl/checker` release. On GitHub-hosted
+equivalent to the existing `@causljs/checker` release. On GitHub-hosted
 Linux runners (free for public repos) this is zero direct cost; on
 macOS runners (10× billing rate vs Linux) it's the load-bearing line
 in the budget. macOS arm64 GHA runners are now first-class and the
-existing `@causl/checker` pipeline already prebuilds for both Apple
+existing `@causljs/checker` pipeline already prebuilds for both Apple
 arches, so the marginal cost of adding the engine target is purely
 the longer cargo build (the kernel + napi-rs is bigger than the IR
 linter).
@@ -354,11 +354,11 @@ release tag. This keeps the PR-time CI under 15 min added.
 
 ### 4.6. Resolved-binary loading
 
-`@causl/core/native/index.ts` (new) does:
+`@causljs/core/native/index.ts` (new) does:
 
 ```ts
 // Pseudocode — actual implementation TBD.
-const platformPkg = `@causl/engine-${process.platform}-${process.arch}`;
+const platformPkg = `@causljs/engine-${process.platform}-${process.arch}`;
 let bindings: NativeEngineBindings;
 try {
   bindings = require(`${platformPkg}/lib/causl-engine.node`);
@@ -369,7 +369,7 @@ try {
 }
 ```
 
-Browser path: `@causl/core/native/index.ts` is gated by a
+Browser path: `@causljs/core/native/index.ts` is gated by a
 `typeof process !== 'undefined' && process.versions?.node` check;
 browsers go straight to the WASM tier-chain.
 
@@ -379,7 +379,7 @@ browsers go straight to the WASM tier-chain.
 
 The §17.6 commitment-14 row (SPEC.md line 2722) reads in full:
 
-> The opt-in `@causl/core/wasm` substrate ships against a documented
+> The opt-in `@causljs/core/wasm` substrate ships against a documented
 > three-tier host compatibility matrix (`wasmgc-builtins`,
 > `wasmgc-classic`, `serde-json`) with a fall-through fallback to the
 > TS engine; **no adopter is ever stranded on an unsupported host
@@ -393,7 +393,7 @@ CONSTRAINTS §2** (CONSTRAINTS.md:90-97):
 > The browser target is **NOT migratable** — re-architecture (a)
 > (native Rust binary) must either ship a WASM/JS fallback for the
 > browser path or document a deliberate scope reduction that strikes
-> the entire `@causl/react` value proposition.
+> the entire `@causljs/react` value proposition.
 
 Two paths follow, both legitimate in principle. The doc commits to
 **A1** as the recommended path (rationale at §5.3).
@@ -438,7 +438,7 @@ browser tier and unconditional embedded-runtime floor."
 ### 5.2. Path A2 — file §17.6 amendment dropping browser as a target
 
 The native binary is the only engine; the WASM/JS substrate is
-deleted. `@causl/react` becomes Node-only (SSR-only); browser users
+deleted. `@causljs/react` becomes Node-only (SSR-only); browser users
 have no engine.
 
 **What this requires**:
@@ -452,13 +452,13 @@ have no engine.
   the engine. Per CONSTRAINTS §2 framing: "A re-architecture that
   drops the browser target is a different product."
 - Deprecation cycle: at least one minor version of warning on
-  `@causl/react`'s browser entry, codemod for adopters to migrate to
+  `@causljs/react`'s browser entry, codemod for adopters to migrate to
   a server-only architecture (Hydrate-only on the browser, all
   commits server-side).
 
 **What this strikes**:
 
-- The `@causl/react` value proposition per CONSTRAINTS §2 framing.
+- The `@causljs/react` value proposition per CONSTRAINTS §2 framing.
 - The `useCauslNode` / `useCausl` / interactive-frame-budget contract
   per SPEC §8 + §14.
 - Cloudflare Workers per CONSTRAINTS §2 row (Workers don't run
@@ -475,7 +475,7 @@ It is dishonest if filed merely to retire maintenance burden.
 
 **Path A1 preserves the SPEC §17.6 commitment-14 invariant** and adds
 Option (a) as an *acceleration tier* for Node-side workloads (SSR,
-`@causl/sync`, bench harness, property-test host). The WASM stack
+`@causljs/sync`, bench harness, property-test host). The WASM stack
 remains the browser floor with no degradation. The 213 KB / 66 KB
 serde-bridge current-state callout (#1150) is frozen in place; no
 further re-tightening work is on the critical path; the bridge
@@ -499,8 +499,8 @@ same size as the F-marshal sub-cascade phases:
 | **A. napi-rs scaffold** | `tools/engine-rs-napi/` new crate; minimal `#[napi]` surface (`new_graph`, `dispose`); CI wiring for one platform (linux-x64). | 1–2 | Lowest-risk; napi-rs scaffold is well-documented. |
 | **B. `BackendEngine` shape over N-API** | Wire `commit`, `read`, `subscribe`, `snapshot`, `hydrate`, `readAt`, `snapshotAt`, `exportModel`, `dispose`, `evaluateStatechart`, `now`. Each method gets a napi binding + the TS-side `NativeBackend` adapter. | 3–4 | The 11-method `BackendEngine` interface from `wasm/index.ts:177-197`. Each method is a discrete PR; some can be batched (read + subscribe; snapshot + hydrate). |
 | **C. Cross-backend determinism gate green** | The 1000-trial × 0-byte-difference gate runs against the native backend. Expected first-run failures: serde number-format divergence (napi-rs vs serde-json), `Object.is`-versus-`f64::eq` NaN handling. | 1–2 | The same surface F-marshal.5 hardened (#1124, #1077, #1078). Most of the byte-identity work is already paid; what's left is the N-API marshal-shape work. |
-| **D. Per-platform CI prebuild matrix** | New `release-native-engine.yml` workflow; per-platform GHA matrix; artefact bundling; per-platform npm publish hooks. | 1–2 | Pattern duplicates `@causl/checker` release pipeline. |
-| **E. `@causl/core` native loader** | `packages/core/src/native/index.ts`; `detectBackend()` extension for native tier; fallback chain wiring (native → wasm tier 1 → tier 2 → tier 3 → JS). | 1 | The fallback chain pattern is established; this is essentially a tier-prepend. |
+| **D. Per-platform CI prebuild matrix** | New `release-native-engine.yml` workflow; per-platform GHA matrix; artefact bundling; per-platform npm publish hooks. | 1–2 | Pattern duplicates `@causljs/checker` release pipeline. |
+| **E. `@causljs/core` native loader** | `packages/core/src/native/index.ts`; `detectBackend()` extension for native tier; fallback chain wiring (native → wasm tier 1 → tier 2 → tier 3 → JS). | 1 | The fallback chain pattern is established; this is essentially a tier-prepend. |
 | **F. Bench harness — perf measurement on native tier** | `packages/bench/scripts/g1-perf-measurement-native.ts`; run the six contract-bearing cells under native; produce the projection-vs-measurement table. | 1 | Validates the §1 projections. Required to commit to GO. |
 | **G. SPEC §17.6 row update + adopter migration guide** | Update the host-tier table; new `docs/native-adoption-guide.md`; CHANGELOG entry; codemod for `'wasm'` → `'native'` in `createCausl({ backend })`. | 1–2 | Path A1 only; Path A2 would expand this to the §17.6 amendment + deprecation. |
 | **Total** | | **9–14 PRs** | Plus 1–2 buffer PRs for unanticipated napi-rs incompatibilities, byte-identity divergences, or platform-specific build failures. |
@@ -520,7 +520,7 @@ approximately that long).
 
 ## 7. Adopter migration story
 
-Existing adopters today consume `@causl/core` against either:
+Existing adopters today consume `@causljs/core` against either:
 
 1. **The default TS engine** — `createCausl()` with no backend, or
    `createCausl({ backend: 'js' })`.
@@ -576,7 +576,7 @@ Existing adopters today consume `@causl/core` against either:
 | **§1a Non-negotiable adopter surface preserved without codemod** | YES (Path A1) / NO (Path A2 — `Bridge` / `BridgeFeatures` / `WasmBackendUnavailableError` retire under A2) | `packages/core/src/types.ts:851-1476` unchanged; `packages/core/wasm/index.ts:177-197` `BackendEngine` interface plugged into by `NativeBackend` adapter under A1. |
 | **§1b Migratable surface — codemods + lints required** | YES — backend literal type extends; `'wasm'` codepath kept (A1) or deprecated (A2); ESLint rule `backend-platform-mismatch`. | `packages/core/src/auto-adapt.ts` `'js' \| 'wasm' \| 'auto'` becomes `'js' \| 'wasm' \| 'native' \| 'auto'`. Deprecation cycle per CONSTRAINTS §1b. |
 | **§2 Browser deployment** | A1: YES (via WASM/JS fallback); A2: NO (requires §17.6 amendment) | CONSTRAINTS §2 row "Browser (Chrome 95+ / Firefox 102+ / Safari 16+)" + SPEC §17.6 commitment 14 (SPEC.md:2722). |
-| **§2 Node deployment** | YES — prebuilt `.node` artefact resolved via `optionalDependencies`. | §4.2 / §4.4; mirrors `@causl/checker-{darwin,linux,win32}-*` model. |
+| **§2 Node deployment** | YES — prebuilt `.node` artefact resolved via `optionalDependencies`. | §4.2 / §4.4; mirrors `@causljs/checker-{darwin,linux,win32}-*` model. |
 | **§2 Native deployment (per-platform binary)** | YES — five-row platform matrix per §4.4. | `packages/checker-*/package.json` model reused verbatim. |
 | **§2 Cloudflare Workers / edge** | A1: YES (WASM tier-3 unchanged); A2: NO. | CONSTRAINTS §2 row + SPEC §17.6. |
 | **§2 Embedded runtimes (RN, Hermes) — TS fallback floor preserved** | A1: YES (JS fallback untouched); A2: NO. | CONSTRAINTS §2 row + SPEC §17.6 commitment 14 "no host stranded." |

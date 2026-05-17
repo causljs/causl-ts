@@ -76,7 +76,7 @@ describe('scanDirectory default extensions', () => {
     )
     await write(
       'src/clean.ts',
-      `import { useCausl } from '@causl/react'\nconst v = useCausl((g) => g.now)\n`,
+      `import { useCausl } from '@causljs/react'\nconst v = useCausl((g) => g.now)\n`,
     )
     const report = await scanDirectory(root)
     expect(report.stats.filesScanned).toBe(3)
@@ -93,7 +93,7 @@ describe('scanDirectory default extensions', () => {
     )
     await write(
       'src/clean.ts',
-      `import { useCausl } from '@causl/react'\nconst v = useCausl((g) => g.now)\n`,
+      `import { useCausl } from '@causljs/react'\nconst v = useCausl((g) => g.now)\n`,
     )
     const report = await scanDirectory(root, { extensions: ['.ts'] })
     expect(report.stats.filesScanned).toBe(1)

@@ -12,7 +12,7 @@
  * loaded.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../src/index.js'
 

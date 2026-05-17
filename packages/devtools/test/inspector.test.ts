@@ -13,7 +13,7 @@
  * uses.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { inspect, watchInspect, type NodeInspectorView } from '../src/index.js'
 

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Vitest configuration for `@causl/core`. Runs the unit / property
+ * Vitest configuration for `@causljs/core`. Runs the unit / property
  * test suite under Node, scopes test discovery to `test/**` and
  * collects v8 coverage against the engine sources in `src/**`.
  *
@@ -22,7 +22,7 @@
 
 import { defineConfig } from 'vitest/config'
 
-// Vitest configuration for the @causl/core package.
+// Vitest configuration for the @causljs/core package.
 export default defineConfig({
   test: {
     // Restrict discovery to TypeScript test files under ./test.

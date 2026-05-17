@@ -41,7 +41,7 @@ import { CycleError, createCausl, type Node } from '../../src/index.js'
 import {
   commitLogConsumerCount,
   propertyTrials,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 
 /**
  * Mulberry32 — a tiny seeded PRNG. The caller threads a 32-bit

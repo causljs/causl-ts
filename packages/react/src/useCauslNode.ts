@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Per-node subscription hook for `@causl/react`. {@link useCauslNode}
+ * Per-node subscription hook for `@causljs/react`. {@link useCauslNode}
  * binds a single {@link Node} to React via `graph.subscribe(node, cb)`
  * so the component re-renders ONLY when that node's value changes —
  * not on every commit to the graph.
@@ -22,8 +22,8 @@
  * `packages/react/e2e/tests/dropped-frames-1000.spec.ts`.
  */
 
-import type { Node } from '@causl/core'
-import { __causlAdapterRead } from '@causl/core/internal'
+import type { Node } from '@causljs/core'
+import { __causlAdapterRead } from '@causljs/core/internal'
 import { useCallback, useContext, useDebugValue, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 

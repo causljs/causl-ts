@@ -16,7 +16,7 @@
  * `packages/react/e2e/tests/dropped-frames-1000.spec.ts`.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { act, render, screen } from '@testing-library/react'
 import { useRef, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

@@ -19,7 +19,7 @@
  * surface ("the engine is its own observer", §11).
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import {
   cellId,
   parseFormula,
@@ -28,14 +28,14 @@ import {
   a1ToCellRef,
   expandRange,
   FormulaParseError,
-} from '@causl/formula'
+} from '@causljs/formula'
 import {
   liveDerived,
   replaceMany,
   commitLog,
   whyUpdated,
   renderWhy,
-} from '@causl/devtools'
+} from '@causljs/devtools'
 
 // ---------------------------------------------------------------
 // 1. Build the graph and the resolver shared across every cell.

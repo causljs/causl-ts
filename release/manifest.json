@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "generated_by": "tools/release/release.py",
+  "packages": [
+    {
+      "name": "@causl/core",
+      "version": "0.2.0",
+      "slug": "causl-core",
+      "bytes": 304160,
+      "runtime_raw_bytes": 114423,
+      "runtime_compressed_bytes": 21949,
+      "types_raw_bytes": 189737,
+      "types_compressed_bytes": 48635,
+      "compression": "brotli"
+    },
+    {
+      "name": "@causl/sync",
+      "version": "0.2.0",
+      "slug": "causl-sync",
+      "bytes": 20518,
+      "runtime_raw_bytes": 13153,
+      "runtime_compressed_bytes": 3924,
+      "types_raw_bytes": 7365,
+      "types_compressed_bytes": 2441,
+      "compression": "brotli"
+    },
+    {
+      "name": "@causl/react",
+      "version": "0.2.0",
+      "slug": "causl-react",
+      "bytes": 57544,
+      "runtime_raw_bytes": 10883,
+      "runtime_compressed_bytes": 2329,
+      "types_raw_bytes": 46661,
+      "types_compressed_bytes": 13037,
+      "compression": "brotli"
+    },
+    {
+      "name": "@causl/formula",
+      "version": "0.2.0",
+      "slug": "causl-formula",
+      "bytes": 54030,
+      "runtime_raw_bytes": 21265,
+      "runtime_compressed_bytes": 5151,
+      "types_raw_bytes": 32765,
+      "types_compressed_bytes": 9442,
+      "compression": "brotli"
+    }
+  ]
+}

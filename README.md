@@ -201,14 +201,60 @@ Pre-1.0 caveats remain — public APIs may evolve before a tagged release; publi
 | `packages/bench/`             | `@causl/bench`             | Benchmarks — Jotai / RTK / MobX comparisons across the canonical scenario taxonomy    |
 | `packages/migration-check/`   | `@causl/migration-check`   | Migration drift detector — flags unmigrated Jotai/MobX/Redux patterns in adopters     |
 
-`tools/checker/` and `tools/enumerator/` house the two Rust crates — both CI tools, not runtimes:
-
-- **`tools/checker/`** ships `causl-check`, the static IR linter (twelve passes: cycle, monotonic, glitch-propagation, subscribe-without-dispose, use-after-dispose, cross-graph-read, commit-from-subscribe, plus structural gates). Per-site `// @causl-allow:RuleId — reason: ...` magic-comment suppressions are wired through the `--source <path>` CLI flag; `--replay <report>` is the SPEC §16A.2 verdict-determinism gate.
-- **`tools/enumerator/`** ships `causl-enumerate`, the SPEC §16.4 bounded state-space enumerator. Tier-1 / tier-2 / tier-3 `Bound` presets cap exploration; the Node worker-pool RPC (`worker.mjs`) sandboxes compute bodies against `Date.now`/`Math.random`/`crypto.randomUUID`/`performance.now` with a 1% double-check sampler. The companion `tools/enumerator/diff/` ships the Apalache differential runner against the EPIC-7 TLA+ corpus.
-
-`tools/drift/` houses the drift telemetry helpers. Internal-only `packages/core/testing/` (published as `@causl/core-testing-internal`) provides shared property-test seam helpers.
+Internal-only `packages/core/testing/` (published as `@causl/core-testing-internal`) provides shared property-test seam helpers.
 
 See each package's `README.md` for build and run instructions where they exist.
+
+---
+
+## Tools
+
+Build infrastructure, Rust crates, CI gates, and release tooling live
+under [`tools/`](./tools/). Brief role descriptions below; the
+authoritative documentation lives in each tool's own `README.md`.
+
+### Release
+
+| Path | Purpose | Detailed docs |
+| --- | --- | --- |
+| [`tools/release/`](./tools/release/) | `release.py` — bundles the minimum viable per-package npm tree at `RELEASE_VERSION` for the TypeScript-only path. Output ships on the `release` branch. | [`tools/release/README.md`](./tools/release/README.md) |
+
+### Rust engine + WASM bridges
+
+| Path | Purpose | Detailed docs |
+| --- | --- | --- |
+| [`tools/engine-rs-core/`](./tools/engine-rs-core/) | Pure-algorithm core (`no_std + alloc`). SPEC §16.4.1 `State` / `Action` / `Event` / `Commit` types + `transition_phased`. | [`tools/engine-rs-core/README.md`](./tools/engine-rs-core/README.md) |
+| [`tools/engine-rs-bridge-serde/`](./tools/engine-rs-bridge-serde/) | Universal-fallback `serde-wasm-bindgen` bridge cdylib. | — |
+| [`tools/engine-rs-bridge-gc/`](./tools/engine-rs-bridge-gc/) | WasmGC + `wasm:js-string` bridge cdylib (two artefacts: `js-string-builtins`, `classic-strings`). | — |
+| [`tools/engine-rs-core-bench/`](./tools/engine-rs-core-bench/) | Criterion microbenches against the pure-algorithm core. | — |
+| [`tools/engine-rs-port-bench/`](./tools/engine-rs-port-bench/) | Cross-port perf comparison harness. | [`tools/engine-rs-port-bench/README.md`](./tools/engine-rs-port-bench/README.md) |
+| [`tools/wasm-build/`](./tools/wasm-build/) | `build.mjs` — drives `wasm-pack` + external binaryen `wasm-opt -Oz` for all bridge × target combinations; enforces SPEC §17.6 bundle-size caps. | [`tools/wasm-build/README.md`](./tools/wasm-build/README.md) |
+
+### Static checking + enumeration
+
+| Path | Purpose | Detailed docs |
+| --- | --- | --- |
+| [`tools/checker/`](./tools/checker/) | `causl-check` Rust crate — twelve-pass static IR linter (cycle, monotonic, glitch-propagation, use-after-dispose, cross-graph-read, commit-from-subscribe, …). Per-site `// @causl-allow:RuleId — reason: ...` magic-comment suppressions via the `--source <path>` flag; `--replay <report>` is the §16A.2 verdict-determinism gate. | [`tools/checker/README.md`](./tools/checker/README.md) |
+| [`tools/enumerator/`](./tools/enumerator/) | `causl-enumerate` — SPEC §16.4 bounded state-space enumerator. Tier-1/2/3 `Bound` presets cap exploration; Node worker-pool RPC sandboxes compute bodies (`Date.now` / `Math.random` / `crypto.randomUUID` / `performance.now`) with a 1% double-check sampler. | — |
+| [`tools/apalache-diff/`](./tools/apalache-diff/) | Apalache differential runner against the EPIC-7 TLA+ corpus. | — |
+
+### Bench, telemetry, audit, lint
+
+| Path | Purpose | Detailed docs |
+| --- | --- | --- |
+| [`tools/bench/`](./tools/bench/) | Python launcher + reproducer for the cross-library benchmark suite in `packages/bench/`; pinned-Docker runs with a typed exit-code contract. | — |
+| [`tools/drift/`](./tools/drift/) | Drift telemetry helpers. | — |
+| [`tools/audit/`](./tools/audit/) | Audit + governance tooling. | — |
+| [`tools/eslint-plugin-causl/`](./tools/eslint-plugin-causl/) | ESLint plugin for causl-aware lint rules. | — |
+| [`tools/lint/`](./tools/lint/) | Project lint helpers (orchestrates `eslint-plugin-causl`, prettier, custom passes). | — |
+| [`tools/lint-fixtures/`](./tools/lint-fixtures/) | Fixture corpus for the lint rules. | — |
+| [`tools/docs-postprocess/`](./tools/docs-postprocess/) | TypeDoc/Markdown post-processing for the docs pipeline. | — |
+| [`tools/causl-org-srv/`](./tools/causl-org-srv/) | Static-site server for the `causl-org/` demos. | [`tools/causl-org-srv/README.md`](./tools/causl-org-srv/README.md) |
+
+Tools without a per-tool `README.md` document themselves through the
+module-level header comments in their primary entry file (`build.mjs`,
+`src/lib.rs`, `release.py`, etc.). When a tool grows past that scale
+its dedicated `README.md` lands alongside.
 
 ---
 

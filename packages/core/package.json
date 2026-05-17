@@ -1,6 +1,6 @@
 {
   "name": "@causljs/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Semantic core for Causl \u2014 transactional state for tangled dependency graphs.",
   "license": "MIT",
   "type": "module",

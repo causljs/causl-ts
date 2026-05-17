@@ -72,6 +72,7 @@ export {
   DuplicateNodeError,
   HydrationSchemaError,
   InvalidGraphNameError,
+  InvariantViolationError,
   NodeDisposedError,
   NodeHasDependentsError,
   NonDeterministicComputeError,

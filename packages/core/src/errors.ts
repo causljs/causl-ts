@@ -425,3 +425,43 @@ export class InvalidGraphNameError extends CauslError {
     )
   }
 }
+
+/**
+ * Raised when a value staged via `tx.set(node, value)` fails the
+ * caller-supplied `invariant` registered on `graph.input(id, initial,
+ * { invariant })`.
+ *
+ * @remarks
+ * Fires inside the commit staging phase, before recompute settles and
+ * before time advances. The full commit is rolled back atomically:
+ * `graph.now` does not advance, the commitLog does not grow, and no
+ * per-node or per-commit subscriber fires. Same atomicity shape as the
+ * existing structural-invariant errors ({@link CycleError},
+ * {@link NotAnInputNodeError}, etc.) — invariants extend the engine's
+ * typed-failure surface from structural-only to caller-supplied
+ * value-level guards.
+ *
+ * The original throw from the user's invariant body is preserved as
+ * `cause` (per `Error.cause`'s ES2022 contract) so adopters can
+ * `e.cause instanceof TypeError` to branch on validation modes.
+ *
+ * @param nodeId - Id of the input whose staged write failed.
+ * @param value  - The offending staged value.
+ * @param cause  - The error thrown by the user's invariant body.
+ */
+export class InvariantViolationError extends CauslError {
+  override name = 'InvariantViolationError'
+  /** Discriminated tag for exhaustive matching. */
+  readonly kind = 'InvariantViolation' as const
+  constructor(
+    public readonly nodeId: NodeId,
+    public readonly value: unknown,
+    override readonly cause: unknown,
+  ) {
+    const causeMsg =
+      cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)
+    super(
+      `Invariant violated for input node ${JSON.stringify(nodeId)}: ${causeMsg}`,
+    )
+  }
+}

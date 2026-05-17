@@ -60,115 +60,6 @@ importers:
         specifier: ^8.59.1
         version: 8.59.1(eslint@9.39.4)(typescript@5.9.3)
 
-  packages/bench:
-    dependencies:
-      '@causljs/core':
-        specifier: workspace:*
-        version: link:../core
-      '@causljs/core-testing-internal':
-        specifier: workspace:*
-        version: link:../core/testing
-      '@causljs/formula':
-        specifier: workspace:*
-        version: link:../formula
-    devDependencies:
-      '@playwright/test':
-        specifier: ^1.48.0
-        version: 1.59.1
-      '@reduxjs/toolkit':
-        specifier: ^2.3.0
-        version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
-      '@types/node':
-        specifier: ^25.6.0
-        version: 25.6.0
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.59.1
-        version: 8.59.1(@typescript-eslint/parser@8.59.1(eslint@9.39.4)(typescript@5.9.3))(eslint@9.39.4)(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.59.1
-        version: 8.59.1(eslint@9.39.4)(typescript@5.9.3)
-      eslint:
-        specifier: ^9.39.4
-        version: 9.39.4
-      jotai:
-        specifier: ^2.10.0
-        version: 2.19.1(@types/react@18.3.28)(react@18.3.1)
-      mobx:
-        specifier: ^6.13.0
-        version: 6.15.0
-      react-redux:
-        specifier: ^9.1.2
-        version: 9.2.0(@types/react@18.3.28)(react@18.3.1)(redux@5.0.1)
-      tinybench:
-        specifier: ^6.0.0
-        version: 6.0.1
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.12)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/node@25.6.0)(jsdom@26.1.0)
-
-  packages/checker:
-    dependencies:
-      '@causljs/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@types/node':
-        specifier: ^24.12.2
-        version: 24.12.2
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.59.1
-        version: 8.59.1(@typescript-eslint/parser@8.59.1(eslint@9.39.4)(typescript@5.9.3))(eslint@9.39.4)(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.59.1
-        version: 8.59.1(eslint@9.39.4)(typescript@5.9.3)
-      eslint:
-        specifier: ^9.39.4
-        version: 9.39.4
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.12)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/node@24.12.2)(jsdom@26.1.0)
-    optionalDependencies:
-      '@causljs/checker-darwin-arm64':
-        specifier: workspace:*
-        version: link:../checker-darwin-arm64
-      '@causljs/checker-darwin-x64':
-        specifier: workspace:*
-        version: link:../checker-darwin-x64
-      '@causljs/checker-linux-arm64':
-        specifier: workspace:*
-        version: link:../checker-linux-arm64
-      '@causljs/checker-linux-x64':
-        specifier: workspace:*
-        version: link:../checker-linux-x64
-      '@causljs/checker-win32-x64':
-        specifier: workspace:*
-        version: link:../checker-win32-x64
-
-  packages/checker-darwin-arm64: {}
-
-  packages/checker-darwin-x64: {}
-
-  packages/checker-linux-arm64: {}
-
-  packages/checker-linux-x64: {}
-
-  packages/checker-win32-x64: {}
-
   packages/core:
     devDependencies:
       '@causljs/core-testing-internal':
@@ -1418,9 +1309,6 @@ packages:
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
-
-  '@types/node@24.12.2':
-    resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
 
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
@@ -4120,9 +4008,6 @@ packages:
     resolution: {integrity: sha512-pJOW4nxjlmfwKApE4zvxLScM/njmwj/DiUBv7EabwE4O8kRUy+HIwxQtZLBPll/jx1LJyBcqNfB3/cpv9EZwOw==}
     hasBin: true
 
-  undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
-
   undici-types@7.19.2:
     resolution: {integrity: sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg==}
 
@@ -5096,10 +4981,6 @@ snapshots:
 
   '@types/node@12.20.55': {}
 
-  '@types/node@24.12.2':
-    dependencies:
-      undici-types: 7.16.0
-
   '@types/node@25.6.0':
     dependencies:
       undici-types: 7.19.2
@@ -5234,14 +5115,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 5.4.21(@types/node@25.6.0)
-
-  '@vitest/mocker@3.2.4(vite@5.4.21(@types/node@24.12.2))':
-    dependencies:
-      '@vitest/spy': 3.2.4
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 5.4.21(@types/node@24.12.2)
 
   '@vitest/mocker@3.2.4(vite@5.4.21(@types/node@25.6.0))':
     dependencies:
@@ -8309,8 +8182,6 @@ snapshots:
       simple-concat: 1.0.1
       xtend: 4.0.2
 
-  undici-types@7.16.0: {}
-
   undici-types@7.19.2: {}
 
   universalify@0.1.2: {}
@@ -8371,24 +8242,6 @@ snapshots:
       - supports-color
       - terser
 
-  vite-node@3.2.4(@types/node@24.12.2):
-    dependencies:
-      cac: 6.7.14
-      debug: 4.4.3
-      es-module-lexer: 1.7.0
-      pathe: 2.0.3
-      vite: 5.4.21(@types/node@24.12.2)
-    transitivePeerDependencies:
-      - '@types/node'
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
   vite-node@3.2.4(@types/node@25.6.0):
     dependencies:
       cac: 6.7.14
@@ -8406,15 +8259,6 @@ snapshots:
       - sugarss
       - supports-color
       - terser
-
-  vite@5.4.21(@types/node@24.12.2):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.12
-      rollup: 4.60.2
-    optionalDependencies:
-      '@types/node': 24.12.2
-      fsevents: 2.3.3
 
   vite@5.4.21(@types/node@25.6.0):
     dependencies:
@@ -8449,45 +8293,6 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.6.0
-      jsdom: 26.1.0
-    transitivePeerDependencies:
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
-  vitest@3.2.4(@types/node@24.12.2)(jsdom@26.1.0):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/expect': 3.2.4
-      '@vitest/mocker': 3.2.4(vite@5.4.21(@types/node@24.12.2))
-      '@vitest/pretty-format': 3.2.4
-      '@vitest/runner': 3.2.4
-      '@vitest/snapshot': 3.2.4
-      '@vitest/spy': 3.2.4
-      '@vitest/utils': 3.2.4
-      chai: 5.3.3
-      debug: 4.4.3
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      pathe: 2.0.3
-      picomatch: 4.0.4
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.16
-      tinypool: 1.1.1
-      tinyrainbow: 2.0.0
-      vite: 5.4.21(@types/node@24.12.2)
-      vite-node: 3.2.4(@types/node@24.12.2)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 24.12.2
       jsdom: 26.1.0
     transitivePeerDependencies:
       - less

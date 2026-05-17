@@ -932,11 +932,24 @@ export interface Graph {
    *   strictly separate from editor-controller identifiers.
    * @param initial - Value at `GraphTime` zero, satisfying
    *   `input(t₀) = initial`.
+   * @param options - Optional registration options.
+   *   - `invariant` — caller-supplied value guard invoked in commit's
+   *     staging phase (Phase A.7) for every staged write to this
+   *     input. A throw aborts the commit and surfaces as
+   *     `InvariantViolationError` carrying the offending value and
+   *     the original throw as `cause`. The full commit is rolled back
+   *     atomically — same shape as `CycleError` / `NotAnInputNodeError`.
+   *     Sync only; returning a Promise has no effect. Initial value
+   *     is NOT validated at registration time.
    * @returns A handle suitable for `tx.set`, `read`, `subscribe`,
    *   and `explain`.
    * @throws {@link DuplicateNodeError} if `id` is already registered.
    */
-  input<T>(id: NodeId, initial: T): InputNode<T>
+  input<T>(
+    id: NodeId,
+    initial: T,
+    options?: { readonly invariant?: (value: T) => void },
+  ): InputNode<T>
 
   /**
    * Register a composed Behavior.

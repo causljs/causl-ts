@@ -1,7 +1,7 @@
 {
   "name": "causl-monorepo",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "Transactional state for tangled dependency graphs.",
   "license": "MIT",
   "type": "module",
@@ -37,7 +37,9 @@
       "path": "packages/core/dist/index.js",
       "name": "@causl/core (full import)",
       "limit": "20 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/core/dist/index.js",
@@ -49,56 +51,78 @@
       "path": "packages/core/dist/wasm.js",
       "name": "@causl/core/wasm (Phase-1 loader + WasmBackend wrapper)",
       "limit": "12 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/core/wasm-pkg/serde-bundler/engine_rs_bg.wasm",
       "name": "@causl/core wasm bridge — serde-json (raw)",
       "limit": "230 KB",
-      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+      "disablePlugins": [
+        "@size-limit/esbuild",
+        "@size-limit/webpack"
+      ]
     },
     {
       "path": "packages/core/wasm-pkg/gc-builtins-bundler/engine_rs_bg.wasm",
       "name": "@causl/core wasm bridge — gc-builtins (raw)",
       "limit": "260 KB",
-      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+      "disablePlugins": [
+        "@size-limit/esbuild",
+        "@size-limit/webpack"
+      ]
     },
     {
       "path": "packages/core/wasm-pkg/gc-classic-bundler/engine_rs_bg.wasm",
       "name": "@causl/core wasm bridge — gc-classic (raw)",
       "limit": "260 KB",
-      "disablePlugins": ["@size-limit/esbuild", "@size-limit/webpack"]
+      "disablePlugins": [
+        "@size-limit/esbuild",
+        "@size-limit/webpack"
+      ]
     },
     {
       "path": "packages/react/dist/index.js",
       "name": "@causl/react",
       "limit": "8 KB",
-      "ignore": ["react", "@causl/core"]
+      "ignore": [
+        "react",
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/devtools-bridge/dist/index.js",
       "name": "@causl/devtools-bridge (connectDevtools-only, absent-extension path)",
       "import": "{ connectDevtools }",
       "limit": "5 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/sync/dist/index.js",
       "name": "@causl/sync (full import)",
       "limit": "12 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/sync/dist/resource-entry.js",
       "name": "@causl/sync/resource (resource-only)",
       "limit": "8 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/sync/dist/conflict-entry.js",
       "name": "@causl/sync/conflict (conflict-only)",
       "limit": "8 KB",
-      "ignore": ["@causl/core"]
+      "ignore": [
+        "@causl/core"
+      ]
     },
     {
       "path": "packages/bench/fixtures/jotai-full.ts",

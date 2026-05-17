@@ -1,6 +1,6 @@
 {
   "name": "@causl/migration-check",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Migration drift detector \u2014 finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase. Rule contract: docs/migration/RULE_CATALOGUE.md.",
   "license": "MIT",
   "type": "module",

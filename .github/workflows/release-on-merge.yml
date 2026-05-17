@@ -35,6 +35,13 @@ on:
   push:
     branches: [release]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run end-to-end but skip mutating gh-release + npm-publish. Validates wiring without shipping.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 permissions:
   contents: write   # tag + create GitHub Release
@@ -127,6 +134,7 @@ jobs:
           echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Tag + create (or update) GitHub Release
+        if: ${{ inputs.dry_run != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -149,7 +157,22 @@ jobs:
               "${ASSETS[@]}"
           fi
 
+      - name: Dry-run smoke (npm publish --dry-run; no upload)
+        if: ${{ inputs.dry_run == 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Validates the tarball + npm credentials + scope access
+          # without actually publishing. Same loop shape as the real
+          # publish step below.
+          for pkg in causl-core causl-sync causl-react causl-formula; do
+            TARBALL="./release-output/packages/$pkg/$pkg-${{ steps.ver.outputs.version }}.tgz"
+            echo "Dry-run publishing $TARBALL"
+            npm publish --access public --dry-run "$TARBALL"
+          done
+
       - name: Publish to npm (with provenance)
+        if: ${{ inputs.dry_run != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |

@@ -1,0 +1,80 @@
+name: bundle-budget
+
+# Re-enables the per-PR bundle-budget comment that was parked under
+# `.github/workflows-disabled/ci.yml` during the EPIC-11 #725 Actions-
+# billing freeze (see issue #10). The blocking enforcement of the
+# `size-limit` ceilings already runs as `pnpm size` inside
+# `.github/workflows/wasm.yml` — this workflow adds the missing half:
+# the per-PR delta comment that names the specific cell which moved
+# (kB before / kB after / ceiling), so the PR author sees the cell
+# without having to scroll the red CI log.
+#
+# The 17 cells gated here are documented in `docs/bundle-budget.md`
+# and declared under `size-limit` in the root `package.json`:
+#
+#   1.  `@causl/core` (full barrel)            — 20 KB
+#   2.  `@causl/core` (createCausl-only)       — 15 KB
+#   3.  `@causl/core/wasm` (Phase-1 loader)    — 12 KB
+#   4.  serde-json wasm bridge (raw)           — 230 KB
+#   5.  gc-builtins wasm bridge (raw)          — 260 KB
+#   6.  gc-classic wasm bridge (raw)           — 260 KB
+#   7.  `@causl/react`                         —   8 KB
+#   8.  `@causl/devtools-bridge`               —   5 KB
+#   9.  `@causl/sync` (full barrel)            —  12 KB
+#   10. `@causl/sync/resource`                 —   8 KB
+#   11. `@causl/sync/conflict`                 —   8 KB
+#   12. jotai full / 13. jotai min             —  20 KB / 20 KB
+#   14. redux-toolkit full / 15. min           —  60 KB / 60 KB
+#   16. mobx full / 17. mobx min               —  30 KB / 30 KB
+#
+# The three wasm-bridge cells (4/5/6) read raw `.wasm` artefacts. At
+# rest the repo carries 8-byte WASM-preamble stubs (see the
+# `//size-limit-wasm` comment in package.json); the cells bite only
+# after `pnpm wasm:build` materialises real artefacts, which is what
+# the `wasm.yml` gate runs. This comment workflow intentionally does
+# NOT run `pnpm wasm:build` — its job is the per-PR delta on the JS
+# cells. The wasm artefact ceilings are enforced (with a red CI on
+# violation) inside `wasm.yml`'s `size-limit` step.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  bundle-budget:
+    name: bundle-budget — per-PR size-limit comment (#10)
+    runs-on: ubuntu-latest
+    # The `andresz1/size-limit-action@v1` action posts a single
+    # delta-vs-base comment on every PR; it needs `pull-requests: write`
+    # to do so. Read access on contents is implicit but called out for
+    # least-surprise on review.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      # `andresz1/size-limit-action@v1` runs the install + build_script
+      # + `pnpm run size` for both the PR head and the merge base, then
+      # diffs the output. Setting `package_manager: pnpm` keeps the
+      # lockfile honoured. `build_script: build` matches the root
+      # `build` script (`pnpm -r --filter './packages/*' run build`).
+      #
+      # The action's exit code is non-zero on overage so this job ALSO
+      # blocks merge — but the blocking signal is already provided by
+      # `wasm.yml`'s `pnpm size` step. The reason this job exists is
+      # the PR comment, not a second red check.
+      - name: Bundle-size diff + budgets (per-PR comment)
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          package_manager: pnpm
+          build_script: build

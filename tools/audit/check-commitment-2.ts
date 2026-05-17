@@ -40,7 +40,7 @@ if (!existsSync(witnessPath)) {
 const text = readFileSync(witnessPath, 'utf8')
 
 // Floor check: the file must reference propertyTrials OR
-// propertyOptions (the @causl/core local seam). Both wrap the
+// propertyOptions (the @causljs/core local seam). Both wrap the
 // 1000-trial floor; a witness using either is acceptable.
 if (!/(propertyTrials|propertyOptions)/.test(text)) {
   process.stderr.write(

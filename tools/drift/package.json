@@ -1,5 +1,5 @@
 {
-  "name": "@causl/drift",
+  "name": "@causljs/drift",
   "version": "0.0.0",
   "description": "Drift detector — finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase.",
   "license": "MIT",

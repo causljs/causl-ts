@@ -8,7 +8,7 @@
 //
 // Output:
 //   - `dist/main.js` (the entry chunk).
-//   - `dist/chunk-<hash>.js` (the @causl/core/wasm split — esbuild's
+//   - `dist/chunk-<hash>.js` (the @causljs/core/wasm split — esbuild's
 //     `splitting: true` is mandatory for dynamic-import code-split
 //     to land in a separate chunk; without it, esbuild inlines the
 //     dynamic import and the bundle-no-leak gate fails).
@@ -30,7 +30,7 @@ await build({
   format: 'esm',
   splitting: true,
   // Code that targets a modern browser is the right shape for
-  // adopters loading @causl/core/wasm — older targets would force
+  // adopters loading @causljs/core/wasm — older targets would force
   // esbuild to polyfill `import()` itself.
   target: ['es2022'],
   // Adopters loading raw .wasm via `new URL('./pkg/...', import.meta.url)`

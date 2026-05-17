@@ -9,7 +9,7 @@
  * sub-statechart (Open → Resolved | Ignored | Superseded).
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   createConflictRegistry,

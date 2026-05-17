@@ -16,7 +16,7 @@ new public API, no new dev dep. The four files compile against the
 existing exports (`resource`, `ResourceHandle`, `ResourceState`,
 `createConflictRegistry`, `Conflict`, `ForbiddenConflictTransitionError`,
 `ForbiddenResourceTransitionError`, `singleConflictWhen`) and against
-`@causl/core`'s `createCausl`. If any of those exports drift, this EPIC
+`@causljs/core`'s `createCausl`. If any of those exports drift, this EPIC
 catches it on the same gate the rest of the §10 contract rides.
 
 **Dependencies:** none. Ships today. The public API the four fixtures
@@ -35,7 +35,7 @@ formal artefact. We add the artefact, we do not add behaviour.
 
 This EPIC has shipped, plus a follow-on corrections wave (#576). The
 four fixture files live at the paths below and run as part of
-`pnpm --filter @causl/sync test:run` on every PR. Readers reviewing
+`pnpm --filter @causljs/sync test:run` on every PR. Readers reviewing
 the actual artefacts should consult the files in tree, not the literal
 `it()` lists in the TASK sections below — the published §10.5 code
 blocks were lifted but the `it()` decompositions converged during
@@ -116,7 +116,7 @@ runs, no other phase begins. The four scenarios are spec-async-§10's
 acceptance gate. Today they exist as code blocks in the spec — readable
 prose, type-checked nowhere, executed nowhere, regression-protected
 nowhere. Tomorrow they exist as `*.test.ts` files compiled by the same
-TypeScript that compiles `@causl/sync`'s public API, run by the same
+TypeScript that compiles `@causljs/sync`'s public API, run by the same
 `vitest` that runs every other unit test in the package, and pinned in
 CI so a regression on any of the §10 invariants — origin pinning,
 GraphTime monotonicity, Promise identity stability, single-pipeline
@@ -132,7 +132,7 @@ Promise identity returned by `user.fetch()`, the `kind` field on a
 `ForbiddenConflictTransitionError`. None of the assertions reach into
 private adapter state, none of them inspect synthetic test-only
 fields, none of them mock the engine — the engine is the real
-`createCausl()` from `@causl/core`. If the public API's observable
+`createCausl()` from `@causljs/core`. If the public API's observable
 surface ever changes, these files break and force a deliberate
 spec update. That is the contract.
 
@@ -215,10 +215,10 @@ the §10 tests must not. They are the line.
 
 The third question: is the §10.2 in-file MVU dispatcher
 (`function dispatch<T>(handle: ResourceHandle<T>, msg: ResourceMsg<T>):
-void`) a maintenance liability vs importing `@causl/react`'s
+void`) a maintenance liability vs importing `@causljs/react`'s
 `defineMsgs` / `createUpdate`? No. The whole point of duplicating the
 dispatcher in-file is to keep `packages/sync` testable against
-`@causl/sync` alone, with no `@causl/react` dependency. The dispatcher
+`@causljs/sync` alone, with no `@causljs/react` dependency. The dispatcher
 is six lines and a switch; if React's dispatcher diverges, that is
 the equivalence test's job to surface.
 
@@ -246,7 +246,7 @@ update. A test failure here is the right alarm.
 *Risk 2: `expect(graph.now).toBe(N)` literal-clock assertions.* The
 §10.1 file pins `graph.now` to literal values: 1, 2, 3, 4. That
 encodes one fact about `createCausl()` initial state — the first
-commit lands at `now == 1`, not 0. If `@causl/core` changes its
+commit lands at `now == 1`, not 0. If `@causljs/core` changes its
 initial-clock convention, the §10 file breaks. We accept that —
 GraphTime monotonicity (Theorem 4) requires *some* convention, and
 literal-clock assertions are the most legible form. A regression
@@ -260,7 +260,7 @@ pushing to an array from the subscriber callback. If the subscriber
 were ever dispatched asynchronously (queueMicrotask, setTimeout(0),
 or a scheduler), the captured `observed[]` would race with the
 fetch resolution. Today, `graph.subscribe(...)` is synchronous in
-`@causl/core` and the §5 single-pipeline guarantee says subscribers
+`@causljs/core` and the §5 single-pipeline guarantee says subscribers
 fire before `dispatch()` returns. If that ever changes, every test
 in this EPIC breaks — which is the correct alarm.
 
@@ -287,8 +287,8 @@ not a behaviour change.
 Lift the SPEC.async §10.5 §10.1 code block verbatim into a runnable
 file at the path above. The file contains exactly one `describe()`
 block named `'SPEC.async §10.1 — direct-commit acceptance'`, and
-exactly five `it()` blocks. Imports: `createCausl` from `@causl/core`;
-`resource` and the `ResourceState` type from `@causl/sync`;
+exactly five `it()` blocks. Imports: `createCausl` from `@causljs/core`;
+`resource` and the `ResourceState` type from `@causljs/sync`;
 `describe`, `expect`, `it` from `vitest`. No other imports. No helper
 functions. Each `it()` block is fully self-contained: fresh
 `createCausl()`, fresh `resource(...)`, fresh loader-resolver capture.
@@ -402,8 +402,8 @@ Lift the SPEC.async §10.5 §10.2 code block verbatim. Same shape as
 TASK 8.1. The file contains an in-file `dispatch<T>` reducer (six
 lines, three switch arms: `'fetch'`, `'invalidate'`, `'fail'`) and
 a discriminated-union `ResourceMsg<T>` type with three variants. No
-import from `@causl/react`; the dispatcher is duplicated in-file
-exactly so the test compiles against `@causl/sync` alone.
+import from `@causljs/react`; the dispatcher is duplicated in-file
+exactly so the test compiles against `@causljs/sync` alone.
 
 The file's structure:
 
@@ -458,11 +458,11 @@ The two `it()` blocks cover:
    two forms ever diverge, the equivalence assertion fires and the
    #439 invariant is broken. Tested as the headline assertion of
    `it()` block 1.
-2. **MVU dispatcher self-contained.** No import from `@causl/react`.
+2. **MVU dispatcher self-contained.** No import from `@causljs/react`.
    The dispatcher is six lines, in-file, with a switch over the
    three message variants. We duplicate intentionally to keep
-   `@causl/sync`'s test suite buildable against `@causl/sync` alone
-   — `@causl/react` has its own MVU tests on its own gate.
+   `@causljs/sync`'s test suite buildable against `@causljs/sync` alone
+   — `@causljs/react` has its own MVU tests on its own gate.
    Wirfs-Brock-style: the wire format (the `ResourceMsg<T>` shape)
    is the contract, the in-file copy is one realisation of it.
 3. **Reducer determinism.** `dispatch(handle, msg)` is a pure
@@ -497,9 +497,9 @@ The two `it()` blocks cover:
 - `packages/sync/test/spec-async-10-3-conflict-registry.test.ts` (new)
 
 Lift the SPEC.async §10.5 §10.3 code block verbatim. Same shape.
-Imports: `createCausl` from `@causl/core`; `Conflict` (type),
+Imports: `createCausl` from `@causljs/core`; `Conflict` (type),
 `createConflictRegistry`, `ForbiddenConflictTransitionError`,
-`singleConflictWhen` from `@causl/sync`; `describe`, `expect`, `it`
+`singleConflictWhen` from `@causljs/sync`; `describe`, `expect`, `it`
 from `vitest`. The file declares an in-file `Validation` interface
 with two fields (`field`, `reason`); each `it()` block builds a
 fresh `graph`, a fresh `validation` input, a fresh registry over a
@@ -600,8 +600,8 @@ The three `it()` blocks cover:
 - `packages/sync/test/spec-async-10-4-disposed-mid-load.test.ts` (new)
 
 Lift the SPEC.async §10.5 §10.4 code block verbatim. Same shape.
-Imports: `createCausl` from `@causl/core`;
-`ForbiddenResourceTransitionError`, `resource` from `@causl/sync`;
+Imports: `createCausl` from `@causljs/core`;
+`ForbiddenResourceTransitionError`, `resource` from `@causljs/sync`;
 `describe`, `expect`, `it` from `vitest`. The file pins the dispose-
 mid-load chart and the staleness guard's role in routing late loader
 resolutions to `stale` rather than overwriting `errored`.
@@ -711,7 +711,7 @@ The five `it()` blocks cover:
 - `.github/workflows/ci.yml` — confirm the existing lane that runs
   `pnpm -r test:run` (or equivalent) covers the four new files; if
   not, add a dedicated `spec-async-10-fixtures` job that runs
-  `pnpm --filter @causl/sync test:run` with the four files as
+  `pnpm --filter @causljs/sync test:run` with the four files as
   required-green. Per the §17 commitment 6 anchor, the four files
   are the gate; CI must enforce them.
 - `tmp/epics/PLAN.md` — add the EPIC-8 entry alongside EPIC-2 so
@@ -727,7 +727,7 @@ the literal CI configuration that makes that line true.
 
 #### TDD test suite for this task
 
-1. **Local dry-run: `pnpm --filter @causl/sync test:run` discovers
+1. **Local dry-run: `pnpm --filter @causljs/sync test:run` discovers
    and passes the four new files.** Run on a clean checkout with the
    four files in place; assert vitest reports four new test files,
    their expected test counts (5 + 2 + 3 + 5 = 15 `it()` blocks
@@ -737,7 +737,7 @@ the literal CI configuration that makes that line true.
    lane goes green.** This is a manual confirmation step, not a
    scripted test, but it is the only way to validate the CI wiring
    end-to-end. Acceptance: the `ci` workflow's `test` job runs the
-   `@causl/sync` package's `test:run` and reports the four files as
+   `@causljs/sync` package's `test:run` and reports the four files as
    passing.
 3. **Required-green confirmation.** Open a PR that intentionally
    breaks one of the four files (e.g., delete a line from
@@ -792,7 +792,7 @@ Concretely, the gate is:
   exists and passes (3 `it()` blocks).
 - `packages/sync/test/spec-async-10-4-disposed-mid-load.test.ts`
   exists and passes (5 `it()` blocks).
-- The four files are run by `pnpm --filter @causl/sync test:run`.
+- The four files are run by `pnpm --filter @causljs/sync test:run`.
 - The four files are required-green on every PR via the existing CI
   lane (or a new lane added in TASK 8.5 if needed).
 - A regression on any of the §3.1 theorems (origin pinning,
@@ -818,20 +818,20 @@ acceptance-gate naming the survey found missing.
   This EPIC ships the underlying assertions; EPIC-10 ships the
   named-gate sugar.
 - Bundle-budget sub-imports (EPIC-?). The four files import from
-  `@causl/sync`'s root, not sub-paths. If the bundle-budget EPIC
-  introduces sub-path imports (`@causl/sync/resource`,
-  `@causl/sync/conflict`), we revisit; today, root imports are the
+  `@causljs/sync`'s root, not sub-paths. If the bundle-budget EPIC
+  introduces sub-path imports (`@causljs/sync/resource`,
+  `@causljs/sync/conflict`), we revisit; today, root imports are the
   shape SPEC.async §10.5 publishes and we keep parity.
 - Adopter-side documentation: linking the four files from
   `docs-site/`'s §10 page, generating snippet excerpts for the
   README, etc. Documentation EPICs are separate; this EPIC ships
   the runnable artefact, not the prose around it.
-- The `@causl/react` MVU dispatcher's full surface. TASK 8.2 ships
+- The `@causljs/react` MVU dispatcher's full surface. TASK 8.2 ships
   an in-file six-line dispatcher that mirrors the React package's
   `defineMsgs`/`createUpdate` shape for one resource handle. The
   React package has its own equivalence tests on its own gate;
   this EPIC does not extend them.
-- New public API on `@causl/sync`. The four files consume the
+- New public API on `@causljs/sync`. The four files consume the
   existing exports — `resource`, `ResourceHandle`, `ResourceState`,
   `createConflictRegistry`, `Conflict`, `ConflictRegistry`,
   `ForbiddenResourceTransitionError`,

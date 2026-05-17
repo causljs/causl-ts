@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { recomputeCounter } from '../recomputeCounter.js'
 
 describe('recomputeCounter', () => {

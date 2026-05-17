@@ -1,7 +1,7 @@
 {
-  "name": "@causl/formula",
+  "name": "@causljs/formula",
   "version": "0.2.0",
-  "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
+  "description": "Spreadsheet formula primitives for Causl \u2014 grammar, parser, formula-to-derived adapter.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
     "dev": "tsup src/index.ts --format esm --dts --watch",
-    "demo": "pnpm --filter @causl/core --filter @causl/devtools --filter @causl/formula run build && node demo/server.js",
+    "demo": "pnpm --filter @causljs/core --filter @causljs/devtools --filter @causljs/formula run build && node demo/server.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
@@ -28,7 +28,7 @@
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'"
   },
   "dependencies": {
-    "@causl/core": "workspace:*"
+    "@causljs/core": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
@@ -40,5 +40,9 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
 }

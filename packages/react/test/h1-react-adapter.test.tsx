@@ -2,10 +2,10 @@
  * @packageDocumentation
  *
  * #1241 — regression gate for the H1 dev-warning false-positive in
- * canonical `@causl/react` adapter usage.
+ * canonical `@causljs/react` adapter usage.
  *
  * Issue #1241 surfaced that the H1 hazard warning (#1155, PR #1238)
- * fired on every commit when any `@causl/react` hook was in use. The
+ * fired on every commit when any `@causljs/react` hook was in use. The
  * cause is structural: `useSyncExternalStore` retains the last
  * `getSnapshot` return reference across commits for tearing detection,
  * and the canonical hooks (`useCauslNode`, `useCausl`,
@@ -34,7 +34,7 @@
  * still warn — the false-positive direction is what #1241 fixes, NOT
  * the load-bearing positive arm from #1155.
  */
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { act, render, screen } from '@testing-library/react'
 import type { JSX } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,7 +62,7 @@ function countH1Warnings(spy: { mock: { calls: unknown[][] } }): number {
   return n
 }
 
-describe('H1 hazard warning — @causl/react adapter exemption (#1241)', () => {
+describe('H1 hazard warning — @causljs/react adapter exemption (#1241)', () => {
   let warnSpy: { mock: { calls: unknown[][] }; mockRestore: () => void }
   const originalNodeEnv = process.env.NODE_ENV
 

@@ -23,7 +23,7 @@ across every subsequent run (SPEC §15.2 reproducibility floor).
 Seeds are first-class artefacts that travel with the package — they
 encode the failure history of contracted invariants. Putting them in
 `src/` keeps them inside the source tree the test seam already treats
-as canonical (`@causl/react`), and prevents bundlers from chasing
+as canonical (`@causljs/react`), and prevents bundlers from chasing
 them as test-only fixtures.
 
 ## Adding a seed

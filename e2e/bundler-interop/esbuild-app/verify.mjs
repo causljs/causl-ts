@@ -35,7 +35,7 @@ if (jsFiles.length === 0) {
 // esbuild names the entry chunk after the entry-point basename
 // (here: `index.js`). With splitting on, dynamic-imported deps land
 // in `<importedBasename>-<hash>.js` (e.g. `wasm-<hash>.js` for the
-// `@causl/core/wasm` import — esbuild reuses the imported module's
+// `@causljs/core/wasm` import — esbuild reuses the imported module's
 // basename, not a generic `chunk-` prefix). We anchor on the entry
 // filename instead of pattern-matching the lazy chunk name.
 const main = jsFiles.find((f) => f.name === 'index.js')

@@ -21,7 +21,7 @@
  *                    the explicit graphId wins
  *   --check          dry-run; exit 1 if any file would change
  *
- * The codemod imports `GRAPH_ID_REGEX` from `@causl/core` so a regex
+ * The codemod imports `GRAPH_ID_REGEX` from `@causljs/core` so a regex
  * drift between the runtime validator and the migration tool is
  * impossible by construction.
  */

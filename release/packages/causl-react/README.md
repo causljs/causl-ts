@@ -1,17 +1,17 @@
-# @causl/react
+# @causljs/react
 
-> React 18+ bindings for [@causl/core](../core/).
+> React 18+ bindings for [@causljs/core](../core/).
 
 ## Install
 
 ```bash
-pnpm add @causl/react @causl/core react react-dom
+pnpm add @causljs/react @causljs/core react react-dom
 ```
 
 ## Provider + hooks
 
 ```tsx
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import {
   CauslProvider,
   createUpdate,
@@ -20,7 +20,7 @@ import {
   useCausl,
   useDispatch,
   type MsgOf,
-} from '@causl/react'
+} from '@causljs/react'
 
 const graph = createCausl()
 const counter = graph.input('counter', 0)
@@ -180,8 +180,8 @@ surface that survives the engine's per-read `structuredClone` boundary.
 
 ```tsx
 import { useMemo } from 'react'
-import { useCausl } from '@causl/react'
-import type { Node } from '@causl/core'
+import { useCausl } from '@causljs/react'
+import type { Node } from '@causljs/core'
 
 function ExpensiveProjection({ node }: { node: Node<MyValue> }) {
   // `useCausl((g) => …)` returns a stable value (the selector's

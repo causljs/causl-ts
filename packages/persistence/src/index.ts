@@ -1,5 +1,5 @@
 /**
- * @causl/persistence — framework-neutral UI-preference persistence
+ * @causljs/persistence — framework-neutral UI-preference persistence
  * for Causl. The information model (the user's mental world: cells
  * with formulas, assets, bookings) and the editor-controller state
  * (the user's tools: cursor, selection, column widths, the mode the

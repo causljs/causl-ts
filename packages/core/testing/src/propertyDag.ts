@@ -49,7 +49,7 @@ import type {
   Graph,
   InputNode,
   Node,
-} from '@causl/core'
+} from '@causljs/core'
 
 /**
  * Specification of a derived node in a random DAG.

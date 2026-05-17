@@ -8,7 +8,7 @@ The previous draft had at least five state machines hiding as flat enums (`NodeS
 
 This page draws **one composite statechart** with hierarchy and orthogonal regions. The four "policies" that previously named themselves separately (`AsyncCommitPolicy`, `CyclePolicy`, `commitMode`, conflict resolution policy) are *guard expressions on transitions* in this chart, sharing one event vocabulary. They are no longer independent enums.
 
-As of v0.9.0 the **Engine** region (the leftmost orthogonal region below) is the shipped surface. The `ResourceFleet` and `ConflictRegistry` regions are drawn here because the engine's transitions reference their event vocabulary, but their implementations remain deferred to the `@causl/sync` adapter epic and the conflict-view derived (see `SPEC.md` §13.6, §13.7); they ride on top of the Engine without changing its internal transitions.
+As of v0.9.0 the **Engine** region (the leftmost orthogonal region below) is the shipped surface. The `ResourceFleet` and `ConflictRegistry` regions are drawn here because the engine's transitions reference their event vocabulary, but their implementations remain deferred to the `@causljs/sync` adapter epic and the conflict-view derived (see `SPEC.md` §13.6, §13.7); they ride on top of the Engine without changing its internal transitions.
 
 ## 1. The composite chart
 
@@ -45,7 +45,7 @@ stateDiagram-v2
             direction TB
             note right of ResourceFleet
               one orthogonal sub-statechart per registered resource;
-              deferred to the @causl/sync adapter (SPEC §13.6),
+              deferred to the @causljs/sync adapter (SPEC §13.6),
               referenced by the Engine via guards on Validating.
             end note
             [*] --> ResourceIdle
@@ -138,7 +138,7 @@ Every transition in the chart reacts to one of these events. New events do not a
 | `all-guards-pass` | engine | Engine: `Validating → Publishing` |
 | `guard-failed` | engine | Engine: `Validating → Publishing | Idle` (guarded by `commitMode`) |
 | `tNew-published` | engine | Engine: `Publishing → Idle`; emits to subscribers |
-| `fetch-begin` | application/`@causl/sync` | ResourceFleet: `ResourceIdle → Loading` |
+| `fetch-begin` | application/`@causljs/sync` | ResourceFleet: `ResourceIdle → Loading` |
 | `fetch-resolve` | external (network) | ResourceFleet: `Loading → Loaded | Stale` |
 | `fetch-reject` | external (network) | ResourceFleet: `Loading → Errored` |
 | `dep-changed` | engine | ResourceFleet: `Loaded → Stale` |
@@ -304,7 +304,7 @@ tag names the call-site label on it.
 
 ## 6. What this page does *not* cover
 
-- **The application-layer interaction modes** (selecting, drawing, idle, …) belong to the editor-controller layer (`SPEC.md` §7.2), which is **not** in `@causl/core`. They will appear in their own statechart in the application code, with `Msg` events crossing into the engine via `commit`.
+- **The application-layer interaction modes** (selecting, drawing, idle, …) belong to the editor-controller layer (`SPEC.md` §7.2), which is **not** in `@causljs/core`. They will appear in their own statechart in the application code, with `Msg` events crossing into the engine via `commit`.
 - **Multi-user merge.** Two clients each producing their own `GraphTime` is a future-epic problem.
 - **Devtools UI.** The chart is not a UI; it is the contract the engine and the resource adapter and the conflict view all share.
 
@@ -324,7 +324,7 @@ phases as follows:
 | `Recomputing.WalkingDirty` / `ComputingDerived` | Kahn-ordered recompute fixpoint over the affected sub-graph; populates `derivedRollback` for the catch arm | D |
 | `Validating.CheckingCycles` | first-commit cycle detector (back-edge probe on the residue of the Kahn pass) | folded into D |
 | `Validating.CheckingConstraints` | reserved (constraints remain deferred; see `SPEC.md` §13) | — |
-| `Validating.CheckingPermissions` | reserved (permissions are out-of-scope for `@causl/core`) | — |
+| `Validating.CheckingPermissions` | reserved (permissions are out-of-scope for `@causljs/core`) | — |
 | `Publishing` | frozen `Commit` assembled; bounded `commitHistory` ring buffer extended; `commitLogEntry.value` refreshed; opt-in `commitMetadataDerived` set recomputed against the just-refreshed log; per-commit input snapshot retained; per-node and per-commit subscribers dispatched | E, F, F.4, F.5, F.6, G, H |
 
 Phases F, F.4, F.5, F.6, G, and H each carry a precondition gate

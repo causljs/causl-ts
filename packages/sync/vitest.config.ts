@@ -1,8 +1,8 @@
 /**
  * @packageDocumentation
  *
- * Vitest configuration for the `@causl/sync` package. Aliases
- * `@causl/core` and `@causl/core/internal` directly to the
+ * Vitest configuration for the `@causljs/sync` package. Aliases
+ * `@causljs/core` and `@causljs/core/internal` directly to the
  * sibling package's source entry points so tests run against in-tree
  * TypeScript without a build step, and scopes test discovery to
  * `test/**\/*.test.ts` under the Node environment (no DOM globals
@@ -36,12 +36,12 @@ export default defineConfig({
     // Array form so we can order the longer subpath alias first.
     alias: [
       // Order matters: the longer subpath alias is matched first so
-      // `@causl/core/internal` doesn't fall through to the bare
-      // `@causl/core` rule.
-      { find: '@causl/core/internal', replacement: coreInternal },
-      // Route `@causl/core` imports to in-tree source so changes in
+      // `@causljs/core/internal` doesn't fall through to the bare
+      // `@causljs/core` rule.
+      { find: '@causljs/core/internal', replacement: coreInternal },
+      // Route `@causljs/core` imports to in-tree source so changes in
       // the sibling package take effect without a build.
-      { find: '@causl/core', replacement: coreSrc },
+      { find: '@causljs/core', replacement: coreSrc },
     ],
   },
   test: {

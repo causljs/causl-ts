@@ -78,7 +78,7 @@ import {
   buildPropertyDag,
   propertyDag,
   propertyTrials,
-} from '@causl/core-testing-internal'
+} from '@causljs/core-testing-internal'
 import { createCausl, type Graph, type Node } from '../../src/index.js'
 
 /**

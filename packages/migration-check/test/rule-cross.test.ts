@@ -95,7 +95,7 @@ describe('rule S-07 — useState shared across components', () => {
 describe('rule S-08 — phantom imports', () => {
   it('fires on useCauslSuspense import', () => {
     expect(
-      ids(`import { useCauslSuspense } from '@causl/react'`),
+      ids(`import { useCauslSuspense } from '@causljs/react'`),
     ).toContain('S-08')
   })
 })

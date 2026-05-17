@@ -16,7 +16,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "demo:spreadsheet": "pnpm --filter @causl/formula run demo",
+    "demo:spreadsheet": "pnpm --filter @causljs/formula run demo",
     "audit:commitments": "node --import tsx tools/audit/run-all.ts",
     "audit:test": "node --import tsx --test tools/audit/__tests__/*.test.ts",
     "docs:test": "node --test tools/docs-postprocess/__tests__/*.test.mjs",
@@ -25,39 +25,39 @@
     "typecheck:test-d": "pnpm -r --filter './packages/*' --if-present run test:types",
     "docs:api": "typedoc && node tools/docs-postprocess/typedoc-reskin.mjs",
     "docs:api:reskin": "node tools/docs-postprocess/typedoc-reskin.mjs",
-    "corpus:report": "pnpm --filter @causl/core exec vitest run test/properties/failing-against-stub.property.test.ts --reporter=json 2>/dev/null | node scripts/corpus-report.mjs",
+    "corpus:report": "pnpm --filter @causljs/core exec vitest run test/properties/failing-against-stub.property.test.ts --reporter=json 2>/dev/null | node scripts/corpus-report.mjs",
     "corpus:stub-must-fail": "CAUSL_BACKEND=stub pnpm corpus:report",
     "corpus:ts-must-pass": "CAUSL_BACKEND=ts pnpm corpus:report",
     "prepare": "husky"
   },
-  "//size-limit": "Per SPEC.md §14.2 the bundle budget is the 15-30 KB band, with 18 KB as the working target on @causl/core (full import). The ceilings below are CI-gate caps — a PR that crosses one fails `size — bundle-size gate` and must include the §14.2.1 written team consensus or the size-limit bump is rejected. The 4.5 KB / 6 KB / 3 KB ceilings the previous spec defended were retired in PR #458 once the team accepted that the small-bundle promise was costing more in adopter glue (per closed PRs #266, #395, #420, #383, #455, #390, #454) than it was earning in elegance.",
-  "//size-limit-wasm": "The per-bridge wasm-pkg artefact cells (serde-json/gc-builtins/gc-classic) were activated by Sub-E (#1063) closeout per the corrected #689 budgets. Each cell asserts the raw .wasm artefact ceiling; the Brotli q11 ceiling is enforced post-compress at `pnpm wasm:build` upload time and is documented in `packages/core/wasm-pkg/README.md`. Per #1103 the per-bridge artefact tree was split into `<bridge>-bundler/` (consumed by the @causl/core/wasm loader + bundler-interop fixtures) and `<bridge>-nodejs/` (consumed by Node test runners such as the bridge-roundtrip property suite). wasm-pack emits byte-identical `.wasm` from both targets, so the size-limit cells gate the `-bundler` variant only — a per-target row pair would duplicate the cap with no extra signal. The 8-byte WASM-preamble stubs committed under both `<bridge>-bundler/` and `<bridge>-nodejs/` let the cells gate today; `pnpm wasm:build` replaces them with real artefacts and the caps bite from that point on. If #692's `js-sys`-drop path lands, `gc-builtins` ratchets to ≤70 KB raw / ≤28 KB Brotli — file a follow-up issue for the ratchet. NOTE (#1150): the `@causl/core wasm bridge — serde-json (raw)` cell sits at 230 KB to absorb the current 213 KB serde artefact, which exceeds the SPEC §17.6 commitment-14 ceiling of 200 KB raw by 13 KB (Brotli 66 KB remains under the 80 KB target). The gap is documented as Option C divergence in §17.6's current-state paragraph; the cell tightens back to ≤200 KB when the Rust engine port (epic #1133) lands and wasm-opt is invoked directly per PR #1112's design discussion — see #1150 for the resolution path.",
+  "//size-limit": "Per SPEC.md §14.2 the bundle budget is the 15-30 KB band, with 18 KB as the working target on @causljs/core (full import). The ceilings below are CI-gate caps — a PR that crosses one fails `size — bundle-size gate` and must include the §14.2.1 written team consensus or the size-limit bump is rejected. The 4.5 KB / 6 KB / 3 KB ceilings the previous spec defended were retired in PR #458 once the team accepted that the small-bundle promise was costing more in adopter glue (per closed PRs #266, #395, #420, #383, #455, #390, #454) than it was earning in elegance.",
+  "//size-limit-wasm": "The per-bridge wasm-pkg artefact cells (serde-json/gc-builtins/gc-classic) were activated by Sub-E (#1063) closeout per the corrected #689 budgets. Each cell asserts the raw .wasm artefact ceiling; the Brotli q11 ceiling is enforced post-compress at `pnpm wasm:build` upload time and is documented in `packages/core/wasm-pkg/README.md`. Per #1103 the per-bridge artefact tree was split into `<bridge>-bundler/` (consumed by the @causljs/core/wasm loader + bundler-interop fixtures) and `<bridge>-nodejs/` (consumed by Node test runners such as the bridge-roundtrip property suite). wasm-pack emits byte-identical `.wasm` from both targets, so the size-limit cells gate the `-bundler` variant only — a per-target row pair would duplicate the cap with no extra signal. The 8-byte WASM-preamble stubs committed under both `<bridge>-bundler/` and `<bridge>-nodejs/` let the cells gate today; `pnpm wasm:build` replaces them with real artefacts and the caps bite from that point on. If #692's `js-sys`-drop path lands, `gc-builtins` ratchets to ≤70 KB raw / ≤28 KB Brotli — file a follow-up issue for the ratchet. NOTE (#1150): the `@causljs/core wasm bridge — serde-json (raw)` cell sits at 230 KB to absorb the current 213 KB serde artefact, which exceeds the SPEC §17.6 commitment-14 ceiling of 200 KB raw by 13 KB (Brotli 66 KB remains under the 80 KB target). The gap is documented as Option C divergence in §17.6's current-state paragraph; the cell tightens back to ≤200 KB when the Rust engine port (epic #1133) lands and wasm-opt is invoked directly per PR #1112's design discussion — see #1150 for the resolution path.",
   "size-limit": [
     {
       "path": "packages/core/dist/index.js",
-      "name": "@causl/core (full import)",
+      "name": "@causljs/core (full import)",
       "limit": "20 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/core/dist/index.js",
       "import": "{ createCausl }",
-      "name": "@causl/core (createCausl-only)",
+      "name": "@causljs/core (createCausl-only)",
       "limit": "15 KB"
     },
     {
       "path": "packages/core/dist/wasm.js",
-      "name": "@causl/core/wasm (Phase-1 loader + WasmBackend wrapper)",
+      "name": "@causljs/core/wasm (Phase-1 loader + WasmBackend wrapper)",
       "limit": "12 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/core/wasm-pkg/serde-bundler/engine_rs_bg.wasm",
-      "name": "@causl/core wasm bridge — serde-json (raw)",
+      "name": "@causljs/core wasm bridge — serde-json (raw)",
       "limit": "230 KB",
       "disablePlugins": [
         "@size-limit/esbuild",
@@ -66,7 +66,7 @@
     },
     {
       "path": "packages/core/wasm-pkg/gc-builtins-bundler/engine_rs_bg.wasm",
-      "name": "@causl/core wasm bridge — gc-builtins (raw)",
+      "name": "@causljs/core wasm bridge — gc-builtins (raw)",
       "limit": "260 KB",
       "disablePlugins": [
         "@size-limit/esbuild",
@@ -75,7 +75,7 @@
     },
     {
       "path": "packages/core/wasm-pkg/gc-classic-bundler/engine_rs_bg.wasm",
-      "name": "@causl/core wasm bridge — gc-classic (raw)",
+      "name": "@causljs/core wasm bridge — gc-classic (raw)",
       "limit": "260 KB",
       "disablePlugins": [
         "@size-limit/esbuild",
@@ -84,44 +84,44 @@
     },
     {
       "path": "packages/react/dist/index.js",
-      "name": "@causl/react",
+      "name": "@causljs/react",
       "limit": "8 KB",
       "ignore": [
         "react",
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/devtools-bridge/dist/index.js",
-      "name": "@causl/devtools-bridge (connectDevtools-only, absent-extension path)",
+      "name": "@causljs/devtools-bridge (connectDevtools-only, absent-extension path)",
       "import": "{ connectDevtools }",
       "limit": "5 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/sync/dist/index.js",
-      "name": "@causl/sync (full import)",
+      "name": "@causljs/sync (full import)",
       "limit": "12 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/sync/dist/resource-entry.js",
-      "name": "@causl/sync/resource (resource-only)",
+      "name": "@causljs/sync/resource (resource-only)",
       "limit": "8 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {
       "path": "packages/sync/dist/conflict-entry.js",
-      "name": "@causl/sync/conflict (conflict-only)",
+      "name": "@causljs/sync/conflict (conflict-only)",
       "limit": "8 KB",
       "ignore": [
-        "@causl/core"
+        "@causljs/core"
       ]
     },
     {

@@ -16,7 +16,7 @@
  * `result.error.kind` tag on each evaluator outcome.
  */
 
-import { createCausl, type Node } from '@causl/core'
+import { createCausl, type Node } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   cellId,

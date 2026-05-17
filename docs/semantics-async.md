@@ -4,7 +4,7 @@
 
 ## 0. Why this page exists
 
-The engine's denotational semantics live in `docs/semantics.md`. The async adapter (`@causl/sync`) layers on top of it: a resource is a `Node<ResourceState<T>>` like any other, fed by an external Event source (the loader's Promise). Defining what a *value* means at any commit moment is the foundation that lets two adapter implementations agree on observable behavior.
+The engine's denotational semantics live in `docs/semantics.md`. The async adapter (`@causljs/sync`) layers on top of it: a resource is a `Node<ResourceState<T>>` like any other, fed by an external Event source (the loader's Promise). Defining what a *value* means at any commit moment is the foundation that lets two adapter implementations agree on observable behavior.
 
 This page is short by design. The full small-step semantics, theorem statements, and counterexample-fragment patterns are in `SPEC.async.md` §3. This page is the cross-reference adopters reach for first.
 

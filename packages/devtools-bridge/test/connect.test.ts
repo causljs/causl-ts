@@ -1,4 +1,4 @@
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools, isExtensionAvailable } from '../src/index.js'
 

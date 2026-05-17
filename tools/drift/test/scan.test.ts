@@ -39,7 +39,7 @@ describe('scanFile', () => {
   it('returns no findings for clean causl code', () => {
     const f = scanFile(
       'src/clean.ts',
-      `import { useCausl } from '@causl/react'\nconst v = useCausl((g) => g.now)`,
+      `import { useCausl } from '@causljs/react'\nconst v = useCausl((g) => g.now)`,
     )
     expect(f).toEqual([])
   })

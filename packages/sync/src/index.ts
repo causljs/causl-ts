@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public barrel for `@causl/sync` — async-resource bindings layered
+ * Public barrel for `@causljs/sync` — async-resource bindings layered
  * over the Causl engine. The semantic core is deliberately unaware
  * of `fetch`; this package is the adapter that lives above it,
  * modelling external fetches as Events feeding Inputs and surfacing
@@ -52,7 +52,7 @@ export {
 } from './conflict.js'
 
 /**
- * Semver string for the published `@causl/sync` artifact.
+ * Semver string for the published `@causljs/sync` artifact.
  *
  * @remarks
  * Pinned at `0.0.0` for the pre-release lineage; bumped by the release

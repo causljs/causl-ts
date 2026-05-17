@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import * as mod from '../src/index.js'
 import { VERSION } from '../src/index.js'
@@ -14,18 +14,18 @@ const pkg = JSON.parse(
   peerDependencies?: Record<string, string>
 }
 
-describe('@causl/persistence scaffolding', () => {
+describe('@causljs/persistence scaffolding', () => {
   it('exports a version placeholder', () => {
     expect(typeof VERSION).toBe('string')
   })
 
   // §13 boundary posture: persistence wraps the host's own engine,
-  // so `@causl/core` belongs in peerDependencies — declaring it as a
+  // so `@causljs/core` belongs in peerDependencies — declaring it as a
   // runtime dep risks duplicate-graph hazards (two `createCausl`
   // instances with divergent identity) when a consumer pins core.
-  it('declares @causl/core as a peerDependency, not a runtime dependency', () => {
-    expect(pkg.peerDependencies?.['@causl/core']).toBeDefined()
-    expect(pkg.dependencies?.['@causl/core']).toBeUndefined()
+  it('declares @causljs/core as a peerDependency, not a runtime dependency', () => {
+    expect(pkg.peerDependencies?.['@causljs/core']).toBeDefined()
+    expect(pkg.dependencies?.['@causljs/core']).toBeUndefined()
   })
 
   // §7.2 surface lock: the public barrel is the editor-controller-state

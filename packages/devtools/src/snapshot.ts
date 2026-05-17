@@ -26,7 +26,7 @@
  * load-failure path.
  */
 
-import type { Graph, InputNode, NodeId } from '@causl/core'
+import type { Graph, InputNode, NodeId } from '@causljs/core'
 
 /**
  * Capability slice handed to {@link exportSnapshot} /

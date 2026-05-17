@@ -1,5 +1,5 @@
 /**
- * @causl/core/testing — shared test seam.
+ * @causljs/core/testing — shared test seam.
  *
  * Test-only. Do not import from production code. See the package
  * README for the rationale and the per-helper docs.

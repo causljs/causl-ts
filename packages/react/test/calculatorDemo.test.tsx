@@ -9,7 +9,7 @@
  * `useDispatch` driven by a single `set` message kind.
  */
 
-import { createCausl, type Graph, type InputNode } from '@causl/core'
+import { createCausl, type Graph, type InputNode } from '@causljs/core'
 import { act, render, screen } from '@testing-library/react'
 import { useRef, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

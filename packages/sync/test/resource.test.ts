@@ -11,7 +11,7 @@
  * commitment 7).
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import { ForbiddenResourceTransitionError, resource } from '../src/index.js'
 

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Smoke test for the `@causl/react` package scaffold. Confirms the
+ * Smoke test for the `@causljs/react` package scaffold. Confirms the
  * public entry point is wired up and the build pipeline emits a
  * loadable module by checking for the `VERSION` placeholder export.
  * Acts as the lightest possible canary: if this fails, the package
@@ -12,9 +12,9 @@ import { describe, expect, it } from 'vitest'
 import { VERSION } from '../src/index.js'
 
 /**
- * Suite covering minimal scaffolding guarantees of `@causl/react`.
+ * Suite covering minimal scaffolding guarantees of `@causljs/react`.
  */
-describe('@causl/react scaffolding', () => {
+describe('@causljs/react scaffolding', () => {
   /**
    * Asserts the package re-exports a string-typed `VERSION` constant.
    * Used as a placeholder until release tooling stamps real versions.

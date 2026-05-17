@@ -37,16 +37,16 @@ treating a green run as evidence.
 
 > **Current state (as of v0.9.0) — bundle budgets.** Earlier drafts
 > of this doc cited the small-bundle promise from the pre-#458 era
-> (`@causl/core` 6 KB, `createCausl`-only 4 KB, `@causl/react` 3 KB,
-> `@causl/devtools-bridge` 3 KB). PR #458 retired those ceilings —
+> (`@causljs/core` 6 KB, `createCausl`-only 4 KB, `@causljs/react` 3 KB,
+> `@causljs/devtools-bridge` 3 KB). PR #458 retired those ceilings —
 > the team accepted that the small-bundle promise was costing more
 > in adopter glue (per closed PRs #266, #395, #420, #383, #455,
 > #390, #454) than it was earning in elegance. The size-limit cells
 > in root `package.json` are the current source of truth; today
-> they ratchet `@causl/core (full import)` at 20 KB,
-> `createCausl`-only at 15 KB, `@causl/react` at 8 KB,
-> `@causl/devtools-bridge (connectDevtools-only)` at 5 KB, and
-> `@causl/sync` at 12 KB. The wasm-pkg cells (serde-json /
+> they ratchet `@causljs/core (full import)` at 20 KB,
+> `createCausl`-only at 15 KB, `@causljs/react` at 8 KB,
+> `@causljs/devtools-bridge (connectDevtools-only)` at 5 KB, and
+> `@causljs/sync` at 12 KB. The wasm-pkg cells (serde-json /
 > gc-builtins / gc-classic) gate the raw `.wasm` artefact per
 > bridge under the #1063 / #1085 closeout; see
 > `packages/core/wasm-pkg/README.md` and SPEC §17.6 (amended
@@ -58,7 +58,7 @@ be coordinated with #225's consumers before the gate goes green
 under the new value.
 
 The bundle-size budget covers the runtime packages adopters ship
-to production. `@causl/migration-check` itself is a build-time
+to production. `@causljs/migration-check` itself is a build-time
 CLI tool — its scanner bundle never reaches the adopter's
 runtime, so it has no end-user-facing budget.
 
@@ -68,15 +68,15 @@ runtime, so it has no end-user-facing budget.
 # Pre-migration baseline
 git checkout main
 pnpm test:run                         # capture: tests pass, count, durations
-npx @causl/migration-check > drift-before.json
+npx @causljs/migration-check > drift-before.json
 
 # Apply migrations following docs/migration/from-jotai.md (and others)
 
 # Post-migration validation (every axis)
 pnpm test:run                          # axis 2 — behaviour parity
-npx @causl/migration-check > drift-after.json
+npx @causljs/migration-check > drift-after.json
                                        # axis 1 — drift-after.json has stats.findings === 0
-grep -E '@causl/[a-z-]+-bridge' .   # axis 3 — must return empty
+grep -E '@causljs/[a-z-]+-bridge' .   # axis 3 — must return empty
 jq '.catalogueVersion' drift-after.json  # axis 4 — pinned schema version
 ```
 
@@ -92,7 +92,7 @@ counter-example.
   See `docs/migration/RULE_CATALOGUE.md` and the per-library
   `docs/migration/from-{jotai,mobx,redux}.md` guides.
 - **Not a runtime bridge sign-off.** We deliberately do not ship a
-  `@causl/jotai-bridge` package; the migration is forward-only
+  `@causljs/jotai-bridge` package; the migration is forward-only
   per the team's commitment to deletable abstractions. Axis 3
   enforces this.
 

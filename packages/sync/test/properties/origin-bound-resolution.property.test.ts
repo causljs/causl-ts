@@ -9,12 +9,12 @@
  * state's `origin` is preserved from the Loading state.
  */
 
-import { tieredPropertyTrials } from '@causl/core-testing-internal'
+import { tieredPropertyTrials } from '@causljs/core-testing-internal'
 import {
   applyEvents,
   loadingEpisodeGen,
   type ResourceModelState,
-} from '@causl/sync-testing-internal'
+} from '@causljs/sync-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 

@@ -16,7 +16,7 @@ hypothesis-file for human debugging.
 > (#535) shipped the `causl-enumerate` binary as a peer to
 > `causl-check` (not as a `causl-check enumerate` subcommand — the
 > earlier prose framing was superseded by the milestone-2 PR). The
-> `--hypothesis-out` flag and the `@causl/hypothesis`
+> `--hypothesis-out` flag and the `@causljs/hypothesis`
 > `evaluateFromFile()` reader are still deferred follow-ons; the
 > `causl-enumerate` CLI presently emits JSON / SARIF only and the
 > `--seed` flag is wired through to `Bound` but does not yet
@@ -61,7 +61,7 @@ The file is a JSON document with a top-level shape:
 
 Schema versioning matches the IR pattern: `schema: 1` is the v1
 shape; future bumps require lockstep updates to the enumerator's
-emitter and the `@causl/hypothesis` evaluator's reader.
+emitter and the `@causljs/hypothesis` evaluator's reader.
 
 ## SARIF integration
 
@@ -106,7 +106,7 @@ closed 2026-05-03) shipped the `causl-enumerate` CLI as a peer
 binary to `causl-check`; the binary today emits JSON / SARIF
 verdicts but does **not** yet write a `.hypothesis` file. The
 enumerator emitter (`--hypothesis-out` flag) and the
-`@causl/hypothesis` reader (`evaluateFromFile()` helper) remain
+`@causljs/hypothesis` reader (`evaluateFromFile()` helper) remain
 deferred follow-ons — they are intended to land lockstep against
 this v1 schema. The original deferral pointer to #520 in the
 first draft of this doc was incorrect (#520 turned out to be the

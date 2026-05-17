@@ -1,5 +1,5 @@
 /**
- * @causl/devtools-bridge — Redux DevTools Extension protocol bridge.
+ * @causljs/devtools-bridge — Redux DevTools Extension protocol bridge.
  *
  * Each Causl Commit becomes a Redux action; reverse messages
  * (JUMP_TO_ACTION / JUMP_TO_STATE) replay against bounded retained

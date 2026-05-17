@@ -265,7 +265,7 @@ export const RULES: readonly RuleDescriptor[] = [
     id: 'R-04',
     source: 'redux',
     severity: 'important',
-    title: 'createAsyncThunk → @causl/sync resource(graph, key, loader)',
+    title: 'createAsyncThunk → @causljs/sync resource(graph, key, loader)',
     predicate: 'A createAsyncThunk import or call.',
     specRef: '§9.1',
     guideSection: 'docs/migration/from-redux.md#R-04',

@@ -18,7 +18,7 @@
  * type-check.
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causljs/core'
 import { describe, it } from 'vitest'
 import type { persistedInput } from '../src/persistedInput.js'
 

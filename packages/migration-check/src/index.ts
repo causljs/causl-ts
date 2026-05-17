@@ -1,5 +1,5 @@
 /**
- * @causl/migration-check — migration drift detector. Finds
+ * @causljs/migration-check — migration drift detector. Finds
  * unmigrated patterns and emits a DriftReport JSON for CI /
  * dashboards. Rule contract: docs/migration/RULE_CATALOGUE.md.
  *

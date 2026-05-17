@@ -17,61 +17,51 @@
  * (JS, WASM-GC-builtins, WASM-GC-classic, WASM-serde).
  *
  * @remarks
- * Phase-1 caveat. The `loadWasmBackend()` entry point shipped in
- * #1031 still throws `WasmBackendUnavailableError` because the
- * concrete `WebAssembly.instantiate()` path waits on engine work in
- * #682 / #683 / #693 follow-ups — those issues shipped the Rust
- * workspace, the wasm-pack pipeline, and the serde bridge *stub*,
- * not a wired `BackendEngine` implementation.
+ * Phase-1 status (causljs/causl-ts#6). The `loadWasmBackend()` entry
+ * point shipped in #1031 returns a real `BackendEngine` today (the
+ * Phase-1 `WasmBackend` whose internal commit pipeline routes through
+ * a TS `Graph` produced by `createCausl()`; see `instantiateBackend`
+ * in `packages/core/wasm/index.ts`). The World pairing is wired
+ * end-to-end — see `makeJsCrossBackendWorld()` /
+ * `makeWasmCrossBackendWorld()` below.
  *
  * The suite therefore:
  *
  *   1. Tries to load the WASM backend at the top of every property.
- *   2. If the load throws `WasmBackendUnavailableError`, logs a
- *      structured skip message and exits the property cleanly. The
- *      test is not marked failed because the dependency is documented
- *      and tracked in the issue body; a skip is the correct signal.
- *   3. If the load succeeds, runs the full property body against
- *      `(TS, WASM)` pairs.
+ *   2. If the load throws `WasmBackendUnavailableError` (future-
+ *      facing — a not-yet-built artifact for a non-default bridge id),
+ *      logs a structured skip message and exits the property cleanly.
+ *      The test is not marked failed because the dependency is
+ *      documented; a skip is the correct signal.
+ *   3. If the load succeeds (the Phase-1 default path), runs the full
+ *      property body against `(TS, WASM)` pairs.
  *
- * That gives us a CI gate that's *ready to fire the moment a real
- * WASM engine lands*. The contract this suite locks in does not
- * change between today and that day: same canonical seeds, same
- * fc.commands alphabet, same `expectByteEqualLog` oracle.
+ * The gate fires green by construction today because the Phase-1
+ * WasmBackend wraps the same TS engine the JS side uses. The contract
+ * pinned here (canonical seeds, fc.commands alphabet, byte-equal IR
+ * oracle) auto-activates the moment a Rust-driven `BackendEngine`
+ * ships in a follow-up; no scaffolding change required.
  *
  * What this file deliberately does NOT do (deferred to follow-ups):
- *
- *   - **Tiered fuzz budgets (5k / 100k / cargo-fuzz).** Once the
- *     engine exists, raise `numRuns` from the propertyOptions floor
- *     to the issue's tiered ceilings: 5 000 for the PR gate, 100 000
- *     for the nightly gate, 2-hour cargo-fuzz weekly. This file
- *     ships at the propertyOptions floor so a hollow run terminates
- *     fast.
- *
- *   - **`arbAdversarialValue` adversarial bias.** The issue calls
- *     for a 30%-biased adversarial-value arbitrary in a
- *     `@causl/core-testing-internal` package. That package does not
- *     exist today; the adversarial-bias work lands alongside Phase-1
- *     because the divergence sources it targets (NaN, ±0, lone
- *     surrogates, BigInt boundaries) are between-backend phenomena
- *     that the in-package TS-only suites cannot exercise.
- *
- *   - **`bridge-roundtrip.property.test.ts`.** Separate property
- *     file in the issue spec. Cheap (no engine init); lands as a
- *     sibling file when the bridge stubs in `tools/engine-rs-bridge-
- *     gc` and `tools/engine-rs-bridge-serde` start round-tripping
- *     real JS values.
  *
  *   - **Apalache differential reuse.** The TLA+ EPIC-7 corpus drives
  *     `causl-enumerator` via `tools/enumerator/diff/`; the 4-way
  *     `CombinedStatus` agreement classifier lands when all four
  *     implementations exist.
  *
- *   - **Migration boundary 5×5×3 matrix.** Documented as future-test
- *     scaffolding at the bottom of this file (`describe.skip` row +
- *     a doc comment that pins the dimensions). The
- *     `snapshot()`/`hydrate()` round-trip the matrix depends on
- *     lands in #687.
+ *   - **Real Rust-driven `BackendEngine`.** The Phase-1 WasmBackend
+ *     wraps the TS engine internally, so the gate is dormant-green
+ *     today. Acceptance flips to active when a Rust-driven engine
+ *     ships through `engine-rs-core` and
+ *     `__isPhase1WasmBackendForTests` starts returning `false`.
+ *
+ * Landed (no longer deferred):
+ *
+ *   - **Tiered fuzz budgets.** `CROSS_BACKEND_FUZZ_TIERS` in `seed.ts`
+ *     pins the default (1 000) / PR (5 000) / nightly (100 000)
+ *     budgets; cargo-fuzz tier signals a structured skip.
+ *   - **`bridge-roundtrip.property.test.ts`.** Sibling property file.
+ *   - **Migration boundary 5×5×3 matrix.** Real `it()` cells below.
  *
  * @see {@link https://github.com/iasbuilt/causl/issues/685} — this gate.
  * @see {@link https://github.com/iasbuilt/causl/issues/680} — WASM EPIC.
@@ -205,15 +195,23 @@ function logWasmSkip(reason: string): void {
 // The `Graph` surface is wider than `BackendEngine` (it adds
 // `input()`, `derived()`, the transaction-callback shape on
 // `commit()`, etc.). The TS engine satisfies both surfaces directly.
-// The WASM engine satisfies only `BackendEngine`; the Graph-shaped
-// methods compose on top in the JS-side facade — that composition
-// work lands in #687 alongside the migration round-trip.
+// The Phase-1 `WasmBackend` (#1065) wraps an internal TS `Graph`
+// reachable through the `__graph()` accessor; the Graph-shaped
+// methods therefore compose for free against the WASM-side world by
+// projecting that wrapped graph directly. See
+// `makeWasmCrossBackendWorld()` below for the projection.
 //
-// For #685's scaffolding we therefore mark the cross-backend
-// `World` pairing as TODO and gate the property body on Phase 1.
-// When the Graph facade learns to route through a `BackendEngine`,
-// the wiring drops in here without changing the surrounding
-// property scaffolding.
+// Phase-1 status (causljs/causl-ts#6, May 2026): the World pairing
+// IS implemented — `makeJsCrossBackendWorld()` /
+// `makeWasmCrossBackendWorld()` build symmetric `World` values, the
+// property body runs `fc.modelRun({ model: js, real: wasm })`
+// against the shared command alphabet, and the byte-equal IR oracle
+// fires after every command. Because the Phase-1 WasmBackend's
+// commit path *is* the same TS commit path under the hood, the gate
+// fires green by construction today; the contract auto-activates
+// the moment a Rust-driven `BackendEngine` ships and
+// `__isPhase1WasmBackendForTests` starts returning `false` for the
+// loaded backend.
 // ---------------------------------------------------------------------------
 
 /**

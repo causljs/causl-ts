@@ -1,7 +1,8 @@
 {
   "name": "@causl/react",
   "version": "0.2.0",
-  "description": "React bindings for Causl \u2014 useCausl, useDispatch, CauslProvider.",
+  "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

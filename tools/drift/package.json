@@ -2,14 +2,25 @@
   "name": "@causl/drift",
   "version": "0.0.0",
   "description": "Drift detector — finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase.",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "causl-drift": "./dist/cli.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "files": ["dist", "README.md"],
+  "bin": {
+    "causl-drift": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --sourcemap",
     "test": "vitest",

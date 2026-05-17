@@ -1,7 +1,8 @@
 {
   "name": "@causl/hypothesis",
   "version": "0.1.0",
-  "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC \u00a716.5).",
+  "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC §16.5).",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

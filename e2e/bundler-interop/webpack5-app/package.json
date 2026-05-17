@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "webpack 5 bundler-interop fixture for @causl/core + @causl/core/wasm (#689).",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "type": "module",
   "scripts": {
     "build": "webpack --config webpack.config.cjs",

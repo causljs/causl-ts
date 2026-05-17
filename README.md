@@ -308,4 +308,6 @@ Both demos are React 19 apps rendered via `createRoot`; React is loaded from esm
 
 ## License
 
-TBD.
+MIT — see [LICENSE](./LICENSE).
+
+Copyright (c) 2026 Roman Goldmann <roman@iasbuilt.com>.

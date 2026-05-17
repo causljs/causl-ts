@@ -1,7 +1,8 @@
 {
   "name": "@causl/persistence",
   "version": "0.1.0",
-  "description": "UI-preference persistence for Causl \u2014 persistedInput() and storage adapters.",
+  "description": "UI-preference persistence for Causl — persistedInput() and storage adapters.",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

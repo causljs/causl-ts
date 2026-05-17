@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Causl logo mark">
+  <!--
+    Causl mark — single source of truth.
+
+    Geometry per Causl Brand Specification §11:
+      - viewBox 0 0 120 120 (square, 120-unit canvas).
+      - Seven graph nodes (radius 10) arrayed on a 40-unit circle
+        centered at (60, 60), with the closing arc swept
+        counter-clockwise from the top-right node to the
+        bottom-right node.
+      - The bottom-right node is the commit node — painted in
+        Rollback Red (#FF4D5E per spec §8). The remaining six
+        nodes and the path are painted in Async Cyan
+        (#11D9FF per spec §8).
+      - NO background plate is baked into this SVG. The bright
+        cyan + commit-red work on both the dark site gradient and
+        the light-mode paper (#F7F8FA). When a backing plate is
+        needed (favicon, social cards), apply it via CSS or via
+        a per-export wrapper SVG — never in the canonical mark.
+  -->
+
+  <!-- Causal path (arc, swept counter-clockwise) -->
+  <path
+    d="M 88.3 31.7 A 40 40 0 1 0 88.3 88.3"
+    fill="none"
+    stroke="#11D9FF"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+
+  <!-- Graph nodes (Async Cyan #11D9FF, radius 10) -->
+  <circle cx="88.3" cy="31.7" r="10" fill="#11D9FF" />
+  <circle cx="60"   cy="20"   r="10" fill="#11D9FF" />
+  <circle cx="31.7" cy="31.7" r="10" fill="#11D9FF" />
+  <circle cx="20"   cy="60"   r="10" fill="#11D9FF" />
+  <circle cx="31.7" cy="88.3" r="10" fill="#11D9FF" />
+  <circle cx="60"   cy="100"  r="10" fill="#11D9FF" />
+
+  <!-- Commit node (Rollback Red #FF4D5E, bottom-right) -->
+  <circle cx="88.3" cy="88.3" r="10" fill="#FF4D5E" />
+</svg>

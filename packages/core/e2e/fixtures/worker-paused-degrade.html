@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Causl core — worker-paused-degrade harness (epic #1558 / #1565)</title>
+  </head>
+  <body>
+    <!--
+      Harness fixture for epic #1558 sub-issue #1565 — worker-paused
+      graceful-degrade acceptance.
+
+      The page spawns a `@causl/core` graph backed by the (future)
+      shared-memory worker variant. The Playwright spec uses the
+      Chrome DevTools Protocol to pause the worker thread; the
+      contract is that the main thread's `commit()` call detects
+      the timeout and transparently falls back to a synchronous
+      `apply_commands` execution against a sibling non-shared
+      instance, so adopter code observes only a latency bump (not
+      a hang or thrown error).
+
+      The page exposes:
+      - `window.startCommit(intent)` — fire a commit and resolve
+        with `{ status, latencyMs, fallbackUsed }`,
+      - `window.testHook = { workerSpawned, sharedMemReady, ... }`
+        so the spec can confirm pre-conditions before pausing.
+
+      Expected initial state: skipped. The shared-memory worker
+      variant doesn't exist yet (Phase 6 of epic #1558), so the
+      worker the spec tries to pause doesn't exist. The suite is
+      guarded with `test.describe.skip(...)` so the spec is
+      discoverable; it flips live the moment Phase 6 lands.
+    -->
+    <main id="status">harness loading</main>
+    <script type="module">
+      // Placeholder harness. The shared-memory worker variant the
+      // gate is meant to exercise doesn't exist yet (Phase 6); when
+      // it lands, this script will:
+      //   1. import the shared-memory backend factory from
+      //      `@causl/core/wasm` (or wherever Phase 6 puts it),
+      //   2. spawn the worker, wait for `sharedMemReady`,
+      //   3. expose `window.startCommit(intent)` that fires a
+      //      commit through the worker and returns latency +
+      //      whether the fallback path was used.
+      // Today the page just publishes a stub `testHook` so the
+      // suite-level skip in the spec is reached without an import
+      // error.
+      window.testHook = {
+        workerSpawned: false,
+        sharedMemReady: false,
+        reason:
+          'shared-memory worker variant not shipped yet (Phase 6 of epic #1558)',
+      }
+      window.startCommit = async () => ({
+        status: 'unavailable',
+        latencyMs: 0,
+        fallbackUsed: false,
+      })
+      document.getElementById('status').textContent = 'harness ready'
+    </script>
+  </body>
+</html>

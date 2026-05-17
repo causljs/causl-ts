@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Causl core — COOP/COEP fallback harness (epic #1558 / #1565)</title>
+  </head>
+  <body>
+    <!--
+      Harness fixture for epic #1558 sub-issue #1565 — COOP/COEP
+      fallback acceptance.
+
+      The page imports `loadWasmBackend()` and `detectBridge()` from
+      `@causl/core/wasm` against a static origin that emits NO
+      Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy
+      headers. Without those headers `crossOriginIsolated === false`
+      and `SharedArrayBuffer` is unavailable, so the shared-memory
+      WASM variant cannot load; the contract under #1565 is that
+      `loadWasmBackend()` *still* returns a usable backend and
+      `detectBridge()` returns a non-shared bridge id
+      (`wasmgc-builtins` or `wasmgc-classic`).
+
+      The page also installs a `SharedArrayBuffer` constructor trap
+      so the spec can assert no shared-memory allocation occurred
+      during init — the fallback is meaningless if it secretly
+      tried (and silently failed) to construct one.
+
+      Expected initial state: skipped. The shared-memory variant
+      doesn't exist yet (Phase 6 of epic #1558), so the fallback
+      gate is meaningless without the upstream variant to fall
+      back FROM. The spec is wired and discoverable so the §14
+      acceptance row is populated; it flips live the moment Phase
+      6 lands.
+    -->
+    <main id="status">harness loading</main>
+    <script type="module">
+      // Trap SharedArrayBuffer construction so the spec can assert
+      // the fallback path never touches it. Stash the original on
+      // a side channel in case some future test wants it.
+      const sabAttempts = []
+      if (typeof SharedArrayBuffer !== 'undefined') {
+        const Original = SharedArrayBuffer
+        // eslint-disable-next-line no-global-assign
+        SharedArrayBuffer = new Proxy(Original, {
+          construct(target, args, newTarget) {
+            sabAttempts.push({
+              size: args[0],
+              stack: new Error('SAB construction').stack,
+            })
+            return Reflect.construct(target, args, newTarget)
+          },
+        })
+      }
+
+      try {
+        const { loadWasmBackend, detectBridge } = await import(
+          '/packages/core/dist/wasm.js'
+        )
+
+        const bridge = await detectBridge()
+        const backend = await loadWasmBackend()
+
+        window.testHook = {
+          loaded: backend !== null && backend !== undefined,
+          bridge,
+          crossOriginIsolated:
+            typeof crossOriginIsolated === 'boolean'
+              ? crossOriginIsolated
+              : false,
+          sabAttempts,
+          error: null,
+        }
+      } catch (err) {
+        window.testHook = {
+          loaded: false,
+          bridge: null,
+          crossOriginIsolated: false,
+          sabAttempts,
+          error: String(err),
+        }
+      }
+
+      document.getElementById('status').textContent = 'harness ready'
+    </script>
+  </body>
+</html>

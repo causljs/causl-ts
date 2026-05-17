@@ -2106,6 +2106,129 @@ export function __createWasmBackendSyncForTests(
   )
 }
 
+// ---------------------------------------------------------------------------
+// Phase 0 / #1559 / epic #1558 — boundary-instr sample collector.
+//
+// The serde-boundary-instr wasm artefact (built by `tools/wasm-build/
+// build.mjs` under the `boundary-instr` cargo feature, output at
+// `packages/bench/wasm-boundary-instr-pkg/`) exports a thread-local
+// ring of per-call byte / ns samples via a `__getBoundarySamples`
+// symbol. The bench-side `zero-boundary-baseline.ts` harness loads
+// that wasm shim directly (via `require()`) and registers its
+// exports object through {@link __registerBoundaryInstrExports} so
+// the collector below can drain the ring without the bench harness
+// needing a separate import path back into the bridge module.
+//
+// This is strictly @internal: not part of the public `BackendEngine`
+// surface, not re-exported from the `@causljs/core` barrel, not part of
+// the documented adopter contract. Adopters MUST NOT depend on it.
+// ---------------------------------------------------------------------------
+
+/**
+ * @internal Phase 0 / #1559 — shape of a single boundary-tax sample.
+ *
+ * Fields are camelCase on the JS side. The wasm-bindgen-emitted shim
+ * returns snake_case (`input_bytes`, `output_bytes`, `ns_in`, `ns_out`);
+ * the collector below maps the rename in JS so the Rust struct does
+ * not have to carry a `#[serde(rename_all = "camelCase")]` attribute.
+ */
+export interface BoundarySample {
+  readonly inputBytes: number
+  readonly outputBytes: number
+  readonly nsIn: number
+  readonly nsOut: number
+}
+
+/**
+ * Raw shape emitted by the wasm-bindgen shim — snake_case Rust struct
+ * fields. Mapped to {@link BoundarySample} by the collector.
+ *
+ * @internal
+ */
+interface RawBoundarySample {
+  input_bytes: number
+  output_bytes: number
+  ns_in: number
+  ns_out: number
+}
+
+/**
+ * Registry of wasm exports objects the boundary-instr probe writes
+ * into at load time. The collector iterates this set and drains every
+ * registered shim's `__getBoundarySamples` ring on each call.
+ *
+ * Keyed by the exports object itself (which is `===`-stable for the
+ * lifetime of the wasm instance) so duplicate `register()` calls
+ * across the same shim are no-ops.
+ *
+ * @internal
+ */
+const boundaryInstrExports = new Set<{
+  __getBoundarySamples?: () => RawBoundarySample[]
+}>()
+
+/**
+ * @internal Phase 0 / #1559 — register a wasm exports object that
+ * may expose `__getBoundarySamples`.
+ *
+ * The bench-side boundary-instr loader (in
+ * `packages/bench/src/wasm-stub-loader.ts` or the baseline harness)
+ * calls this immediately after `require()`-ing the wasm-pack-emitted
+ * nodejs shim, passing the shim's exports object. The collector
+ * below drains every registered shim's ring on each call.
+ *
+ * Safe to call multiple times with the same exports object — the
+ * underlying registry is a `Set` keyed by reference.
+ */
+export function __registerBoundaryInstrExports(
+  exports: { __getBoundarySamples?: () => RawBoundarySample[] },
+): void {
+  boundaryInstrExports.add(exports)
+}
+
+/**
+ * @internal Phase 0 / #1559 — clear the boundary-instr registry. For
+ * test hermiticity and the rare adopter-driven teardown path.
+ */
+export function __resetBoundaryInstrExportsForTests(): void {
+  boundaryInstrExports.clear()
+}
+
+/**
+ * @internal Phase 0 / #1559 — boundary-instr sample collector.
+ *
+ * Returns the boundary-tax samples accumulated by the
+ * serde-boundary-instr bridge artefact since the last call (drains the
+ * thread-local ring). Returns an empty array if:
+ *
+ *   - No boundary-instr exports object has been registered yet
+ *     (nothing to sample);
+ *   - The registered exports object wasn't built with
+ *     `--features boundary-instr` (the symbol is absent).
+ *
+ * Consumed by `packages/bench/scripts/zero-boundary-baseline.ts`. NOT
+ * part of the public `BackendEngine` API; do not depend on this from
+ * adopter code.
+ */
+export function __getBoundarySamples(): BoundarySample[] {
+  const out: BoundarySample[] = []
+  for (const exp of boundaryInstrExports) {
+    const fn = exp.__getBoundarySamples
+    if (typeof fn !== 'function') continue
+    const raw = fn() as RawBoundarySample[] | undefined
+    if (!raw) continue
+    for (const s of raw) {
+      out.push({
+        inputBytes: s.input_bytes,
+        outputBytes: s.output_bytes,
+        nsIn: s.ns_in,
+        nsOut: s.ns_out,
+      })
+    }
+  }
+  return out
+}
+
 /**
  * Streaming-instantiate with a non-streaming fallback for hosts
  * that serve `.wasm` with the wrong MIME type (S3, older nginx).

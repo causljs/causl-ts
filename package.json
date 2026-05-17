@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "description": "Transactional state for tangled dependency graphs.",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "scripts": {

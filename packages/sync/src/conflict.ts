@@ -46,7 +46,7 @@
  * through a registry method's parameter.
  */
 
-import { assertNever } from '@causl/core/internal'
+import { assertNever } from '@causljs/core/internal'
 import type {
   Compute,
   DerivedNode,
@@ -54,7 +54,7 @@ import type {
   GraphTime,
   Node,
   NodeId,
-} from '@causl/core'
+} from '@causljs/core'
 import {
   type ConflictReducerState,
   type ConflictResolutionRecord,

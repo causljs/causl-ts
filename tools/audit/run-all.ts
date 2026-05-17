@@ -7,7 +7,7 @@
  *   - The quarterly cron in `.github/workflows/quarterly-audit.yml`.
  *
  * Replaces the v1 quarterly-audit invocation that ran each script
- * via `pnpm --filter @causl/core exec tsx`, which silently reset cwd
+ * via `pnpm --filter @causljs/core exec tsx`, which silently reset cwd
  * to `packages/core/` and broke every script's relative-path
  * resolution. See #565 for the full incident.
  *

@@ -2,11 +2,11 @@
  * @packageDocumentation
  *
  * Behavioural contract for the adapter-layer disposal hook reachable
- * via `@causl/core/internal`'s `dispose` helper. `_dispose` is
+ * via `@causljs/core/internal`'s `dispose` helper. `_dispose` is
  * deliberately not part of the seven-method commitment, not in the
  * public README, and not covered by SemVer guarantees on the
- * `@causl/core` public exports — it lives behind the
- * `@causl/core/internal` entrypoint because disposal is an
+ * `@causljs/core` public exports — it lives behind the
+ * `@causljs/core/internal` entrypoint because disposal is an
  * adapter-level concern. The React `useCauslFamily` hook owns the
  * concept of "this node's lifetime is bounded by a component's
  * mount"; application code has no business calling `_dispose`
@@ -35,7 +35,7 @@ import { dispose } from '../src/internal.js'
  * surface, idempotence, mid-commit rejection, and the dependents-still-live
  * guard.
  */
-describe('@causl/core/internal :: dispose(graph, node)', () => {
+describe('@causljs/core/internal :: dispose(graph, node)', () => {
   /**
    * After disposing an input, every public-surface access must throw
    * `NodeDisposedError` with the node id and the disposal time —

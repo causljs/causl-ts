@@ -1,9 +1,9 @@
 /**
- * `@causl/core/testing` sub-path entrypoint resolution test.
+ * `@causljs/core/testing` sub-path entrypoint resolution test.
  *
  * Per SPEC.async §15.0, the shared test seam is exposed from
- * `@causl/core` itself rather than only from the private
- * `@causl/core-testing-internal` workspace package. This test pins the
+ * `@causljs/core` itself rather than only from the private
+ * `@causljs/core-testing-internal` workspace package. This test pins the
  * entrypoint shape so that an accidental drop of the `./testing`
  * exports map entry, the `src/testing.ts` barrel, or the build-script
  * inclusion fails loudly rather than silently regressing the public
@@ -30,7 +30,7 @@ import {
   ADVERSARIAL_NUMBERS_NAN,
 } from '../src/testing.js'
 
-describe('@causl/core/testing entrypoint', () => {
+describe('@causljs/core/testing entrypoint', () => {
   it('exposes propertyTrials as a callable', () => {
     expect(typeof propertyTrials).toBe('function')
   })

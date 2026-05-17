@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Formula-to-derived-node adapter for `@causl/formula`. Causl
+ * Formula-to-derived-node adapter for `@causljs/formula`. Causl
  * commits to two primitives — `InputNode` and `DerivedNode` — and treats
  * everything previous drafts called a "kind" as a *role* a node plays.
  * A `formula` is "a derived whose compute function happens to interpret
@@ -19,7 +19,7 @@
  * does not know about cell references, and spreadsheet support is a
  * deliberate *use* of the engine rather than something built into it.
  * Cycle detection, dependency tracking, and topological recompute remain
- * the responsibility of the `@causl/core` graph; this module merely
+ * the responsibility of the `@causljs/core` graph; this module merely
  * supplies a {@link Compute} that delegates to the public
  * {@link evaluate} entry point against a {@link FormulaHost} bound to the
  * graph at compute time.
@@ -36,8 +36,8 @@
  * at the compute boundary as a single {@link FormulaResult}.
  */
 
-import type { Compute, DerivedNode, Graph, Node } from '@causl/core'
-import { assertNever } from '@causl/core/internal'
+import type { Compute, DerivedNode, Graph, Node } from '@causljs/core'
+import { assertNever } from '@causljs/core/internal'
 import { a1ToCellRef, cellRefToA1, expandRange } from './grammar.js'
 import type { Ast, CellRef, FormulaError, FormulaResult } from './ir.js'
 import {

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Structured error classes thrown by `@causl/core` at runtime.
+ * Structured error classes thrown by `@causljs/core` at runtime.
  *
  * I keep an honest catalogue of which races are eliminated structurally
  * and which require later layers — concurrent engine mutations, reads
@@ -149,7 +149,7 @@ export class StaleTxError extends CauslError {
 /**
  * Raised when `read`, `subscribe`, or `tx.set` targets a node that has
  * been disposed via the adapter-layer disposal hook
- * (`@causl/core/internal`'s `dispose`).
+ * (`@causljs/core/internal`'s `dispose`).
  *
  * @remarks
  * Use-after-dispose on a family-keyed node is caught at compile time

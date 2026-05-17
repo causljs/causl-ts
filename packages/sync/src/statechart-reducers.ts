@@ -76,7 +76,7 @@
  * @see issue #680 — the WASM backend epic this carve-out unblocks.
  */
 
-import type { GraphTime, NodeId } from '@causl/core'
+import type { GraphTime, NodeId } from '@causljs/core'
 
 // ---------------------------------------------------------------------------
 // Common reducer return shape

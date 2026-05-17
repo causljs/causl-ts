@@ -9,7 +9,7 @@
  * a regression in any one transition is caught.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   createConflictRegistry,

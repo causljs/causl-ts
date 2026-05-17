@@ -3,7 +3,7 @@
  * refetch, SuspenseList, transition boundaries (#128 v0).
  */
 
-import { createCausl, type Graph } from '@causl/core'
+import { createCausl, type Graph } from '@causljs/core'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import {
   Component,

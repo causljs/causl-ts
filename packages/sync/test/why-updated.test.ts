@@ -24,7 +24,7 @@
  *   - The decoder is total over the §6 chart's transition space.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 import { describe, expect, it } from 'vitest'
 import {
   resource,

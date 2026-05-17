@@ -1,4 +1,4 @@
-# @causl/core
+# @causljs/core
 
 > The semantic core of [Causl](../../README.md): two primitives, one
 > commit, the canonical seven-method API plus the second-tier extensions
@@ -7,7 +7,7 @@
 ## Install
 
 ```bash
-pnpm add @causl/core
+pnpm add @causljs/core
 ```
 
 ## Quick start — the smallest example that proves the engine is real
@@ -18,7 +18,7 @@ dynamic-dep cleanup, glitch-free diamond — all fall out of getting it
 right; everything downstream depends on it.
 
 ```ts
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causljs/core'
 
 const graph = createCausl()
 const a = graph.input('a', 1)
@@ -55,7 +55,7 @@ twenty-first.
 | `graph.input<T>(id, initial)` | Register a writable Behavior. Throws `DuplicateNodeError` on a clashing `id`. |
 | `graph.derived<T>(id, compute)` | Register a derived Behavior; deps captured by `get()` calls in `compute`, so a derivation that switches branches on an `if` rewires its dependency set on the next evaluation. |
 | `graph.commit(intent, tx => …)` | Discrete event — advances GraphTime by exactly 1. The only mutation entry; nested commits throw `CommitInProgressError`. |
-| `graph.read(node)` | Read at the current committed time. Per the SPEC §15.1 amendment shipped via PR #1129, the JavaScript *reference* returned across calls is **not** contractually guaranteed; the contractual identity surface is **value identity** at a fixed `GraphTime`. Today's TS engine (and the Phase-1 `WasmBackend` from `@causl/core/wasm`, which wraps it) trivially returns the same reference for object-valued reads, but the real Rust `serde`/`wasmgc` bridges promised by EPIC #680 / §17.6 return a fresh object per call. Adopters who memoise on the read return reference (e.g. `React.memo`, `useMemo([value])`) MUST key on `commit.time` or the per-node version counter exposed by `EngineTelemetry` instead. |
+| `graph.read(node)` | Read at the current committed time. Per the SPEC §15.1 amendment shipped via PR #1129, the JavaScript *reference* returned across calls is **not** contractually guaranteed; the contractual identity surface is **value identity** at a fixed `GraphTime`. Today's TS engine (and the Phase-1 `WasmBackend` from `@causljs/core/wasm`, which wraps it) trivially returns the same reference for object-valued reads, but the real Rust `serde`/`wasmgc` bridges promised by EPIC #680 / §17.6 return a fresh object per call. Adopters who memoise on the read return reference (e.g. `React.memo`, `useMemo([value])`) MUST key on `commit.time` or the per-node version counter exposed by `EngineTelemetry` instead. |
 | `graph.subscribe(node, observer)` | Observe value changes; one notification per commit per affected subscriber. Returns `Unsubscribe`. |
 | `graph.explain(node)` | Returns a `DerivedNode<Explanation>` of the lineage. Itself subscribable, so devtools render on top of the engine's own primitives instead of a parallel system. |
 
@@ -142,20 +142,20 @@ CAUSL_FUZZ_TRIALS=20000 pnpm test:run   # numeric override
 ```
 
 Property suites that opt into the tier system go through
-`tieredPropertyTrials` (published from `@causl/core/testing`) or
+`tieredPropertyTrials` (published from `@causljs/core/testing`) or
 `tieredPropertyOptions` (internal to `packages/core/test/properties/`);
 the post-#1153 sweep routed every callsite through one of those wrappers
 so the env vars actually fire end-to-end.
 
 ## WASM backend
 
-`@causl/core` itself stays on the deterministic TS engine. The
+`@causljs/core` itself stays on the deterministic TS engine. The
 WebAssembly substrate landed by EPIC #680 (Phase-0 + Phase-1 scaffolding,
-17 sub-issues merged) is reached through the opt-in `@causl/core/wasm`
+17 sub-issues merged) is reached through the opt-in `@causljs/core/wasm`
 subpath:
 
 ```ts
-import { loadWasmBackend } from '@causl/core/wasm'
+import { loadWasmBackend } from '@causljs/core/wasm'
 
 const backend = await loadWasmBackend()
 ```

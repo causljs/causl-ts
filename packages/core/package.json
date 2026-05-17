@@ -1,7 +1,7 @@
 {
-  "name": "@causl/core",
+  "name": "@causljs/core",
   "version": "0.2.0",
-  "description": "Semantic core for Causl — transactional state for tangled dependency graphs.",
+  "description": "Semantic core for Causl \u2014 transactional state for tangled dependency graphs.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -49,7 +49,7 @@
     }
   },
   "devDependencies": {
-    "@causl/core-testing-internal": "workspace:*",
+    "@causljs/core-testing-internal": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "eslint": "^9.39.4",
@@ -60,5 +60,9 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
 }

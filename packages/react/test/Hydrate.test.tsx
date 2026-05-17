@@ -1,5 +1,5 @@
-import { createCausl, type Commit, type GraphSnapshot } from '@causl/core'
-import { assertResultStability } from '@causl/core/testing'
+import { createCausl, type Commit, type GraphSnapshot } from '@causljs/core'
+import { assertResultStability } from '@causljs/core/testing'
 import { act, render, screen } from '@testing-library/react'
 import React, { StrictMode, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

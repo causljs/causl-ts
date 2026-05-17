@@ -1,7 +1,7 @@
 /**
- * tinybench nightly benchmarks for @causl/core (#146).
+ * tinybench nightly benchmarks for @causljs/core (#146).
  *
- * Run with:  pnpm -F @causl/core bench
+ * Run with:  pnpm -F @causljs/core bench
  * Baseline:  packages/core/bench/baseline.json
  *
  * Trend tracking is delta-against-baseline; CI fails on regressions

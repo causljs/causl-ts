@@ -14,7 +14,7 @@
  * `SUM(A1:A3)` participates correctly in cycle search.
  */
 
-import { assertNever } from '@causl/core/internal'
+import { assertNever } from '@causljs/core/internal'
 import { cellRefToA1, expandRange } from './grammar.js'
 import type { Ast, CellRef } from './ir.js'
 

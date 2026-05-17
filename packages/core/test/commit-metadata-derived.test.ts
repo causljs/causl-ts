@@ -34,7 +34,7 @@
 
 import fc from 'fast-check'
 import { describe, it, expect, vi } from 'vitest'
-import { propertyTrials } from '@causl/core-testing-internal'
+import { propertyTrials } from '@causljs/core-testing-internal'
 import { createCausl } from '../src/index.js'
 import type { Commit, DerivedNode } from '../src/index.js'
 

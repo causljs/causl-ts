@@ -19,7 +19,7 @@
  * type-check.
  */
 
-import type { Graph, Node } from '@causl/core'
+import type { Graph, Node } from '@causljs/core'
 import { describe, it } from 'vitest'
 import type { FamilyFactory } from '../src/useCauslFamily.js'
 

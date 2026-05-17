@@ -1,4 +1,4 @@
-# `@causl/core/testing`
+# `@causljs/core/testing`
 
 > Shared test helpers for the Causl ecosystem. **Test-only**. Do not import from production code.
 
@@ -26,15 +26,15 @@ This module is the canonical implementation. Once a helper lands here, every PR 
 
 ### Helpers that have moved
 
-- `narrowCapability(graph)` is now exported from `@causl/core/internal` (capability narrowing is also relevant to adapters, not just tests; see #372 / #376 / #385).
-- `renderSpy<P>(Component)` was scoped out of this engine-level seam — render-counting belongs in the consuming framework's own test helpers, not in `@causl/core/testing`. `@causl/react` callsites use `act`/`render` from `@testing-library/react` directly.
+- `narrowCapability(graph)` is now exported from `@causljs/core/internal` (capability narrowing is also relevant to adapters, not just tests; see #372 / #376 / #385).
+- `renderSpy<P>(Component)` was scoped out of this engine-level seam — render-counting belongs in the consuming framework's own test helpers, not in `@causljs/core/testing`. `@causljs/react` callsites use `act`/`render` from `@testing-library/react` directly.
 
 ## Anti-features (deliberately not here)
 
-- **No production code.** This module is excluded from `@causl/core`'s published bundle (`package.json` `exports` field exclusion + `size-limit` lint).
+- **No production code.** This module is excluded from `@causljs/core`'s published bundle (`package.json` `exports` field exclusion + `size-limit` lint).
 - **No assertion DSLs.** Tests should read like specifications; we use `vitest`/`fast-check` directly.
 - **No mocks of the real engine.** Helpers wrap the real `Graph`; nothing is faked.
 
 ## Versioning
 
-The testing surface is versioned independently of `@causl/core`'s public API. A change here is **not** a public API change of the engine. The contract for users of this module: imports look like `import { recomputeCounter } from '@causl/core/testing'`.
+The testing surface is versioned independently of `@causljs/core`'s public API. A change here is **not** a public API change of the engine. The contract for users of this module: imports look like `import { recomputeCounter } from '@causljs/core/testing'`.

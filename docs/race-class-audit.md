@@ -38,7 +38,7 @@ that the post-invalidate state remain Stale, not transition back
 to Loaded with the late value.
 
 **Engine cross-reference.** Adjacent to engine row 6 (stale-async)
-but specific to the `@causl/sync` adapter's resource-lifecycle
+but specific to the `@causljs/sync` adapter's resource-lifecycle
 model. The engine's row-6 catalogue covers the in-engine race
 shape; this S-1 is the same shape lifted to the resource state
 machine.
@@ -86,7 +86,7 @@ verifies the witness exists. Findings:
 |---|---|---|
 | S-1 (SPEC.async) | **Abandon-then-resume** — host issues fetch, then fail mid-load, then a second fetch before the first loader settles | ✓ Present at `packages/sync/test/properties/race-row-S-1.property.test.ts`. Docstring matches (SPEC.async §9.1.1 / row S-1 — stale-async resolution race). The SPEC.async-canonical filename is `resource-lifecycle.property.test.ts`; the actual filename uses the row-id convention. Functionally equivalent. |
 | S-2 (SPEC.async) | **Open-set drift mid-resolution** — open-set compute would emit a different set if re-evaluated between requireOpen guard and resolution commit | ✓ Present at `packages/sync/test/properties/conflict-registry-drift.property.test.ts` (#919). The witness fuzzes randomized open-set-source mutations across the (`requireOpen` guard, resolution-Input commit) seam and asserts the §5 atomicity contract holds: the patch's record stamps the same GraphTime the guard read (and the post-resolve `now` is exactly one tick past), so the drift seam is closed structurally. The mis-labelled file `race-row-S-2.property.test.ts` was renamed to `disposed-mid-load.property.test.ts` in the same PR to remove the false S-2 docstring claim. |
-| S-3 (SPEC.async) | **Dispatch-shape leak across capability narrowing** — consumer casts a `ConflictRegistryWriteGraph` slice back to `Graph` via `as Graph` | ~ Partial. `packages/sync/test/conflictRegistry.narrowCapability.test.ts` exists and asserts the type-narrowing + `narrowCapability` runtime gate. The SPEC.async-named `narrowCapability.property.test.ts` does not exist as a `.property.test.ts` under `properties/`. The type-system gate is enforced by `tsc`'s structural-typing pass; the runtime gate is the `narrowCapability` proxy from `@causl/core/internal`. Both layers fail closed without a fast-check property test enrolling thousands of trials. |
+| S-3 (SPEC.async) | **Dispatch-shape leak across capability narrowing** — consumer casts a `ConflictRegistryWriteGraph` slice back to `Graph` via `as Graph` | ~ Partial. `packages/sync/test/conflictRegistry.narrowCapability.test.ts` exists and asserts the type-narrowing + `narrowCapability` runtime gate. The SPEC.async-named `narrowCapability.property.test.ts` does not exist as a `.property.test.ts` under `properties/`. The type-system gate is enforced by `tsc`'s structural-typing pass; the runtime gate is the `narrowCapability` proxy from `@causljs/core/internal`. Both layers fail closed without a fast-check property test enrolling thousands of trials. |
 
 The audit (#844) closes here. The S-2 divergence was resolved in #919:
 the missing canonical witness was authored at

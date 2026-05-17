@@ -35,8 +35,8 @@
  * Closes #383.
  */
 
-import type { Commit, DerivedNode, Graph, Node, NodeId } from '@causl/core'
-import { assertNever } from '@causl/core/internal'
+import type { Commit, DerivedNode, Graph, Node, NodeId } from '@causljs/core'
+import { assertNever } from '@causljs/core/internal'
 
 /**
  * Capability slice handed to {@link whyUpdated} / {@link whyNotUpdated}.

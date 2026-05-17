@@ -96,7 +96,7 @@ export type CommitObserver = (commit: Commit) => void
  *
  * @remarks
  * Mirrors the `ForbiddenTransition` interface from
- * `@causl/sync/src/statechart-reducers.ts` exactly so the seam's
+ * `@causljs/sync/src/statechart-reducers.ts` exactly so the seam's
  * input/output types are structurally interchangeable with the TS
  * reducers' public shape. The tuple `(region, from, to, id)` is
  * enough for a wiring shell to construct a public typed error and
@@ -157,10 +157,10 @@ export type StatechartResult =
  *
  *   1. The canonical typed shapes for the regions
  *      (`ConflictReducerState` / `ConflictEvent` / `ResourceReducerState`
- *      / `ResourceEvent`) live in `@causl/sync`, not `@causl/core` —
+ *      / `ResourceEvent`) live in `@causljs/sync`, not `@causljs/core` —
  *      the BackendEngine seam cannot import them without inverting the
  *      package dependency direction (`sync → core`, not the reverse).
- *   2. Callers on the `@causl/sync` side already hold typed values
+ *   2. Callers on the `@causljs/sync` side already hold typed values
  *      and narrow `next` from the result. The structural `unknown`
  *      is a width-typing concession at the seam, not a type-erasure
  *      at the call site.
@@ -277,7 +277,7 @@ export interface BackendEngine {
 
   /**
    * Adapter-layer disposal hook. Same contract as the dispose surface
-   * exposed through `@causl/core/internal`. Lives on the BackendEngine
+   * exposed through `@causljs/core/internal`. Lives on the BackendEngine
    * because both backends (JS and WASM) own the underlying registry and
    * neither can satisfy disposal through the public Graph surface alone.
    */
@@ -294,7 +294,7 @@ export interface BackendEngine {
    * The seam exists so the WASM backend can route SPEC §6 reducer
    * evaluation through its Rust-side `engine-rs-core::statechart_reducers`
    * enums (gated behind `feature = "future"`; landed structurally by
-   * #1068, wired by Sub-D of EPIC #680). Callers in `@causl/sync`'s
+   * #1068, wired by Sub-D of EPIC #680). Callers in `@causljs/sync`'s
    * `applyEvent` shells route through this method instead of calling
    * `reduceConflict` / `reduceResource` directly, so the cross-backend
    * determinism gate (#685) verifies the two implementations produce
@@ -304,9 +304,9 @@ export interface BackendEngine {
    * the result's `next` is the seam's width-typing concession: the
    * canonical region-typed shapes (`ConflictReducerState`,
    * `ConflictEvent`, `ResourceReducerState<T>`, `ResourceEvent`) live
-   * in `@causl/sync` and the BackendEngine seam in `@causl/core`
+   * in `@causljs/sync` and the BackendEngine seam in `@causljs/core`
    * cannot import them without inverting the package dependency
-   * direction. Adopters on the `@causl/sync` side hold typed values
+   * direction. Adopters on the `@causljs/sync` side hold typed values
    * and narrow `next` from the result.
    *
    * ## Determinism

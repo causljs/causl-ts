@@ -8,8 +8,8 @@
  * no-ops on a non-Open conflict). This property fuzzes that.
  */
 
-import { tieredPropertyTrials } from '@causl/core-testing-internal'
-import { applyConflictEvents, type ConflictEvent } from '@causl/sync-testing-internal'
+import { tieredPropertyTrials } from '@causljs/core-testing-internal'
+import { applyConflictEvents, type ConflictEvent } from '@causljs/sync-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 

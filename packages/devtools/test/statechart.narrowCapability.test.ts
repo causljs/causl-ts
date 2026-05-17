@@ -19,7 +19,7 @@
  * directives stop being errors and this file fails to type-check.
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causljs/core'
 import { describe, it } from 'vitest'
 import type { StatechartGraph, statechart } from '../src/index.js'
 

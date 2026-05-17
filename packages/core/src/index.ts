@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public-surface barrel for `@causl/core`.
+ * Public-surface barrel for `@causljs/core`.
  *
  * Re-exports the canonical seven-method API — `createCausl`,
  * `graph.input`, `graph.derived`, `graph.commit`, `graph.read`,

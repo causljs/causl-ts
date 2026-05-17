@@ -1,0 +1,82 @@
+name: release
+
+# Tag-triggered publish to GitHub Packages (https://npm.pkg.github.com)
+# for every non-private @causljs/* package whose package.json carries a
+# publishConfig.registry pointed at GitHub Packages.
+#
+# Trigger: push of an annotated tag matching `v*.*.*` (e.g. `v0.2.1`).
+# Manual trigger via workflow_dispatch is also available for re-runs.
+#
+# Required repo settings:
+#  - The repo (or its owning org) must allow GitHub Actions to publish
+#    packages: Settings → Actions → General → Workflow permissions →
+#    "Read and write permissions".
+#  - Each package's package.json declares `publishConfig.registry =
+#    https://npm.pkg.github.com`. The scope (`@causljs`) must match the
+#    GitHub org/user under which this repo lives, otherwise GitHub
+#    rejects the publish with 403.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Publish with --dry-run (no tarballs uploaded)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @causljs/* to GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node 20 (with GitHub Packages registry)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@causljs'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r --filter './packages/**' run build
+
+      # `pnpm publish -r` walks every workspace package, honours each
+      # package.json's `private: true` (skips them), uses the
+      # publishConfig.registry override, and rewrites `workspace:*`
+      # ranges to literal versions on publish. `--no-git-checks` skips
+      # the "working tree clean" gate (the tag commit IS the clean
+      # state, but pnpm sometimes flags the .npmrc rewrite from
+      # setup-node as dirty).
+      - name: Publish (dry-run)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
+        run: pnpm -r --filter './packages/**' publish --no-git-checks --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != 'true') }}
+        run: pnpm -r --filter './packages/**' publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

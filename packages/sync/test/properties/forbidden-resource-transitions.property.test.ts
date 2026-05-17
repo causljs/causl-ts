@@ -10,12 +10,12 @@
  * into an undeclared state shape.
  */
 
-import { tieredPropertyTrials } from '@causljs/core-testing-internal'
+import { tieredPropertyTrials } from '@causl/core-testing-internal'
 import {
   applyEvents,
   resourceEventGen,
   type ResourceModelState,
-} from '@causljs/sync-testing-internal'
+} from '@causl/sync-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 

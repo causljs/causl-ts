@@ -33,7 +33,7 @@ import {
   propertyTrials,
   recomputeCounter,
   type DagSpec,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 import { createCausl } from '../../src/index.js'
 
 /**

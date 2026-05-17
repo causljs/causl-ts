@@ -52,7 +52,7 @@ import {
   propertyTrials,
   recomputeCounter,
   type DagSpec,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 
 /**
  * Derived-shape selector — for each random derived id, choose between

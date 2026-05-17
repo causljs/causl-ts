@@ -24,14 +24,14 @@
  *
  * Usage:
  *
- *     CAUSL_BACKEND=stub pnpm --filter @causljs/core exec vitest run \
+ *     CAUSL_BACKEND=stub pnpm --filter @causl/core exec vitest run \
  *       --reporter=json \
  *       test/properties/failing-against-stub.property.test.ts \
  *       2>/dev/null | node scripts/corpus-report.mjs
  *
  * Or pipe the human reporter output:
  *
- *     CAUSL_BACKEND=ts pnpm --filter @causljs/core exec vitest run \
+ *     CAUSL_BACKEND=ts pnpm --filter @causl/core exec vitest run \
  *       test/properties/failing-against-stub.property.test.ts 2>&1 \
  *       | node scripts/corpus-report.mjs
  *

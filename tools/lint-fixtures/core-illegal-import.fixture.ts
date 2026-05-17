@@ -2,8 +2,8 @@
 // package-boundary layering rule.
 //
 // This file deliberately violates the layering: it imports from
-// `@causljs/react` (a sibling adapter) as if it lived inside
-// `@causljs/core`. The layering-lint test in
+// `@causl/react` (a sibling adapter) as if it lived inside
+// `@causl/core`. The layering-lint test in
 // `packages/core/test/layering-lint.test.ts` lints this content via
 // the ESLint Node API at a synthetic file path under
 // `packages/core/` and asserts the rule fires.
@@ -18,6 +18,6 @@
 // adapter; that is fine because the test feeds the source string to
 // ESLint directly and never asks tsc to compile it.
 
-import { useCausl } from '@causljs/react'
+import { useCausl } from '@causl/react'
 
 export const _useCausl = useCausl

@@ -25,7 +25,7 @@
  * encode at the type level the invariant that a reference error
  * cannot exist without naming the cell it failed on.
  */
-import { assertNever } from '@causljs/core/internal'
+import { assertNever } from '@causl/core/internal'
 import type { FormulaError, FormulaResult } from './ir.js'
 
 // The pure-data IR for `FormulaResult` / `FormulaError` / `FormulaErrorKind`
@@ -34,7 +34,7 @@ import type { FormulaError, FormulaResult } from './ir.js'
 // `rootCause`, and `valueOr` below stay here because they are behaviour
 // — they instantiate, walk, and pattern-match on the IR rather than
 // being part of the wire shape. Re-exporting the types from this module
-// keeps the historical `@causljs/formula/result` import path stable for
+// keeps the historical `@causl/formula/result` import path stable for
 // any external consumers that bypass the package barrel.
 
 export type { FormulaError, FormulaErrorKind, FormulaResult } from './ir.js'

@@ -1,4 +1,4 @@
-# @causljs/persistence
+# @causl/persistence
 
 UI-preference persistence for [Causl](../../README.md). This package
 persists editor-controller state — what the cursor is doing, what's
@@ -16,14 +16,14 @@ on rehydration; they are never on-disk-canonical.
 ## Install
 
 ```bash
-pnpm add @causljs/persistence @causljs/core
+pnpm add @causl/persistence @causl/core
 ```
 
 ## Quick start
 
 ```ts
-import { createCausl } from '@causljs/core'
-import { persistedInput, localStorageAdapter } from '@causljs/persistence'
+import { createCausl } from '@causl/core'
+import { persistedInput, localStorageAdapter } from '@causl/persistence'
 
 const graph = createCausl()
 const columnWidth = persistedInput(graph, 'colWidth', 200, {
@@ -71,7 +71,7 @@ job demands. The boot-write skip (review-209 P0) drives writes off
 round-trips an unchanged envelope back to disk.
 
 Snapshot/restore of the wider graph state (inputs + `GraphTime`) lives
-on `@causljs/devtools` (`exportSnapshot` / `importSnapshot`) and uses
+on `@causl/devtools` (`exportSnapshot` / `importSnapshot`) and uses
 `graph.snapshot` / `graph.hydrate` under SPEC §12.2; that surface is
 intentionally separate from this package, which is UI-preference-only.
 

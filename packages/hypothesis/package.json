@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/hypothesis",
+  "name": "@causl/hypothesis",
   "version": "0.0.0",
   "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC \u00a716.5).",
   "license": "MIT",
@@ -33,7 +33,6 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
     "access": "public"
   }
 }

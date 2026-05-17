@@ -153,7 +153,7 @@ future operator needs the full snapshot, not a short-circuit).
   projection vs the JS-engine canonical `Commit[]` at the production
   trial count, **with the V2.4 promotion guard active** (not
   shadow-discarded).
-- **Harness (exists)**: `pnpm --filter @causljs/core exec vitest run
+- **Harness (exists)**: `pnpm --filter @causl/core exec vitest run
   test/properties/cross-backend-determinism.property.test.ts` — the
   🚦V2.4 (#1534) "promote GO/NO-GO" describe block runs the gate
   with the Rust post-state PROMOTED at N=312 × 1000 trials.

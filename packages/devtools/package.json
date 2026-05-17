@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/devtools",
+  "name": "@causl/devtools",
   "version": "0.0.0",
   "description": "Inspection primitives for Causl \u2014 commit log, node inspector, why-did-this-update views.",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'"
   },
   "dependencies": {
-    "@causljs/core": "workspace:*"
+    "@causl/core": "workspace:*"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.59.1",
@@ -37,7 +37,6 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
     "access": "public"
   }
 }

@@ -7,7 +7,7 @@ has a worked example and a rationale.
 
 I deliberately do **not** ship a codemod. The contract that backs
 this guide is `docs/migration/RULE_CATALOGUE.md`, and the drift
-detector `causljs-migration-check` (see `packages/migration-check`)
+detector `causl-migration-check` (see `packages/migration-check`)
 flags un-migrated patterns in CI by rule ID. If you want machine
 help, run the drift tool — it tells you which rule each finding
 maps to so you can come back here and apply the worked example by
@@ -31,7 +31,7 @@ hand. The drift detector classifies, it does not transform.
 The "yes" rows are mechanical (search-and-replace within a worked
 example). The "structural" rows require user judgment about
 identifiers and lifecycle. The "manual" rows need a rewrite. The
-drift detector (`causljs-migration-check`, see
+drift detector (`causl-migration-check`, see
 `packages/migration-check`) flags any of these patterns surviving
 in CI; see `docs/migration/RULE_CATALOGUE.md` for the rule IDs.
 
@@ -59,13 +59,13 @@ function Counter() {
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import {
   createUpdate,
   CauslProvider,
   useDispatch,
   useCausl,
-} from '@causljs/react'
+} from '@causl/react'
 
 const graph = createCausl()
 const counter = graph.input('counter', 0)
@@ -148,12 +148,12 @@ Multiple sequential `setX(); setY()` in Jotai is N atom writes — but
 the *intent* of "set X then set Y" is often "I want both to happen at
 once." Causl's `commit(intent, tx => { tx.set(X); tx.set(Y) })` is
 the literal atomic version. The drift detector
-(`causljs-migration-check`) flags every `set; set` pair surviving
+(`causl-migration-check`) flags every `set; set` pair surviving
 the migration with the corresponding rule ID from
 `docs/migration/RULE_CATALOGUE.md` (rule `S-01`):
 
 ```ts
-// causljs-migration-check: consider single commit (S-01)
+// causl-migration-check: consider single commit (S-01)
 dispatch({ kind: 'set-x', value: ... })
 dispatch({ kind: 'set-y', value: ... })
 ```
@@ -164,15 +164,15 @@ it does not rewrite.
 ## Suspense
 
 Jotai's `atom(async (get) => …)` throws a Promise. Causl's
-`@causljs/sync` `resource(...)` is a tagged-union; the projection
+`@causl/sync` `resource(...)` is a tagged-union; the projection
 through `useCauslSuspense(selector)` re-introduces the
 throw-Promise behaviour at the React boundary. Both primitives ship
-today: `resource` from `@causljs/sync` and `useCauslSuspense`
-from `@causljs/react`.
+today: `resource` from `@causl/sync` and `useCauslSuspense`
+from `@causl/react`.
 
 ```ts
-import { resource } from '@causljs/sync'
-import { useCauslSuspense } from '@causljs/react'
+import { resource } from '@causl/sync'
+import { useCauslSuspense } from '@causl/react'
 
 // Before
 const userAtom = atom(async (get) => fetch('/api/me').then(r => r.json()))
@@ -208,14 +208,14 @@ function Greeting() {
 Jotai's `atomWithStorage(key, initial)` reads from `localStorage` (or
 a custom store) on mount and writes through on every set.
 `persistedInput(graph, id, initial, { key, storage, version })` from
-`@causljs/persistence` is the Causl equivalent — same identity
+`@causl/persistence` is the Causl equivalent — same identity
 contract, but the read / write hooks live on the graph rather than
 the React tree, and the on-disk envelope is a versioned
 `{ version, value }` record so schema evolution has a `migrate`
 seam.
 
 ```ts
-import { persistedInput, localStorageAdapter } from '@causljs/persistence'
+import { persistedInput, localStorageAdapter } from '@causl/persistence'
 
 // Before
 const themeAtom = atomWithStorage('theme', 'light')
@@ -228,7 +228,7 @@ const theme = persistedInput(graph, 'theme', 'light', {
 })
 ```
 
-`@causljs/persistence` ships `localStorageAdapter()` and
+`@causl/persistence` ships `localStorageAdapter()` and
 `memoryAdapter()` out of the box; any object satisfying the
 `StorageAdapter` interface (sync `get` / `set` / `remove`) plugs in.
 Schema evolution is handled by passing a `migrate(prev, prevVersion)`
@@ -240,15 +240,15 @@ into the host application.
 
 Jotai uses `getDefaultStore()` per-request. Causl captures
 server state via `graph.snapshot()` and replays it on the client
-through `<Hydrate snapshot={…}>` from `@causljs/react`. The
+through `<Hydrate snapshot={…}>` from `@causl/react`. The
 hydration runs in a `useLayoutEffect`, so render bodies stay pure
 and the server HTML and the first client paint observe identical
 values.
 
 ```ts
 // app/page.tsx (Next.js App Router server component)
-import { createCausl } from '@causljs/core'
-import { Hydrate, CauslProvider } from '@causljs/react'
+import { createCausl } from '@causl/core'
+import { Hydrate, CauslProvider } from '@causl/react'
 
 const serverGraph = createCausl()
 bootGraphFromDb(serverGraph)
@@ -275,7 +275,7 @@ Jotai's `atomFamily(id => atom(…))` returns a memoized atom factory.
 Causl's `useCauslFamily(key, factory)` is a hook with explicit
 mount-driven lifecycle: when the last consumer unmounts, the node is
 disposed. This shipped via PR #209 and is exported from
-`@causljs/react`.
+`@causl/react`.
 
 ```ts
 // Before
@@ -297,12 +297,12 @@ function Row({ id }: { id: string }) {
 
 ## What's deferred
 
-- A bidirectional bridge package (`@causljs/jotai-bridge`) was
+- A bidirectional bridge package (`@causl/jotai-bridge`) was
   considered (#122 original phrasing). The current direction is
   guide-driven hand migration without a runtime bridge: the bridge
   encourages indefinite parallel maintenance and never gets removed.
 - The drift detector (`packages/migration-check`, binary
-  `causljs-migration-check`) parses sources to find unmigrated
+  `causl-migration-check`) parses sources to find unmigrated
   patterns and reports them in CI by rule ID; see
   `docs/migration/RULE_CATALOGUE.md` for the rule contract. The
   detector does not transform — it classifies findings against the

@@ -13,14 +13,14 @@
  * for the statechart-reducer carve-out. Mirrors the cross-backend
  * gate in #685 (which keys on commit-log byte-equality across JS and
  * WASM backends); this gate keys on reducer-output byte-equality
- * across the two TS implementations (`@causljs/sync` canonical reducer
- * + the `@causljs/core` evaluator that the JsBackend's
+ * across the two TS implementations (`@causl/sync` canonical reducer
+ * + the `@causl/core` evaluator that the JsBackend's
  * `evaluateStatechart` method routes through).
  *
  * ## Why two implementations
  *
- * The package boundary forces the seam: `@causljs/core` cannot import
- * `@causljs/sync` (dependency direction is `sync → core`, not the
+ * The package boundary forces the seam: `@causl/core` cannot import
+ * `@causl/sync` (dependency direction is `sync → core`, not the
  * reverse). The `JsBackend.evaluateStatechart` extension point lives
  * in core; the canonical reducer lives in sync. Rather than invert
  * the package graph or factor the reducer into a third package, the
@@ -56,7 +56,7 @@
 
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { propertyTrials } from '@causljs/core-testing-internal'
+import { propertyTrials } from '@causl/core-testing-internal'
 
 import {
   reduceConflict,
@@ -67,7 +67,7 @@ import {
   type ResourceReducerState,
 } from '../../src/statechart-reducers.js'
 
-// Deep import: the seam evaluator is not on `@causljs/core`'s public
+// Deep import: the seam evaluator is not on `@causl/core`'s public
 // barrel — it is the package-internal implementation behind the
 // `JsBackend.evaluateStatechart` op. Reaching across the workspace
 // boundary via the src-relative path is the same pattern other
@@ -105,9 +105,9 @@ describe('JsBackend.evaluateStatechart agrees with reduceConflict (SPEC §6 Conf
         fc.integer({ min: 0, max: 1_000_000 }),
         fc.string({ minLength: 1, maxLength: 16 }),
         (state, event, time, id) => {
-          // Canonical reducer (TS, `@causljs/sync`).
+          // Canonical reducer (TS, `@causl/sync`).
           const oracle = reduceConflict(state, event as ConflictEvent, time, id)
-          // Seam evaluator (TS, `@causljs/core` — what the JsBackend's
+          // Seam evaluator (TS, `@causl/core` — what the JsBackend's
           // `evaluateStatechart` op routes through).
           const seam = evaluateStatechartViaSeam({
             region: 'conflict',

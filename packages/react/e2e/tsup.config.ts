@@ -9,7 +9,7 @@
  * be a self-contained browser ESM module the static fixture page can
  * import directly with no node_modules resolver, no importmap, no
  * UMD shim. So this config flips `noExternal` to bake everything
- * in: `@causljs/core`, `@causljs/react`, `react`, `react-dom`, plus the
+ * in: `@causl/core`, `@causl/react`, `react`, `react-dom`, plus the
  * three comparison libraries the cross-library gate exercises
  * (`jotai`, `@reduxjs/toolkit` + `react-redux` + `redux`, `mobx` +
  * `mobx-react-lite`).
@@ -26,9 +26,9 @@ export default defineConfig({
   sourcemap: false,
   clean: false,
   noExternal: [
-    '@causljs/core',
-    '@causljs/core/internal',
-    '@causljs/react',
+    '@causl/core',
+    '@causl/core/internal',
+    '@causl/react',
     'react',
     'react-dom',
     'react-dom/client',

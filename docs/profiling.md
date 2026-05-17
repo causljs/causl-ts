@@ -1,7 +1,7 @@
 # Profiling causl benchmarks
 
 An adopter-facing guide to flame-graphing and heap-profiling the
-`@causljs/bench` cells. If `pnpm bench` tells you *which* library wins on
+`@causl/bench` cells. If `pnpm bench` tells you *which* library wins on
 wall time, profiling tells you *why* — where the cycles go, which call
 edges dominate, which symbols allocate.
 
@@ -38,7 +38,7 @@ The bench package wires every profiler to the cell harness:
 ```sh
 pnpm bench:profile causl linear-chain 1000
 pnpm bench:profile:cpu causl scrolling-viewport 10000
-pnpm --filter @causljs/bench profile:heap
+pnpm --filter @causl/bench profile:heap
 ```
 
 The first form opens 0x and writes an SVG flame graph; `:cpu` drops a

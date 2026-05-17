@@ -22,12 +22,12 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@causljs/core": ["./packages/core/src/index.ts"],
-      "@causljs/core/internal": ["./packages/core/src/internal.ts"],
-      "@causljs/core/testing": ["./packages/core/testing/src/index.ts"],
-      "@causljs/core/wasm": ["./packages/core/wasm/index.ts"],
-      "@causljs/formula": ["./packages/formula/src/index.ts"],
-      "@causljs/sync": ["./packages/sync/src/index.ts"]
+      "@causl/core": ["./packages/core/src/index.ts"],
+      "@causl/core/internal": ["./packages/core/src/internal.ts"],
+      "@causl/core/testing": ["./packages/core/testing/src/index.ts"],
+      "@causl/core/wasm": ["./packages/core/wasm/index.ts"],
+      "@causl/formula": ["./packages/formula/src/index.ts"],
+      "@causl/sync": ["./packages/sync/src/index.ts"]
     }
   }
 }

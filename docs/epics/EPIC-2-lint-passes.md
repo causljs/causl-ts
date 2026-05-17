@@ -69,7 +69,7 @@ pattern in the four passes is expressed against the on-disk JSON shape —
 "callbackSite": ...}` — not against the in-memory Rust types that may
 drift. The Rust types `IrEvent`, `IrScope`, `IrBridge` are convenience;
 the JSON is the contract. Adopters' SARIF consumers, version-locked
-`@causljs/checker` npm wrappers, and the release-checker workflow
+`@causl/checker` npm wrappers, and the release-checker workflow
 (`.github/workflows/release-checker.yml`, pinned at the
 schema-2-vs-schema-3 boundary by EPIC-1) all key off the wire shape, not
 the Rust shape. Each fixture in `tools/checker/tests/fixtures/` is a JSON

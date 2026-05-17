@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/core",
+  "name": "@causl/core",
   "version": "0.2.0",
   "description": "Semantic core for Causl — transactional state for tangled dependency graphs.",
   "license": "MIT",

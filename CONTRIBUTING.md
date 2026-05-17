@@ -26,7 +26,7 @@ platform-specific `checker-*` shims and the `core-testing-internal`
 seam) and Rust crates under `tools/` (`tools/checker/` ships
 `causl-check`; `tools/enumerator/` ships `causl-enumerate`;
 `tools/engine-rs-core/` carries the engine types that ship inside
-`@causljs/core`'s wasm-pkg artefacts; `tools/engine-rs-core-bench/`
+`@causl/core`'s wasm-pkg artefacts; `tools/engine-rs-core-bench/`
 hosts the JsonValue object-representation bench harness added under
 #1162). The Rust engine port itself is **post-0.9.0** and deferred
 behind GO/NO-GO criteria documented in epic
@@ -186,7 +186,7 @@ maps 1:1 to SPEC §17, row N to commitment N:
 | -- | ---------------------- | ----------- |
 | 1 | The semantic-foundation page in §3 lands first; every later decision references it | Spec review (human) + `docs/semantics.md` cross-references in PR descriptions |
 | 2 | The composite statechart in §6 is drawn before conflict and resource code | `docs/lifecycle.md` is updated in the same PR as any new conflict/resource transition; reviewer-enforced |
-| 3 | Layering in §7 is enforced at the package boundary; `@causljs/core` does not export controller types | Open today — tracked by [#393](https://github.com/iasbuilt/causl/issues/393) (no mechanical gate yet; lint rule or fitness function pending) |
+| 3 | Layering in §7 is enforced at the package boundary; `@causl/core` does not export controller types | Open today — tracked by [#393](https://github.com/iasbuilt/causl/issues/393) (no mechanical gate yet; lint rule or fitness function pending) |
 | 4 | Every discriminated union in §9 is a *tagged* union with a type-system-enforced exhaustiveness check | [`assertNever`](packages/core/src/internal.ts) + `@typescript-eslint/switch-exhaustiveness-check` lint rule. See [Lint rules](#lint-rules) below |
 | 5 | The race-class catalogue in §9.1 is kept current; every new public API arrives with a row in the table | Open today — tracked by [#399](https://github.com/iasbuilt/causl/issues/399) (PR-template anchor + CI gate pending) |
 | 6 | The §10 worked example is the gate for "the engine is real" | `packages/core/test/spec-10-worked-example.test.ts` runs on every PR via `pnpm test:run` |
@@ -235,7 +235,7 @@ The rule does not apply to `fix:` / `refactor:` / `test:` /
   discriminant is a discriminated union must cover every variant or
   end with a `default: assertNever(x)` arm. Realises §17.4. The
   helper [`assertNever`](packages/core/src/internal.ts) lives under
-  `@causljs/core/internal` — adapter packages import from there.
+  `@causl/core/internal` — adapter packages import from there.
 
 - **`@typescript-eslint/no-explicit-any`** (error) — every `as any`
   cast is paying interest; if you need one, leave a `// why` comment

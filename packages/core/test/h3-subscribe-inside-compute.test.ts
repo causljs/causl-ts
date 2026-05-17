@@ -32,7 +32,7 @@
  *      registration targets → the registration is cancelled cleanly
  *      via `_dispose`'s subscription-cancel walk (`for sub of
  *      subscriptions`); subsequent commits do not visit a dangling
- *      entry. The disposal path through `@causljs/core/internal`'s
+ *      entry. The disposal path through `@causl/core/internal`'s
  *      `dispose` helper drops the registration before
  *      `subscriptionsByNode` is deleted, so the Phase G bucket walk
  *      sees an empty bucket on the next commit and the observer is

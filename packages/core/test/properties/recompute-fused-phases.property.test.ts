@@ -38,7 +38,7 @@ import {
   buildPropertyDag,
   propertyDag,
   propertyTrials,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 
 describe('SPEC #963 — fused Phases 1+2 of recomputeAffected', () => {
   /**

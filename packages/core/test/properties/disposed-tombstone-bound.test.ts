@@ -31,7 +31,7 @@
  * `propertyTrials('tombstone-bound')`. Random unique-id traces are
  * generated as fast-check sequences, and the oracle is the
  * `disposedTombstoneSize(graph)` accessor surfaced through
- * `@causljs/core-testing-internal` (the `@causljs/core/testing`
+ * `@causl/core-testing-internal` (the `@causl/core/testing`
  * seam) for this purpose. Adapter code has no production use for the
  * size accessor — it lives behind the testing seam because the
  * underlying retention is engine-internal hygiene, not a contract
@@ -49,7 +49,7 @@ import { dispose } from '../../src/internal.js'
 import {
   disposedTombstoneSize,
   propertyTrials,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 
 describe('property: disposed-tombstone bound (#251)', () => {
   /**

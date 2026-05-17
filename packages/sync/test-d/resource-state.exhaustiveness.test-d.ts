@@ -1,5 +1,5 @@
 /**
- * Compile-time exhaustiveness fixture for `@causljs/sync`'s
+ * Compile-time exhaustiveness fixture for `@causl/sync`'s
  * `ResourceState<T>` discriminated union (#581).
  *
  * Pins the closed five-arm shape: `idle | loading | loaded | stale |

@@ -29,7 +29,7 @@
 
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { propertyTrials } from '@causljs/core-testing-internal'
+import { propertyTrials } from '@causl/core-testing-internal'
 import {
   reduceConflict,
   reduceResource,

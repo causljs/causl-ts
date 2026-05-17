@@ -180,3 +180,18 @@ packages/checker-*/bin/stackrat-check
 packages/checker-*/bin/stackrat-check.exe
 # `npm pack` outputs in the same dir during the integration test.
 packages/checker-*/*.tgz
+
+
+# Claude-generated session docs at repo root — plans, reviews, design
+# RFCs, debug traces. The permanent root .md allowlist below is the
+# canonical set; anything else lives in the org-level scratch
+# (`causljs-tmp/` adjacent to the repo working dirs) and never gets
+# committed.
+/*.md
+!/README.md
+!/CHANGELOG.md
+!/CONTRIBUTING.md
+!/LICENSE.md
+!/SPEC.md
+!/SPEC.async.md
+!/causl-exemptions.md

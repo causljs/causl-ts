@@ -58,6 +58,30 @@ export default [
           ],
         },
       ],
+      // Issue #9 — S-3 third gate. SPEC.async §S-3 names three gates
+      // against the dispatch-shape leak across capability narrowing
+      // (compile-time `tsc`, runtime `narrowCapability` Proxy, static
+      // lint). The lint gate was deferred under TASK 12.4 and is now
+      // wired here. Bare `value as Graph` and the chained
+      // `as unknown as Graph` / `as any as Graph` bypass shapes fail
+      // the build. Brand-casts (`as GraphTime`, `as GraphSnapshot`,
+      // `as GraphParam`) are NOT flagged — those are unrelated TS
+      // branding casts in the wasm marshaler and fixtures.
+      //
+      // Allowlist: the two test files below deliberately synthesise
+      // the `as Graph` leak shape to assert that `narrowCapability`'s
+      // Proxy throws `CapabilityViolation` at runtime — they ARE the
+      // test for gate 2. Each call site carries an inline comment
+      // explaining why the cast is structurally required.
+      'causl/no-graph-upcast': [
+        'error',
+        {
+          allowlist: [
+            'packages/react/test/useCausl.test.tsx',
+            'packages/react/test/useCauslSuspense.test.tsx',
+          ],
+        },
+      ],
     },
   },
   {

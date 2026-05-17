@@ -5,6 +5,69 @@ All notable changes to this repository land here. The format follows
 project follows [Semantic Versioning](https://semver.org/) once the
 first stable release ships.
 
+## [0.2.0] - 2026-05-16
+
+First versioned release of the `@causl/*` TypeScript-only bundle.
+Ships as a GitHub Release (`v0.2.0`) with four `.tgz` tarball assets
+attached, plus the unminified per-package tree committed under
+`release/` at this tag for audit traceability.
+
+### Added
+
+- `tools/release/release.py` — Python script that bundles the minimum
+  viable per-package npm tree, narrows `package.json#exports` to the
+  main barrel, resolves `workspace:*` cross-deps to `^0.2.0`, strips
+  source maps + map-URL trailers, and optionally re-minifies each
+  emitted `.js` via `esbuild --minify` (`--minify` flag) and emits a
+  `.tgz` per package (`--tarballs` flag).
+- `tools/release/README.md` — detailed build-pipeline docs.
+- `## Tools` section in the root `README.md` — repo-wide tool
+  inventory with one-line role descriptions linking to per-tool
+  READMEs.
+- `release/` tree at the v0.2.0 tag — committed un-minified copy
+  matching the source `packages/*/dist/`. Lets reviewers diff the
+  shipped tarballs against a known reference.
+- `"sideEffects": false` on `@causl/core`, `@causl/sync`,
+  `@causl/react`, `@causl/formula` package.json files. Enables
+  bundler tree-shaking; downstream apps that import a subset of the
+  barrel pay only for what they use.
+- Root `.gitignore` carve-out for `release/packages/*/dist/` so script
+  re-runs can re-stage cleanly with plain `git add release/` (the
+  global `dist/` rule otherwise blocks parent-excluded re-inclusion).
+
+### Changed
+
+- Source `packages/{core,sync,react,formula}/package.json` versions
+  bumped from `0.0.0` / `0.1.0` → `0.2.0`. Root `package.json`
+  bumped from `0.0.0` → `0.2.0`. Source-of-truth versions now align
+  with the published v0.2.0 release.
+
+### Release contents
+
+| Package | Runtime (brotli q11, minified) | + Types | npm tarball |
+| --- | ---: | ---: | ---: |
+| `@causl/core` | **14.36 KiB** | 47.50 KiB | 76 KiB |
+| `@causl/sync` | 2.40 KiB | 2.38 KiB | 9 KiB |
+| `@causl/react` | 1.75 KiB | 12.73 KiB | 20 KiB |
+| `@causl/formula` | 2.96 KiB | 9.22 KiB | 16 KiB |
+| **TOTAL** | **21.46 KiB** | 71.83 KiB | 121 KiB |
+
+### Excluded from v0.2.0
+
+- All WASM artefacts (`@causl/core/wasm` subpath; the `gc-builtins`,
+  `gc-classic`, and `serde` bridge cdylibs under
+  `packages/core/wasm-pkg/`). Tracked separately under the
+  Zero-boundary WASM engine epic (#1558).
+- `@causl/checker` (+ native Linux/macOS/Windows x64/arm64 binary
+  shards).
+- `@causl/devtools`, `@causl/devtools-bridge`, `@causl/hypothesis`,
+  `@causl/migration-check`, `@causl/persistence`,
+  `@causl/sync-testing-internal`.
+- The `./internal` and `./testing` subpath exports on `@causl/core`;
+  the `./resource` and `./conflict` exports on `@causl/sync`.
+
+Adopters who need any of the above install from the source workspace.
+
 ## [Unreleased]
 
 ### Known limitations

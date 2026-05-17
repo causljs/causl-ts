@@ -1,6 +1,6 @@
 {
   "name": "@causl/sync",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "Async resource and conflict bindings for Causl — resource(key, loader), staleness guards, conflict registry.",
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,10 @@
       "import": "./dist/conflict-entry.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts src/resource-entry.ts src/conflict-entry.ts --format esm --dts --clean --sourcemap",
     "dev": "tsup src/index.ts --format esm --dts --watch",
@@ -49,5 +52,6 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  }
+  },
+  "sideEffects": false
 }

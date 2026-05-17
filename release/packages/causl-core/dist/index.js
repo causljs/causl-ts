@@ -23,7 +23,7 @@ import {
   detectFeatures,
   parseCauslModel,
   shouldMigrate
-} from "./chunk-4VGVKSWF.js";
+} from "./chunk-A4V4AYSP.js";
 import "./chunk-HLBMCSGV.js";
 import "./chunk-6AT5T6LD.js";
 export {

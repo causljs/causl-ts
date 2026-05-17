@@ -64,9 +64,12 @@ jobs:
 
       # `andresz1/size-limit-action@v1` runs the install + build_script
       # + `pnpm run size` for both the PR head and the merge base, then
-      # diffs the output. Setting `package_manager: pnpm` keeps the
-      # lockfile honoured. `build_script: build` matches the root
-      # `build` script (`pnpm -r --filter './packages/*' run build`).
+      # diffs the output. The action auto-detects pnpm from the
+      # `pnpm-lock.yaml` checked into the repo — no `package_manager:`
+      # input is accepted (that input is a common-mistake; the action
+      # warns "Unexpected input(s) 'package_manager'" if passed).
+      # `build_script: build` matches the root `build` script
+      # (`pnpm -r --filter './packages/*' run build`).
       #
       # The action's exit code is non-zero on overage so this job ALSO
       # blocks merge — but the blocking signal is already provided by
@@ -76,5 +79,4 @@ jobs:
         uses: andresz1/size-limit-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          package_manager: pnpm
           build_script: build

@@ -1,0 +1,187 @@
+name: release-on-merge
+
+# Auto-release pipeline: triggered when a PR merges into the `release`
+# branch. Builds the minimum-viable @causljs/* tree via
+# `tools/release/release.py --minify --tarballs`, creates a GitHub
+# Release tagged from the source package.json version, attaches the
+# four `.tgz` tarballs, uses the merged PR's description as the
+# release notes, and publishes each tarball to npm with provenance.
+#
+# Prerequisites (set up once on the repo):
+#   - `NPM_TOKEN` secret with publish rights for the @causljs scope
+#     (Settings → Secrets and variables → Actions → New repository secret)
+#   - Workflow permissions: `Read and write permissions`
+#     (Settings → Actions → General → Workflow permissions)
+#   - `release` branch protected so only PR-driven merges land
+#
+# Manual trigger via `workflow_dispatch` is available for re-runs.
+#
+# Versioning contract: the version comes from `packages/core/package.json`.
+# The PR that lands on `release` is expected to have already bumped that
+# version (and the sibling sync/react/formula packages, which all bump
+# in lockstep — see tools/release/release.py PACKAGES tuple). If the
+# version was not bumped, the existing tag is detected and the workflow
+# only re-uploads tarball assets without creating a new release.
+#
+# Single-package `causl` shipping (npmjs.com/package/causl): not in
+# scope for this iteration. The workflow currently publishes the four
+# `@causljs/*` scoped packages individually. To collapse them into a
+# single `causl` package, add a meta-package row to
+# `tools/release/release.py` PACKAGES that re-exports from @causljs/core
+# (and friends) under the unscoped name, then add `causl` to the
+# `for pkg in ...` loop below.
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run end-to-end but skip mutating gh-release + npm-publish. Validates wiring without shipping.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+permissions:
+  contents: write   # tag + create GitHub Release
+  id-token: write   # npm provenance via OIDC
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history to look up the merge-PR
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup Python (for tools/release/release.py)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Resolve release version
+        id: ver
+        run: |
+          V=$(jq -r '.version' packages/core/package.json)
+          if [ -z "$V" ] || [ "$V" = "null" ] || [ "$V" = "0.0.0" ]; then
+            echo "::error::packages/core/package.json version must be bumped before merging to release (got '$V')"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$V"
+
+      - name: Build minified tarballs
+        run: |
+          python3 tools/release/release.py \
+            --out ./release-output \
+            --minify \
+            --tarballs \
+            --require-minify
+          ls -la ./release-output/packages/*/*.tgz
+
+      - name: Resolve release notes from merged PR description
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find the PR that produced this merge commit. The workflow_dispatch
+          # trigger has no associated PR — fall back to a generic note.
+          PR_NUM=""
+          if [ "${{ github.event_name }}" = "push" ]; then
+            PR_NUM=$(gh pr list --search "${{ github.sha }}" --state merged --base release --json number --jq '.[0].number // empty')
+          fi
+
+          if [ -n "$PR_NUM" ]; then
+            echo "Using PR #$PR_NUM description as release notes"
+            gh pr view "$PR_NUM" --json body --jq '.body // ""' > /tmp/release-notes.md
+            # Append a footer linking back to the PR
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "Released from PR #$PR_NUM via the release-on-merge workflow."
+            } >> /tmp/release-notes.md
+          else
+            # workflow_dispatch or no PR found — synthesise a minimal body
+            cat > /tmp/release-notes.md <<EOF
+          Released from commit ${{ github.sha }} via the release-on-merge workflow${PR_NUM:+ (PR #$PR_NUM)}.
+
+          Tarball contents are the output of \`python3 tools/release/release.py --minify --tarballs\` against this commit's source tree.
+          EOF
+          fi
+
+          # Persist the path for downstream steps
+          echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Tag + create (or update) GitHub Release
+        if: ${{ inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          ASSETS=(
+            "./release-output/packages/causl-core/causl-core-${{ steps.ver.outputs.version }}.tgz"
+            "./release-output/packages/causl-sync/causl-sync-${{ steps.ver.outputs.version }}.tgz"
+            "./release-output/packages/causl-react/causl-react-${{ steps.ver.outputs.version }}.tgz"
+            "./release-output/packages/causl-formula/causl-formula-${{ steps.ver.outputs.version }}.tgz"
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — refreshing tarball assets"
+            gh release upload "$TAG" --clobber "${ASSETS[@]}"
+          else
+            echo "Creating new release $TAG"
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file "${{ steps.notes.outputs.notes_file }}" \
+              "${ASSETS[@]}"
+          fi
+
+      - name: Dry-run smoke (npm publish --dry-run; no upload)
+        if: ${{ inputs.dry_run == 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Validates the tarball + npm credentials + scope access
+          # without actually publishing. Same loop shape as the real
+          # publish step below.
+          for pkg in causl-core causl-sync causl-react causl-formula; do
+            TARBALL="./release-output/packages/$pkg/$pkg-${{ steps.ver.outputs.version }}.tgz"
+            echo "Dry-run publishing $TARBALL"
+            npm publish --access public --dry-run "$TARBALL"
+          done
+
+      - name: Publish to npm (with provenance)
+        if: ${{ inputs.dry_run != 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in causl-core causl-sync causl-react causl-formula; do
+            TARBALL="./release-output/packages/$pkg/$pkg-${{ steps.ver.outputs.version }}.tgz"
+            echo "Publishing $TARBALL"
+            # `--access public` is required for @causljs/* scoped packages
+            # the first time each is published. `--provenance` attaches an
+            # OIDC-signed attestation linking the artefact to this workflow
+            # run (npmjs.com displays a "Built and signed on GitHub" badge).
+            npm publish --access public --provenance "$TARBALL"
+          done

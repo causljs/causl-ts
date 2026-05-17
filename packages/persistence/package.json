@@ -1,6 +1,6 @@
 {
   "name": "@causl/persistence",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "UI-preference persistence for Causl \u2014 persistedInput() and storage adapters.",
   "license": "MIT",
   "type": "module",

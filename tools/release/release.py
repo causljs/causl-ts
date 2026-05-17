@@ -81,6 +81,34 @@ from pathlib import Path
 
 RELEASE_VERSION = "0.2.0"
 
+# npm scope rewrite. Per the project's brand discipline:
+#   - `causljs` is the GitHub-org slug only (lives in URLs like
+#     github.com/causljs/causl-ts).
+#   - `causl` is the brand + npm scope everywhere else (npmjs.com/package/
+#     @causl/core, the domain causl.org, the user-facing library name).
+#
+# Source `package.json` files in this workspace ship as `@causljs/*`
+# (matching the GitHub org). The release tarballs published to npm
+# must rebrand to `@causl/*`. This script rewrites both:
+#   1. the `name` field on every package
+#   2. dependency keys that reference sibling @causljs packages
+# at tarball-build time, leaving the source workspace untouched.
+#
+# If you ever need to publish under the @causljs scope (e.g. to
+# GitHub Packages at npm.pkg.github.com), pass --keep-source-scope.
+SOURCE_NPM_SCOPE = "@causljs/"
+PUBLISHED_NPM_SCOPE = "@causl/"
+
+
+def rebrand_scope(s: str) -> str:
+    """Rewrite SOURCE_NPM_SCOPE → PUBLISHED_NPM_SCOPE in a single string.
+
+    Idempotent. Safe on strings that don't carry the source scope.
+    """
+    if not isinstance(s, str):
+        return s
+    return s.replace(SOURCE_NPM_SCOPE, PUBLISHED_NPM_SCOPE)
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Per-package configuration. Each entry maps the source workspace package
@@ -389,21 +417,46 @@ def rewrite_package_json(
 
     out["version"] = RELEASE_VERSION
 
+    # Rebrand the npm scope: @causljs/* (GitHub org) → @causl/* (npm
+    # scope + brand). See SOURCE_NPM_SCOPE / PUBLISHED_NPM_SCOPE
+    # constants at the top of this file for rationale. Affects the
+    # `name` field + every `dependencies` key.
+    if "name" in out:
+        out["name"] = rebrand_scope(out["name"])
+
     # Resolve workspace:* dependency refs. Per pnpm-workspace.yaml every
-    # `@causl/*` cross-dep ships as `workspace:*` in source; the release
+    # `@causljs/*` cross-dep ships as `workspace:*` in source; the release
     # tree must turn these into a real semver range pointing at the
-    # release version we're emitting.
+    # release version we're emitting. Dependency KEYS also get the
+    # scope rebrand so the published tarballs reference @causl/* not
+    # @causljs/* (otherwise @causl/react would install but try to
+    # resolve a non-existent @causljs/core peer).
     if "dependencies" in out:
-        deps = dict(out["dependencies"])
-        for dep, ver in deps.items():
+        deps = {}
+        for dep, ver in out["dependencies"].items():
+            new_dep = rebrand_scope(dep)
+            new_ver = ver
             if isinstance(ver, str) and ver.startswith("workspace:"):
                 # `workspace:*` → `^0.2.0`. `workspace:^` → `^0.2.0`.
                 # Anything else (workspace:~, pinned ranges) collapses
                 # to the same target — every package in this release
                 # ships at the same version, so a single carat range is
                 # the right shape.
-                deps[dep] = f"^{RELEASE_VERSION}"
+                new_ver = f"^{RELEASE_VERSION}"
+            deps[new_dep] = new_ver
         out["dependencies"] = deps
+
+    # Peer-dependency keys also get the rebrand (a future @causl/react
+    # could declare @causl/core as a peer; today it's a regular dep,
+    # but the rebrand is shape-safe even when the keys list is empty).
+    if "peerDependencies" in out:
+        out["peerDependencies"] = {
+            rebrand_scope(k): v for k, v in out["peerDependencies"].items()
+        }
+    if "peerDependenciesMeta" in out:
+        out["peerDependenciesMeta"] = {
+            rebrand_scope(k): v for k, v in out["peerDependenciesMeta"].items()
+        }
 
     # Narrow exports map in slim mode. Default (slim): only the './'
     # entry survives. --full mode preserves every entry the source had.

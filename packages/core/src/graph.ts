@@ -40,6 +40,7 @@ import {
   DuplicateNodeError,
   HydrationSchemaError,
   InvalidGraphNameError,
+  InvariantViolationError,
   NodeDisposedError,
   NodeHasDependentsError,
   NonDeterministicComputeError,
@@ -1177,6 +1178,16 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
 
   // Forward index: id → {input | derived} entry. The single source of truth for node existence.
   const entries = new Map<NodeId, Entry>()
+  /**
+   * Issue #1 — caller-supplied invariants on input nodes. Stored in a
+   * side Map (not on InputEntry) to preserve the post-#915 / #994 /
+   * #995 5-field InputEntry hidden-class monomorphism. Probe is a
+   * single Map.get per staged write in Phase A.7; only paid when at
+   * least one invariant is registered (guarded by `size > 0` check).
+   * Lazy-minted: entries are only added when `input(id, init, {
+   * invariant })` is called with the option present.
+   */
+  const inputInvariants = new Map<NodeId, (value: unknown) => void>()
   /**
    * #915 — sibling map for the `inputRegisteredAt` GraphTime,
    * lazy-minted at registration only when `now > 0` (i.e., the input
@@ -2818,10 +2829,21 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
    * @returns A frozen handle usable in `read`, `derived`, and `tx.set`.
    * @throws {@link DuplicateNodeError} if an entry already exists under `id`.
    */
-  function input<T>(id: NodeId, initial: T): InputNode<T> {
+  function input<T>(
+    id: NodeId,
+    initial: T,
+    options?: { readonly invariant?: (value: T) => void },
+  ): InputNode<T> {
     // Reject collisions: ids are the engine's identity contract.
     if (entries.has(id)) throw new DuplicateNodeError(id)
     const node = makeInputNode<T>(id)
+    // Issue #1 — caller-supplied invariant. SPEC choice: the initial
+    // value is NOT validated at registration (no `invariant(initial)`
+    // call here). Adopters who want a registration-time check can
+    // call the invariant themselves before `input()`.
+    if (options?.invariant !== undefined) {
+      inputInvariants.set(id, options.invariant as (value: unknown) => void)
+    }
     // Seed the entry with the initial value and the immutable public handle.
     // #1014 — InputEntry allocation moved to module-level
     // `makeInputEntry` so the literal's source position is shared
@@ -4464,6 +4486,45 @@ export function createCausl(options: CreateCauslOptions = {}): Graph {
           inputRollbackEntries.length = writeIdx
           inputRollbackPriorValues.length = writeIdx
           inputRollbackPriorLastWrite.length = writeIdx
+        }
+      }
+
+      // Phase A.7 — run caller-supplied invariants (issue #1).
+      // After Phase A.5 compaction (so revert-sequences don't fire
+      // invariants) but BEFORE Phase B publishes any slow-path cell
+      // value: walk every surviving staged write and run the
+      // invariant, if one is registered for that node id. A throw
+      // here routes through the existing catch arm, which rolls back
+      // fast-path mutations + restores `now` byte-identically to
+      // the pre-commit moment. Invariants for slow-path writes see
+      // the staged value; for fast-path writes the cell value IS
+      // the staged value (Phase A wrote it directly). Both paths
+      // share semantics — "what would Phase B publish?" — so the
+      // invariant evaluates the same value on either path.
+      if (inputInvariants.size > 0) {
+        for (let i = 0, n = inputRollbackEntries.length; i < n; i++) {
+          const e = inputRollbackEntries[i]!
+          const inv = inputInvariants.get(e.id)
+          if (inv === undefined) continue
+          try { inv(e.value) } catch (cause) {
+            // Pass structural CauslErrors through unwrapped — they're
+            // API-misuse signals (e.g. CommitInProgressError from a
+            // re-entrant commit attempt inside the invariant body),
+            // not value-validation signals. Wrapping would obscure
+            // the actual misuse for adopters.
+            if (cause instanceof CauslError) throw cause
+            throw new InvariantViolationError(e.id, e.value, cause)
+          }
+        }
+        for (let i = 0, n = stagedWriteEntries.length; i < n; i++) {
+          const e = stagedWriteEntries[i]!
+          const inv = inputInvariants.get(e.id)
+          if (inv === undefined) continue
+          const v = stagedWriteValues[i]
+          try { inv(v) } catch (cause) {
+            if (cause instanceof CauslError) throw cause
+            throw new InvariantViolationError(e.id, v, cause)
+          }
         }
       }
 

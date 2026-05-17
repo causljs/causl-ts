@@ -18,7 +18,7 @@
  * Usage:
  *
  *   import fc from 'fast-check'
- *   import { propertyTrials } from '@causljs/core/testing'
+ *   import { propertyTrials } from '@causl/core/testing'
  *
  *   it('diamond is glitch-free for any commit sequence', () => {
  *     fc.assert(
@@ -133,8 +133,8 @@ function seedFromEnv(): number | undefined {
 // and `CAUSL_FUZZ_TRIALS` (numeric override). That resolver lives in a
 // `test/` path and cannot be imported from this published-testing-seam
 // module; the tier env-var contract is therefore mirrored here so
-// `propertyTrials` callers (predominantly in `@causljs/sync` and
-// `@causljs/migration-check` property tests) can route trial budgets
+// `propertyTrials` callers (predominantly in `@causl/sync` and
+// `@causl/migration-check` property tests) can route trial budgets
 // through the same env-var lever.
 // ---------------------------------------------------------------------------
 

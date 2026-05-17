@@ -6,21 +6,21 @@
  * input, derived, commit, read, subscribe, explain) and the second-tier
  * extensions (subscribeCommits, commitLog, exportModel, snapshot,
  * hydrate, readAt, snapshotAt, now). They exist for adapter
- * packages (`@causljs/react`, `@causljs/persistence`,
- * `@causljs/devtools-bridge`, …) that need engine-internal hooks the
+ * packages (`@causl/react`, `@causl/persistence`,
+ * `@causl/devtools-bridge`, …) that need engine-internal hooks the
  * application surface deliberately omits.
  *
  * @remarks
- * Application code MUST NOT import from `@causljs/core/internal`. The
+ * Application code MUST NOT import from `@causl/core/internal`. The
  * surface here exists on the engine for adapter use but is NOT part of
  * the public-method commitment, NOT documented in the public README,
- * and NOT covered by SemVer guarantees on the `@causljs/core` public
+ * and NOT covered by SemVer guarantees on the `@causl/core` public
  * exports. Adapters that import from here vendor that risk and pin a
  * tight version range.
  *
  * The module is intentionally narrow. Internal primitives are listed
  * alongside the consumer that justifies them — for example, the
- * disposal hook is owned by `@causljs/react`'s `useCauslFamily`
+ * disposal hook is owned by `@causl/react`'s `useCauslFamily`
  * because the React hook is the unit that owns "this node's lifetime
  * is bounded by a component's mount." If an internal primitive becomes
  * broadly useful, it can be promoted to the second-tier extension list
@@ -32,14 +32,14 @@ import type { Graph, GraphSnapshot, Node, Observer, Unsubscribe } from './types.
 import { lookupInternalDispatch } from './internal-dispatch.js';
 
 /**
- * Sentinel marker confirming the `@causljs/core/internal` entrypoint
+ * Sentinel marker confirming the `@causl/core/internal` entrypoint
  * resolves. Has no runtime use beyond import-path verification — kept
  * as a stable export so the `internal.test.ts` wiring assertion that
  * landed alongside the entrypoint scaffold continues to hold.
  *
  * @internal
  */
-export const INTERNAL_ENTRYPOINT = '@causljs/core/internal' as const;
+export const INTERNAL_ENTRYPOINT = '@causl/core/internal' as const;
 
 /**
  * Adapter-layer disposal hook. Releases a node from the engine
@@ -63,8 +63,8 @@ export const INTERNAL_ENTRYPOINT = '@causljs/core/internal' as const;
  *
  * @example
  * ```ts
- * import { createCausl } from '@causljs/core';
- * import { dispose } from '@causljs/core/internal';
+ * import { createCausl } from '@causl/core';
+ * import { dispose } from '@causl/core/internal';
  *
  * const graph = createCausl();
  * const a = graph.input('a', 1);
@@ -89,7 +89,7 @@ export function dispose(graph: Graph, node: Node<unknown>): void {
  * Adopters MUST use {@link Graph.hydrate} for SSR-restore on a
  * running graph. `_migrateFrom` exists only for two consumers:
  *
- *   1. The WASM auto-adapt wrapper (`@causljs/core/wasm`'s
+ *   1. The WASM auto-adapt wrapper (`@causl/core/wasm`'s
  *      `WasmBackend.__migrateFrom`) so a JS → WASM migration
  *      reaches the wasm-side engine without an intervening
  *      synthetic record.
@@ -132,7 +132,7 @@ export function _migrateFrom(graph: Graph, snap: GraphSnapshot): void {
  * H1 hazard tracker suppressed for reads issued synchronously from
  * inside the body.
  *
- * Used by canonical `@causljs/react` hooks (`useCauslNode`,
+ * Used by canonical `@causl/react` hooks (`useCauslNode`,
  * `useCausl`, `useCauslShallow`, `useCauslTypedArrayNode`) to wrap
  * their `useSyncExternalStore` `getSnapshot` body. The
  * `useSyncExternalStore` contract retains the snapshot across
@@ -166,12 +166,12 @@ export function _migrateFrom(graph: Graph, snap: GraphSnapshot): void {
  * is deliberately ugly to discourage drive-by adoption. The
  * shape is not part of any SemVer-stable surface; adapter
  * packages that import it pin a tight version range on
- * `@causljs/core`.
+ * `@causl/core`.
  *
  * @example
  * Inside an adapter hook:
  * ```ts
- * import { __causlAdapterRead } from '@causljs/core/internal';
+ * import { __causlAdapterRead } from '@causl/core/internal';
  *
  * const getSnapshot = useCallback(
  *   () => __causlAdapterRead(graph, () => graph.read(node)),
@@ -233,8 +233,8 @@ export function assertNever(value: never, hint = 'unhandled discriminator'): nev
  *
  * @remarks
  * Mark Miller's principle of least authority applied at the *adapter*
- * boundary. Adapters (`@causljs/react`, `@causljs/persistence`,
- * `@causljs/devtools-bridge`) wrap their selector / listener boundary
+ * boundary. Adapters (`@causl/react`, `@causl/persistence`,
+ * `@causl/devtools-bridge`) wrap their selector / listener boundary
  * with {@link narrowCapability} so the function they hand to
  * application code receives only the read-side capability. Application
  * code does not name this type and should not import it: selector
@@ -286,8 +286,8 @@ export class CapabilityViolation extends Error {
  * the runtime gate against `as any`-coerced or `as Graph`-coerced
  * leaks.
  *
- * Adapter packages (`@causljs/react`, `@causljs/persistence`,
- * `@causljs/devtools-bridge`) wrap their selector/listener boundary
+ * Adapter packages (`@causl/react`, `@causl/persistence`,
+ * `@causl/devtools-bridge`) wrap their selector/listener boundary
  * with this so application code receives only the read-side
  * capability. Application code MUST NOT import this directly — adapters
  * own the boundary.

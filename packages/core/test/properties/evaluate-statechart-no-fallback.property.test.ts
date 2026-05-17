@@ -47,7 +47,7 @@
 
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { propertyTrials } from '@causljs/core-testing-internal'
+import { propertyTrials } from '@causl/core-testing-internal'
 
 import { JsBackend, type JsBackendOps } from '../../src/backend.js'
 import { evaluateStatechart as evaluateStatechartCanonical } from '../../src/statechart-evaluator.js'
@@ -98,9 +98,9 @@ function makeJsBackend(): JsBackend {
 
 // ---------------------------------------------------------------------------
 // Arbitraries — mirror the shapes the canonical reducers in
-// `@causljs/sync/src/statechart-reducers.ts` accept. Reproduced here
-// because the package boundary forbids `@causljs/core` from importing
-// from `@causljs/sync`; the agreement gate in
+// `@causl/sync/src/statechart-reducers.ts` accept. Reproduced here
+// because the package boundary forbids `@causl/core` from importing
+// from `@causl/sync`; the agreement gate in
 // `packages/sync/test/properties/evaluate-statechart-agreement.property.test.ts`
 // pins the same arbitraries against the canonical reducer, so the
 // shape coverage stays in lockstep.

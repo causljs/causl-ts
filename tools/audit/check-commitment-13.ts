@@ -3,7 +3,7 @@
  * EPIC-13 / Adapter Commitment 13 audit — Two-primitive surface
  * stays at two (Resource + Conflict).
  *
- * Per SPEC.async §17 commitment 2: @causljs/sync exports exactly
+ * Per SPEC.async §17 commitment 2: @causl/sync exports exactly
  * two primitives — `resource` (the Resource factory) and
  * `createConflictRegistry` (the ConflictRegistry factory). A
  * third primitive without a §12.1 audit is a §17.2 violation.

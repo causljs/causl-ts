@@ -21,7 +21,7 @@
  * GraphTime is strictly increasing across the resource's lifetime."
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../../src/index.js'
 

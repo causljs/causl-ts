@@ -2,7 +2,7 @@
  * @packageDocumentation
  *
  * Minimal formula grammar and AST shape for Phase 3 of
- * `@causljs/formula`. The grammar covers literal numbers, A1-style
+ * `@causl/formula`. The grammar covers literal numbers, A1-style
  * cell references, contiguous ranges, parenthesised arithmetic with
  * `+ - * /`, unary negation, and function calls — enough to express
  * common spreadsheet expressions without the complexity of operator
@@ -34,7 +34,7 @@
 // `Ast`, `BinOp`, and `CellRef` live in `./ir.ts` (the pure-data wire
 // IR carved out for the future Rust port — issue #697 / epic #680).
 // They are re-exported here so existing adopters that import
-// `Ast`/`BinOp`/`CellRef` from `@causljs/formula` or directly from
+// `Ast`/`BinOp`/`CellRef` from `@causl/formula` or directly from
 // `./grammar.js` continue to compile unchanged.
 
 export type { Ast, BinOp, CellRef } from './ir.js'

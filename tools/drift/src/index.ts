@@ -1,5 +1,5 @@
 /**
- * @causljs/drift — drift detector. Finds unmigrated patterns and
+ * @causl/drift — drift detector. Finds unmigrated patterns and
  * emits a DriftReport JSON for CI / dashboards.
  */
 

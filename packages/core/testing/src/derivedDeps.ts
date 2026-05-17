@@ -11,7 +11,7 @@
  *
  * Usage (property-test only):
  *
- *   import { derivedDeps } from '@causljs/core-testing-internal'
+ *   import { derivedDeps } from '@causl/core-testing-internal'
  *
  *   const g = createCausl()
  *   const a = g.input('a', 1)
@@ -26,7 +26,7 @@
  * contract surface.
  */
 
-import type { Graph, NodeId } from '@causljs/core'
+import type { Graph, NodeId } from '@causl/core'
 import { lookupTestingDispatch } from '../../src/testing-dispatch.js'
 
 /**

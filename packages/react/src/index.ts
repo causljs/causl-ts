@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public entry point for `@causljs/react`, the React binding layer for
+ * Public entry point for `@causl/react`, the React binding layer for
  * the Causl dependency engine. This module re-exports the provider,
  * hooks, MVU update helpers, and supporting types that together form
  * the application surface for React hosts.
@@ -104,7 +104,7 @@ export { useDispatch } from './useDispatch.js'
 /**
  * Family-lifecycle hook closing Adoption-gap #1 (Jotai's `atomFamily`):
  * stable per-key node identity within a provider, refcount-driven
- * disposal via `@causljs/core/internal`. See {@link useCauslFamily}.
+ * disposal via `@causl/core/internal`. See {@link useCauslFamily}.
  */
 export type { FamilyFactory, FamilyGraph } from './useCauslFamily.js'
 export { useCauslFamily } from './useCauslFamily.js'

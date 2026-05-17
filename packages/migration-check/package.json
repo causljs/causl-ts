@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/migration-check",
+  "name": "@causl/migration-check",
   "version": "0.0.0",
   "description": "Migration drift detector \u2014 finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase. Rule contract: docs/migration/RULE_CATALOGUE.md.",
   "license": "MIT",
@@ -8,7 +8,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "causljs-migration-check": "./dist/cli.js"
+    "causl-migration-check": "./dist/cli.js"
   },
   "exports": {
     ".": {
@@ -41,7 +41,6 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
     "access": "public"
   }
 }

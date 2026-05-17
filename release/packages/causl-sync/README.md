@@ -1,7 +1,7 @@
-# @causljs/sync
+# @causl/sync
 
 > Async resources and conflict registry on top of
-> [@causljs/core](../core/). The package wires two of the orthogonal
+> [@causl/core](../core/). The package wires two of the orthogonal
 > regions in Causl's composite lifecycle statechart — a per-resource
 > ResourceFleet sub-statechart whose states are
 > `Idle | Loading | Loaded | Stale | Errored`, and a per-conflict
@@ -12,14 +12,14 @@
 ## Install
 
 ```bash
-pnpm add @causljs/sync @causljs/core
+pnpm add @causl/sync @causl/core
 ```
 
 ## Resource
 
 ```ts
-import { createCausl } from '@causljs/core'
-import { resource } from '@causljs/sync'
+import { createCausl } from '@causl/core'
+import { resource } from '@causl/sync'
 
 const graph = createCausl()
 const items = resource<Item[]>(graph, 'items', {
@@ -58,7 +58,7 @@ resource(graph, 'items', { loader, stalenessGuard: false })
 ## Conflict registry
 
 ```ts
-import { createConflictRegistry, singleConflictWhen } from '@causljs/sync'
+import { createConflictRegistry, singleConflictWhen } from '@causl/sync'
 
 const conflicts = createConflictRegistry<Item[]>(graph, {
   id: 'conflicts',
@@ -155,37 +155,37 @@ The currently-shipped properties:
 | `forbidden-conflict-transitions.property.test.ts` | Mutators targeting a non-`open` conflict throw `ForbiddenConflictTransitionError`. |
 | `promise-identity-stability.property.test.ts` | SPEC.async §15.1 / Property 4 — repeated application of the same event sequence yields the same `(tag, value, origin)` tuple (the model-level analogue of the §3.1 Theorem 3 Promise-identity claim). |
 | `open-set-computation.property.test.ts` | SPEC.async §15.2 / Property 8 — open-set membership equals the `open`-tagged conflicts after arbitrary event sequences. |
-| `evaluate-statechart-agreement.property.test.ts` | The `JsBackend.evaluateStatechart` extension point in `@causljs/core` and the canonical `reduceConflict` / `reduceResource` reducers in `@causljs/sync/statechart-reducers` agree byte-equivalently on every `(state × event)` pair (the cross-implementation determinism gate landed by #1068). |
+| `evaluate-statechart-agreement.property.test.ts` | The `JsBackend.evaluateStatechart` extension point in `@causl/core` and the canonical `reduceConflict` / `reduceResource` reducers in `@causl/sync/statechart-reducers` agree byte-equivalently on every `(state × event)` pair (the cross-implementation determinism gate landed by #1068). |
 
 Failing inputs are shrunk and committed as regression cases; seeds
 are deterministic so a CI failure is reproducible.
 
 ## Bundle budget (SPEC.async §14.2)
 
-`@causljs/sync` ships with per-primitive sub-imports so adopters who
+`@causl/sync` ships with per-primitive sub-imports so adopters who
 only need the resource primitive (or only the conflict registry)
 pay only for what they import. Three CI-gated `size-limit` ceilings
 in the root `package.json`:
 
 | Import | Ceiling |
 |---|---|
-| `@causljs/sync` (full barrel) | 12 KB |
-| `@causljs/sync/resource` (resource-only) | 8 KB |
-| `@causljs/sync/conflict` (conflict-only) | 8 KB |
+| `@causl/sync` (full barrel) | 12 KB |
+| `@causl/sync/resource` (resource-only) | 8 KB |
+| `@causl/sync/conflict` (conflict-only) | 8 KB |
 
 Resource-only consumers:
 
 ```ts
-import { resource } from '@causljs/sync/resource'
+import { resource } from '@causl/sync/resource'
 ```
 
 Conflict-only consumers:
 
 ```ts
-import { createConflictRegistry } from '@causljs/sync/conflict'
+import { createConflictRegistry } from '@causl/sync/conflict'
 ```
 
-The full barrel `@causljs/sync` re-exports both surfaces. A PR that
+The full barrel `@causl/sync` re-exports both surfaces. A PR that
 crosses one of the ceilings fails the `size — bundle-size gate` and
 must include the §14.2 written team consensus or the size-limit bump
 is rejected. The §14.2 narrative pins the trade-off: a smaller bundle

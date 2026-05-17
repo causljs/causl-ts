@@ -11,7 +11,7 @@
  * monotonicity).
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../src/index.js'
 

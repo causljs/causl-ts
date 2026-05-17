@@ -1,6 +1,6 @@
 /**
  * Ambient `process` declaration for the bundler-replacement
- * `process.env.NODE_ENV` literal gate (#1241 fix C). `@causljs/core`'s
+ * `process.env.NODE_ENV` literal gate (#1241 fix C). `@causl/core`'s
  * tsconfig does not include `@types/node` so the type-checker
  * cannot resolve `process` from the Node global; this minimal
  * declaration is the smallest patch that makes the literal
@@ -18,7 +18,7 @@ declare const process: { env: { NODE_ENV?: string } }
 
 /**
  * #1241 / #1549 Part B — THE single source of truth for the
- * NODE_ENV production gate across `@causljs/core`. `process.env` is
+ * NODE_ENV production gate across `@causl/core`. `process.env` is
  * read EXACTLY ONCE here, at module load, and the resulting boolean
  * is imported everywhere else. Nothing else in the engine may read
  * `process.env.NODE_ENV` directly — import this const instead.
@@ -34,7 +34,7 @@ declare const process: { env: { NODE_ENV?: string } }
  *   measured at ~93 ns/read, ~95% of `op-read-cold`'s total and the
  *   dominant cause of that benchmark's deficit vs redux. It is paid
  *   in production too (the condition evaluates either way) and by
- *   every consumer that does not bundle `@causljs/core` through a prod
+ *   every consumer that does not bundle `@causl/core` through a prod
  *   `define` (SSR / Node services / scripts / tests / benchmarks).
  *   Reading `process.env` once at module load removes the cost from
  *   every gated site with zero behaviour change.

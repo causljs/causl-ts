@@ -15,7 +15,7 @@
  * same node; only the compute behind it changed.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { liveDerived } from '../src/index.js'
 

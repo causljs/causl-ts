@@ -50,7 +50,7 @@
  *
  *   - **`arbAdversarialValue` adversarial bias.** The issue calls
  *     for a 30%-biased adversarial-value arbitrary in a
- *     `@causljs/core-testing-internal` package. That package does not
+ *     `@causl/core-testing-internal` package. That package does not
  *     exist today; the adversarial-bias work lands alongside Phase-1
  *     because the divergence sources it targets (NaN, ±0, lone
  *     surrogates, BigInt boundaries) are between-backend phenomena
@@ -81,7 +81,7 @@
 
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { tieredPropertyTrials } from '@causljs/core-testing-internal'
+import { tieredPropertyTrials } from '@causl/core-testing-internal'
 
 import { createCausl, type Graph } from '../../src/index.js'
 import type { Commit, GraphTime, NodeId } from '../../src/types.js'
@@ -237,7 +237,7 @@ interface CrossBackendWorld extends World {
  * so the call sites are symmetric.
  *
  * The TS-side world's graphId is pinned to the same string the WASM
- * side mints (`@causljs/core/wasm:serde-json` by default — see
+ * side mints (`@causl/core/wasm:serde-json` by default — see
  * {@link loadWasmBackend}'s `graphName` option). Both `Graph`
  * instances must share a graphId because the byte-equal IR oracle
  * compares the `graphId` field directly.
@@ -396,7 +396,7 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
   // The seeds intentionally include the §10 worked example shape
   // (`spec-10-worked-example-arithmetic`) the issue calls out by
   // name. NaN-handling and BigInt-boundary seeds land alongside
-  // `arbAdversarialValue` when `@causljs/core-testing-internal` ships.
+  // `arbAdversarialValue` when `@causl/core-testing-internal` ships.
   // ---------------------------------------------------------------
   describe('SPEC §15 canonical-seed cross-backend parity', () => {
     for (const seed of CANONICAL_SEEDS) {
@@ -405,7 +405,7 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
         // engines share a `graphId` field in their IR projections.
         // The byte-equal oracle compares `graphId` directly; without
         // the pin the wasm-side engine would mint
-        // `@causljs/core/wasm:serde-json` and the js-side world's
+        // `@causl/core/wasm:serde-json` and the js-side world's
         // graphId would diverge before the first commit.
         const graphName = `cross-backend-seed:${seed.id}`
         let wasmBackend: BackendEngine
@@ -1548,7 +1548,7 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
   // first Phase G fire via the same drain `commitInternal`'s
   // `finally` arm runs for every transient subscription.
   //
-  // Trial budget: `tieredPropertyTrials` from `@causljs/core/testing`
+  // Trial budget: `tieredPropertyTrials` from `@causl/core/testing`
   // (issue #1163 wire-up) so the H3 arm respects `CAUSL_FUZZ_TIER`
   // the same way the rest of the suite does. Default tier is 1000
   // trials per the SPEC §15.2 floor; PR-lane raises to 5k, nightly

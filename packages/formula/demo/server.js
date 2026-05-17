@@ -3,7 +3,7 @@
  * Static dev server for the SPEC §11 spreadsheet demo.
  *
  * I run the demo against the built ESM in each package's `dist/` folder
- * and resolve `@causljs/*` bare specifiers via the import map in
+ * and resolve `@causl/*` bare specifiers via the import map in
  * `index.html`. That keeps the page identical to what users see when
  * they install the published packages — no bundler step in the middle.
  *

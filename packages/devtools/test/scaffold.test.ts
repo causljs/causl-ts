@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Scaffolding-level smoke test for `@causljs/devtools`. Confirms the
+ * Scaffolding-level smoke test for `@causl/devtools`. Confirms the
  * package exports a `VERSION` string, anchoring the public entry point
  * for the inspection-primitive surface — the engine is meant to be
  * inspectable through its own primitives rather than through a parallel
@@ -19,7 +19,7 @@ import { VERSION } from '../src/index.js'
  * detect that the inspection-primitive package is wired before any of its
  * deeper APIs are reached for.
  */
-describe('@causljs/devtools scaffolding', () => {
+describe('@causl/devtools scaffolding', () => {
   /**
    * `VERSION` is exposed as a string so consumers (and tooling) can
    * introspect the shipped devtools build at runtime.

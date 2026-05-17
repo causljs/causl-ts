@@ -590,11 +590,11 @@ function detectReduxRules(ctx: ScanContext, node: ts.Node, emit: Emitter): void 
       return
     }
     if (isAliasOf(ctx.imports, 'react-redux', 'useDispatch', n)) {
-      emit('R-03', node, 'useDispatch', 'Replace useDispatch with typed useDispatch<Msg>() from @causljs/react.')
+      emit('R-03', node, 'useDispatch', 'Replace useDispatch with typed useDispatch<Msg>() from @causl/react.')
       return
     }
     if (isAliasOf(ctx.imports, '@reduxjs/toolkit', 'createAsyncThunk', n)) {
-      emit('R-04', node, 'createAsyncThunk', 'Replace createAsyncThunk with @causljs/sync resource(graph, key, loader).')
+      emit('R-04', node, 'createAsyncThunk', 'Replace createAsyncThunk with @causl/sync resource(graph, key, loader).')
       return
     }
     if (
@@ -828,9 +828,9 @@ function detectCrossRules(ctx: ScanContext, node: ts.Node, emit: Emitter): void 
     const phantoms = ['useCauslSuspense', 'persistedInput']
     for (const phantom of phantoms) {
       if (
-        importedFrom(ctx.imports, '@causljs/react', phantom) ||
-        importedFrom(ctx.imports, '@causljs/persistence', phantom) ||
-        importedFrom(ctx.imports, '@causljs/core', phantom)
+        importedFrom(ctx.imports, '@causl/react', phantom) ||
+        importedFrom(ctx.imports, '@causl/persistence', phantom) ||
+        importedFrom(ctx.imports, '@causl/core', phantom)
       ) {
         emit('S-08', node, phantom, `${phantom} is a phantom symbol — its Adoption epic has not shipped.`)
       }

@@ -23,7 +23,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import {
   createConflictRegistry,
   singleConflictWhen,

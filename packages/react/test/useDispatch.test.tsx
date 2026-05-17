@@ -7,7 +7,7 @@
  * provider — produces clear runtime errors at render time.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { act, render, screen } from '@testing-library/react'
 import { type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

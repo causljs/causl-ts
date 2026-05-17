@@ -13,7 +13,7 @@
  * field-preserving (no value drift), and use the same `graphId`
  * regex the engine validates at construction. A drift between the
  * runtime regex and the codemod regex is impossible by construction
- * because both consume `GRAPH_ID_REGEX` from `@causljs/core`.
+ * because both consume `GRAPH_ID_REGEX` from `@causl/core`.
  */
 
 import { describe, expect, it } from 'vitest'

@@ -1,25 +1,25 @@
-# @causljs/formula
+# @causl/formula
 
 > Spreadsheet-style formula primitives layered on
-> [@causljs/core](../core/). The core engine knows nothing about `=A1+B1`;
+> [@causl/core](../core/). The core engine knows nothing about `=A1+B1`;
 > this package translates AST → derived node.
 
 ## Install
 
 ```bash
-pnpm add @causljs/formula @causljs/core
+pnpm add @causl/formula @causl/core
 ```
 
 ## Quick start
 
 ```ts
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import {
   cellId,
   createFormulaAdapter,
   parseFormula,
   valueOr,
-} from '@causljs/formula'
+} from '@causl/formula'
 
 const graph = createCausl()
 const a1 = graph.input(cellId('wb', 'Sheet1', { col: 0, row: 0 }), 5)
@@ -72,7 +72,7 @@ import {
   addFormula,
   detectCycle,
   parseFormula,
-} from '@causljs/formula'
+} from '@causl/formula'
 
 const g = emptyFormulaGraph()
 addFormula(g, { col: 0, row: 0 }, parseFormula('=B1'))
@@ -87,11 +87,11 @@ reject formulas before they hit the engine.
 ## Runnable demo
 
 A 100-cell spreadsheet diamond demo lives under `demo/` and exercises
-the same wiring this README describes against `@causljs/core` and
-`@causljs/devtools`. From the repo root:
+the same wiring this README describes against `@causl/core` and
+`@causl/devtools`. From the repo root:
 
 ```bash
-pnpm --filter @causljs/formula run demo
+pnpm --filter @causl/formula run demo
 ```
 
 The demo builds the three packages and serves `demo/index.html` on a
@@ -108,11 +108,11 @@ and the surface below is the current one. Two changes:
 
 1. **`parseFormula` consumes IR types directly.** `parseFormula` and
    the cycle helpers now import `Ast`, `BinOp`, and `CellRef` from the
-   internal IR module instead of `./grammar.js`. The `@causljs/formula`
+   internal IR module instead of `./grammar.js`. The `@causl/formula`
    package barrel re-exports the same types, so the public type
    identity is unchanged for adopters that import from the package
    root. Adopters who imported types from the deep path
-   `@causljs/formula/grammar` will see a moved-source identity.
+   `@causl/formula/grammar` will see a moved-source identity.
 
 2. **`FormulaHost` interface + public `evaluate(ast, host)`.** The
    evaluator no longer takes a `(resolve, get)` closure pair. It now

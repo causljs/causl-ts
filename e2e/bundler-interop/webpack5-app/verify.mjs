@@ -5,7 +5,7 @@
 //   1. `dist/` contains a `main.*.js` entry chunk.
 //   2. The main chunk does NOT contain `loadWasmBackend` or
 //      `WasmBackendUnavailableError` sentinels (bundle-no-wasm-leak).
-//   3. Some other chunk (the lazy split for @causljs/core/wasm) DOES
+//   3. Some other chunk (the lazy split for @causl/core/wasm) DOES
 //      contain those sentinels (proves the dynamic import was
 //      preserved and the lazy seam works).
 //   4. The main chunk DOES contain `createCausl` body (sanity that

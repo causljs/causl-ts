@@ -35,7 +35,7 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { createCausl } from '../../src/index.js'
-import { propertyTrials } from '@causljs/core-testing-internal'
+import { propertyTrials } from '@causl/core-testing-internal'
 
 describe('SPEC #972 — tx.set Object.is equal-value fast-path', () => {
   /**

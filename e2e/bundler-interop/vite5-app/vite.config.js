@@ -3,7 +3,7 @@
 // `build.lib` mode emits an ESM library bundle so we can grep the
 // chunk text in verify.mjs without HTML/index-template noise. This
 // mirrors the shape an adopter shipping a library on top of
-// @causljs/core would produce (the broader test case — Vite app mode —
+// @causl/core would produce (the broader test case — Vite app mode —
 // has the same code-split rules underneath, so this is the right
 // proxy).
 //
@@ -23,7 +23,7 @@ export default defineConfig({
       fileName: () => 'main.js',
     },
     rollupOptions: {
-      // No externals — we want @causljs/core fully bundled so the
+      // No externals — we want @causl/core fully bundled so the
       // grep-the-output gate has something to grep.
       output: {
         chunkFileNames: 'chunk.[name].[hash].js',

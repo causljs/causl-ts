@@ -20,7 +20,7 @@
  *
  * Usage:
  *
- *   import { recomputeCounter } from '@causljs/core/testing'
+ *   import { recomputeCounter } from '@causl/core/testing'
  *
  *   const counter = recomputeCounter()
  *   const sum = graph.derived('sum', counter.wrap(get => get(a) + get(b)))
@@ -30,7 +30,7 @@
  *   counter.reset()
  */
 
-import type { Compute, Node } from '@causljs/core'
+import type { Compute, Node } from '@causl/core'
 
 export interface RecomputeCounter {
   /**

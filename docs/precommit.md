@@ -74,7 +74,7 @@ To enable the cell locally:
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
-pnpm --filter @causljs/bench wasm:build
+pnpm --filter @causl/bench wasm:build
 ```
 
 ## Speeding it up
@@ -105,7 +105,7 @@ SIGKILLing the orchestrator. Sequential workspace iteration with
 aggregated per-package output makes the wall-clock cost roughly equal
 to the concurrent path on a warm cache while removing the cross-sibling
 pipe-contention class entirely. Per-package runs
-(`pnpm --filter @causljs/<pkg> test:run`) remain unaffected and finish in
+(`pnpm --filter @causl/<pkg> test:run`) remain unaffected and finish in
 under a second each.
 
 ## Why the bench fork pool is capped at `maxForks: 4` (#1049)

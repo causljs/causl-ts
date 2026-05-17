@@ -62,7 +62,7 @@ importers:
 
   packages/core:
     devDependencies:
-      '@causljs/core-testing-internal':
+      '@causl/core-testing-internal':
         specifier: workspace:*
         version: link:testing
       '@typescript-eslint/eslint-plugin':
@@ -95,7 +95,7 @@ importers:
 
   packages/core/testing:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:..
     devDependencies:
@@ -108,7 +108,7 @@ importers:
 
   packages/devtools:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -133,11 +133,11 @@ importers:
 
   packages/devtools-bridge:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@causljs/core-testing-internal':
+      '@causl/core-testing-internal':
         specifier: workspace:*
         version: link:../core/testing
       '@typescript-eslint/eslint-plugin':
@@ -167,7 +167,7 @@ importers:
 
   packages/formula:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -247,10 +247,10 @@ importers:
 
   packages/persistence:
     devDependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
-      '@causljs/core-testing-internal':
+      '@causl/core-testing-internal':
         specifier: workspace:*
         version: link:../core/testing
       '@typescript-eslint/eslint-plugin':
@@ -280,10 +280,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
-      '@causljs/sync':
+      '@causl/sync':
         specifier: workspace:*
         version: link:../sync
     devDependencies:
@@ -353,14 +353,14 @@ importers:
 
   packages/sync:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@causljs/core-testing-internal':
+      '@causl/core-testing-internal':
         specifier: workspace:*
         version: link:../core/testing
-      '@causljs/sync-testing-internal':
+      '@causl/sync-testing-internal':
         specifier: workspace:*
         version: link:../sync-testing-internal
       '@typescript-eslint/eslint-plugin':
@@ -390,14 +390,14 @@ importers:
 
   packages/sync-testing-internal:
     dependencies:
-      '@causljs/core':
+      '@causl/core':
         specifier: workspace:*
         version: link:../core
-      '@causljs/sync':
+      '@causl/sync':
         specifier: workspace:*
         version: link:../sync
     devDependencies:
-      '@causljs/core-testing-internal':
+      '@causl/core-testing-internal':
         specifier: workspace:*
         version: link:../core/testing
       fast-check:

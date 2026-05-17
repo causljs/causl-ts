@@ -8,11 +8,11 @@
  * and ResourceFleet). Landed by issue #1068 as the deferred-from-#698
  * extension point.
  *
- * ## Why this lives in `@causljs/core`
+ * ## Why this lives in `@causl/core`
  *
  * The canonical reducers — `reduceConflict` and `reduceResource` —
- * live in `@causljs/sync/src/statechart-reducers.ts` (PR #1056). The
- * BackendEngine seam in `@causljs/core` cannot import from `@causljs/sync`
+ * live in `@causl/sync/src/statechart-reducers.ts` (PR #1056). The
+ * BackendEngine seam in `@causl/core` cannot import from `@causl/sync`
  * (dependency direction is `sync → core`, not the reverse). To wire
  * the JsBackend's `evaluateStatechart` op without inverting the
  * package graph, this module hosts a **structurally-equivalent
@@ -22,7 +22,7 @@
  * The duplication is bounded (~50 LoC of decision logic; the docs
  * stay on the sync side as the contract-of-record). The two
  * implementations are kept byte-equivalent by the cross-backend
- * determinism property test (mirrored on the `@causljs/sync` test side
+ * determinism property test (mirrored on the `@causl/sync` test side
  * in `packages/sync/test/statechart-reducers.test.ts`'s
  * `evaluateStatechart` agreement-with-reducer block): if the sync
  * reducer ever diverges from this evaluator, the gate fails CI.
@@ -30,7 +30,7 @@
  * ## Why not move the reducers into core
  *
  * That would tighten the architecture (single source of truth in
- * `@causljs/core`, sync re-exports), but it churns the sync package's
+ * `@causl/core`, sync re-exports), but it churns the sync package's
  * internal module layout and the existing
  * `packages/sync/test/statechart-reducers.test.ts` import path. PR
  * #1056 chose the sync-side carve as the contract; #1068's scope is
@@ -45,7 +45,7 @@
  * inputs and outputs structurally — `unknown` for the region-typed
  * payloads. This evaluator narrows the structural inputs through
  * region-tag and event-kind switches, identical to the sync-side
- * reducers' control flow. Adopter callers on the `@causljs/sync` side
+ * reducers' control flow. Adopter callers on the `@causl/sync` side
  * hold typed values and re-narrow the result's `next` after the seam
  * round-trip.
  *
@@ -67,12 +67,12 @@ import type {
 } from './backend.js'
 
 // ---------------------------------------------------------------------------
-// ConflictRegistry reducer — mirrors @causljs/sync/src/statechart-reducers.ts
+// ConflictRegistry reducer — mirrors @causl/sync/src/statechart-reducers.ts
 // ---------------------------------------------------------------------------
 
 /**
  * Structural ConflictEvent shape. Mirrors the TS `ConflictEvent` DU
- * from `@causljs/sync/src/statechart-reducers.ts` exactly, repeated here
+ * from `@causl/sync/src/statechart-reducers.ts` exactly, repeated here
  * because the seam strips the region-typed shape at the BackendEngine
  * boundary.
  */
@@ -94,7 +94,7 @@ type ConflictStateShape =
 
 /**
  * ConflictRegistry sub-statechart dispatch. Mirrors
- * `reduceConflict` from `@causljs/sync/src/statechart-reducers.ts`.
+ * `reduceConflict` from `@causl/sync/src/statechart-reducers.ts`.
  *
  * The chart has exactly three outgoing edges from `Open` and zero
  * outgoing edges from any terminal. Every legal transition produces
@@ -152,12 +152,12 @@ function evaluateConflict(
 }
 
 // ---------------------------------------------------------------------------
-// ResourceFleet reducer — mirrors @causljs/sync/src/statechart-reducers.ts
+// ResourceFleet reducer — mirrors @causl/sync/src/statechart-reducers.ts
 // ---------------------------------------------------------------------------
 
 /**
  * Structural ResourceEvent shape. Mirrors `ResourceEvent` from
- * `@causljs/sync/src/statechart-reducers.ts`. The promise slot is
+ * `@causl/sync/src/statechart-reducers.ts`. The promise slot is
  * `unknown` here because the seam never inspects the promise.
  */
 type ResourceEventShape =
@@ -179,7 +179,7 @@ type ResourceEventShape =
 /**
  * Structural ResourceReducerState shape. Mirrors
  * `ResourceReducerState<T>` from
- * `@causljs/sync/src/statechart-reducers.ts`. Generic `T` is structural
+ * `@causl/sync/src/statechart-reducers.ts`. Generic `T` is structural
  * `unknown` at the seam.
  */
 type ResourceStateShape =
@@ -210,7 +210,7 @@ type ResourceStateShape =
 
 /**
  * ResourceFleet sub-statechart dispatch. Mirrors `reduceResource`
- * from `@causljs/sync/src/statechart-reducers.ts` exactly.
+ * from `@causl/sync/src/statechart-reducers.ts` exactly.
  *
  * Chart edges (see `docs/lifecycle.md` §1, ResourceFleet region):
  * - `* → Loading` via `fetch-start` (host-driven trigger).
@@ -362,7 +362,7 @@ function evaluateResource(
  *
  * @see {@link StatechartInput} — input envelope shape.
  * @see {@link StatechartResult} — result shape.
- * @see `@causljs/sync/src/statechart-reducers.ts` — canonical contract.
+ * @see `@causl/sync/src/statechart-reducers.ts` — canonical contract.
  */
 export function evaluateStatechart(input: StatechartInput): StatechartResult {
   switch (input.region) {

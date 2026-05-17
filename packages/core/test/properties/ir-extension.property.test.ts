@@ -45,7 +45,7 @@ import {
   buildPropertyDag,
   propertyDag,
   type DagSpec,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 import {
   createCausl,
   CAUSL_MODEL_SCHEMA,

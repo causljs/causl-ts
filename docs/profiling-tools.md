@@ -8,7 +8,7 @@
 - **`0x`** — flame-graph generator. Emits a self-contained SVG small
   enough to commit alongside a perf-investigation PR. Shipped as the
   root `devDependency` `0x@^6.0.0`; wired as
-  `pnpm --filter @causljs/bench profile:flame` (which shells out to
+  `pnpm --filter @causl/bench profile:flame` (which shells out to
   `npx --yes 0x@5` to pin the wrapper independently of the resolved
   devDependency major). The repo-wide `pnpm bench:profile` driver
   uses `require.resolve('0x')` against the root install. Use when
@@ -20,7 +20,7 @@
 - **`node --heap-prof`** — built-in V8 heap sampler. Drops a
   `*.heapprofile` for allocation hotspots — the right tool for the
   cell-allocation work this package keeps poking at. Wired as
-  `pnpm --filter @causljs/bench profile:heap` (there is no top-level
+  `pnpm --filter @causl/bench profile:heap` (there is no top-level
   `bench:profile:heap` alias; the bench-cell driver is single-cell,
   not the multi-library `bench:profile*` driver pair).
 

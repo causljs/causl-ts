@@ -2,7 +2,7 @@
  * @packageDocumentation
  *
  * Disposed-mid-load staleness — adjacent to `SPEC.md` §9.1 engine
- * row 11 (use-after-dispose), lifted to the `@causljs/sync` resource
+ * row 11 (use-after-dispose), lifted to the `@causl/sync` resource
  * state machine.
  *
  * Property: a resource disposed while a fetch is in flight must
@@ -20,12 +20,12 @@
  * its docstring made.
  */
 
-import { tieredPropertyTrials } from '@causljs/core-testing-internal'
+import { tieredPropertyTrials } from '@causl/core-testing-internal'
 import {
   applyEvents,
   type ResourceEvent,
   type ResourceModelState,
-} from '@causljs/sync-testing-internal'
+} from '@causl/sync-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 

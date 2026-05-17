@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * React context plumbing for `@causljs/react`. A single context object
+ * React context plumbing for `@causl/react`. A single context object
  * carries the engine handle (`Graph`) and an optional MVU `update`
  * runner from `<CauslProvider>` down to consumer hooks
  * (`useCausl`, `useCauslShallow`, `useDispatch`). The context
@@ -11,7 +11,7 @@
  * underlying graph.
  */
 
-import type { Graph, Node } from '@causljs/core'
+import type { Graph, Node } from '@causl/core'
 import { createContext } from 'react'
 import type { Update } from './update.js'
 
@@ -20,7 +20,7 @@ import type { Update } from './update.js'
  * by {@link useCauslFamily}. Tracks the node handle returned by
  * the factory and a refcount that tallies live consumers; when the
  * count returns to zero, the hook schedules disposal via
- * `@causljs/core/internal`'s `dispose`.
+ * `@causl/core/internal`'s `dispose`.
  *
  * @remarks
  * Exported only so {@link CauslContextValue} can carry the typed

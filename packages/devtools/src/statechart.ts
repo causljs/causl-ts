@@ -30,12 +30,12 @@
  * the composite chart) and renders it as Mermaid for UI display.
  *
  * Phase 5 ships only the Engine orthogonal region, since that is the
- * only region implemented in `@causljs/core`. ResourceFleet and
+ * only region implemented in `@causl/core`. ResourceFleet and
  * ConflictRegistry regions are layered in by the host application
  * overlaying their per-resource / per-conflict sub-statecharts.
  */
 
-import type { Graph } from '@causljs/core'
+import type { Graph } from '@causl/core'
 
 /**
  * Capability slice handed to {@link statechart}.

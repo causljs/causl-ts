@@ -16,7 +16,7 @@ two comparator architectures that drop one or more of those invariants.
 | 4 | Frozen commit envelopes    | E + F + F.6     | `Object.freeze` on Commit + `freezeIfDev` on changedNodes + `Array.from(changed)` |
 | 5 | Per-node subscriber dispatch | G             | Walk `changed` → `subscriptionsByNode.get(id)` → fan per bucket in insertion order |
 
-All five are tested as theorems (`@causljs/checker` against the IR, plus the
+All five are tested as theorems (`@causl/checker` against the IR, plus the
 fast-property suite in `packages/core/test/properties/`). The cost is the
 engineering price of upgrading those theorems from "should hold" to "holds
 under every reachable interleaving the bounded-search checker exhibits."
@@ -250,4 +250,4 @@ viewport-scroll shapes.
 
 Each proposal should land with a property test that proves the
 short-circuit's output is bit-identical to the full envelope's, run
-on the same `@causljs/checker` interleaving corpus.
+on the same `@causl/checker` interleaving corpus.

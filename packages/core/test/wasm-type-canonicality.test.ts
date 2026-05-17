@@ -1,10 +1,10 @@
 /**
  * @packageDocumentation
  *
- * Type-canonicality pinning suite for the `@causljs/core/wasm` entry
+ * Type-canonicality pinning suite for the `@causl/core/wasm` entry
  * point (issue #1121).
  *
- * The `@causljs/core/wasm` subpath previously declared in-tree mirrors
+ * The `@causl/core/wasm` subpath previously declared in-tree mirrors
  * of `StatechartInput` / `StatechartResult` /
  * `ForbiddenStatechartTransition`, identical-but-distinct from the
  * source-of-truth declarations in `packages/core/src/backend.ts`.
@@ -21,7 +21,7 @@
  *      `typecheck` step) fails on.
  *
  *   2. **Adopter-import smoke.** Adopter code importing
- *      `@causljs/core/wasm`'s `StatechartInput` / `StatechartResult` /
+ *      `@causl/core/wasm`'s `StatechartInput` / `StatechartResult` /
  *      `ForbiddenStatechartTransition` must resolve to a value whose
  *      type is interchangeable with the same import sourced from the
  *      canonical deep-import path. The smoke test builds a fixture
@@ -80,19 +80,19 @@ function assertEq<A, B>(_ok: AssertEq<A, B>): void {
 }
 
 describe('wasm type canonicality (issue #1121)', () => {
-  it('StatechartInput from @causljs/core/wasm is the same type as from src/backend.js', () => {
+  it('StatechartInput from @causl/core/wasm is the same type as from src/backend.js', () => {
     const ok: AssertEq<CanonicalStatechartInput, WasmStatechartInput> = true
     assertEq<CanonicalStatechartInput, WasmStatechartInput>(ok)
     expect(ok).toBe(true)
   })
 
-  it('StatechartResult from @causljs/core/wasm is the same type as from src/backend.js', () => {
+  it('StatechartResult from @causl/core/wasm is the same type as from src/backend.js', () => {
     const ok: AssertEq<CanonicalStatechartResult, WasmStatechartResult> = true
     assertEq<CanonicalStatechartResult, WasmStatechartResult>(ok)
     expect(ok).toBe(true)
   })
 
-  it('ForbiddenStatechartTransition from @causljs/core/wasm is the same type as from src/backend.js', () => {
+  it('ForbiddenStatechartTransition from @causl/core/wasm is the same type as from src/backend.js', () => {
     const ok: AssertEq<
       CanonicalForbiddenStatechartTransition,
       WasmForbiddenStatechartTransition

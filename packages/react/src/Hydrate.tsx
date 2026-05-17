@@ -43,7 +43,7 @@
  * `Commit { intent: 'hydrate' }` per provider mount.
  */
 
-import type { Graph, GraphSnapshot } from '@causljs/core'
+import type { Graph, GraphSnapshot } from '@causl/core'
 import { useContext, useLayoutEffect, type JSX, type ReactNode } from 'react'
 import { CauslContext } from './context.js'
 

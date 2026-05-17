@@ -8,7 +8,7 @@
  * looks like it survives the WASM migration, or the "right" pattern
  * looks like it breaks, this file flags the divergence.
  *
- * The doc's example is written against React + `@causljs/react`; this
+ * The doc's example is written against React + `@causl/react`; this
  * file mirrors the same memoisation shape against the bare engine
  * (no React dependency) so the test runs inside the core package's
  * vitest harness. The two layers exercise the same contract:

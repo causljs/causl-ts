@@ -3,7 +3,7 @@
  *
  * Vitest configuration for the shared testing seam. Discovery covers the
  * co-located `src/__tests__/*.test.ts` suites alongside the source files
- * they exercise, and the `@causljs/core` alias points at the in-tree
+ * they exercise, and the `@causl/core` alias points at the in-tree
  * source so seam helpers and their tests share a single engine instance.
  */
 
@@ -17,7 +17,7 @@ const coreSrc = resolve(__dirname, '../src');
 export default defineConfig({
   resolve: {
     alias: {
-      '@causljs/core': coreSrc,
+      '@causl/core': coreSrc,
     },
   },
   test: {

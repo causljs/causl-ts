@@ -80,10 +80,10 @@ size-limit gate (PR #203 review).
 | Jotai (core) | 6.1 KB | 0.2 KB |
 | Redux Toolkit | 13.3 KB | 3.0 KB |
 | MobX | 16.0 KB | 13.8 KB |
-| **Causl** (`@causljs/core`) | 7.7 KB | 6.8 KB |
+| **Causl** (`@causl/core`) | 7.7 KB | 6.8 KB |
 <!-- bundle-table:end -->
 
-[We have committed a per-import `size-limit` budget for `@causljs/core` of 4 KB on minimal import (`createCausl`, `input`, `derived`, `commit`) and 6 KB on full import. That is 1 KB above Jotai's core and well below Redux Toolkit and MobX. The budget is enforced as a CI gate, not folklore (Adoption Epic E). We will not publish a bundle number that drifts from the budget without re-baselining the budget in writing.]
+[We have committed a per-import `size-limit` budget for `@causl/core` of 4 KB on minimal import (`createCausl`, `input`, `derived`, `commit`) and 6 KB on full import. That is 1 KB above Jotai's core and well below Redux Toolkit and MobX. The budget is enforced as a CI gate, not folklore (Adoption Epic E). We will not publish a bundle number that drifts from the budget without re-baselining the budget in writing.]
 
 ## The Memory Wall
 
@@ -126,11 +126,11 @@ We expect MobX to be the closest competitor on workloads 1, 6, and 7 (linear, ba
 
 **Jotai** does small global state with the smallest install footprint. If your app has fifteen pieces of UI state and no dependency graph worth talking about, Jotai is the right answer and we will not pretend otherwise. The migration guide in this repo (`docs/migration/from-jotai.md`, Adoption Epic F) exists precisely for the case where you started with Jotai and grew into the complexity Causl is designed for.
 
-**Redux Toolkit** does explicit auditable mutations with industry-standard DevTools and the largest hiring pool of developers who already know it. Time-travel debugging in Redux DevTools is the single best debugging experience in the React state-management ecosystem, which is exactly why we built `@causljs/devtools-bridge` (Adoption Epic D) to plug into the same protocol.
+**Redux Toolkit** does explicit auditable mutations with industry-standard DevTools and the largest hiring pool of developers who already know it. Time-travel debugging in Redux DevTools is the single best debugging experience in the React state-management ecosystem, which is exactly why we built `@causl/devtools-bridge` (Adoption Epic D) to plug into the same protocol.
 
 **MobX** does ergonomic reactive objects in the smallest amount of user code. `makeAutoObservable(thing)` is one line; the equivalent Causl code defines inputs and derived selectors explicitly. If terse object-oriented mutation is the goal, MobX is the right answer and we will not pretend otherwise.
 
-**TanStack Query** (not on the chart but worth naming) is the gold standard for server-state cache. It is not a general state engine, and Causl's `@causljs/sync` adapter is intentionally narrower: it owns the *integration* of async resources with the dependency graph, not the cache, dedupe, refetch, and focus-revalidation story that TanStack Query owns end-to-end. The two compose; one does not replace the other.
+**TanStack Query** (not on the chart but worth naming) is the gold standard for server-state cache. It is not a general state engine, and Causl's `@causl/sync` adapter is intentionally narrower: it owns the *integration* of async resources with the dependency graph, not the cache, dedupe, refetch, and focus-revalidation story that TanStack Query owns end-to-end. The two compose; one does not replace the other.
 
 ## Methodology Notes
 
@@ -150,7 +150,7 @@ Two test invariants in `packages/bench/test/runAll.test.ts` defend the bench's h
 **Refresh procedure** when an intentional engine change moves the counters: regenerate the baseline and commit it in the same PR as the change.
 
 ```sh
-pnpm --filter @causljs/bench exec tsx test/regen-baseline.ts
+pnpm --filter @causl/bench exec tsx test/regen-baseline.ts
 git add packages/bench/fixtures/baseline.json
 ```
 
@@ -201,7 +201,7 @@ Other flags: `--seed <n>` is forwarded as `CAUSL_FUZZ_SEED` to every pnpm step (
 |---:|---|
 | `0` | Success — the dashboard `causl-org/pages/benchmarks/history.json` is refreshed (and copied to `--out` if given) |
 | `10` | Config / usage error (unsupported `--node`, negative `--seed`, unknown `--engines` value, etc.) |
-| `11` | The 4-library `bench:report` step failed (`pnpm --filter @causljs/bench bench:report` exited non-zero). The child's actual returncode is logged on stderr; the launcher always returns `11` so the typed boundary stays unambiguous. |
+| `11` | The 4-library `bench:report` step failed (`pnpm --filter @causl/bench bench:report` exited non-zero). The child's actual returncode is logged on stderr; the launcher always returns `11` so the typed boundary stays unambiguous. |
 | `12` | The refreshed dashboard `history.json` is unreadable / not a non-empty JSON array |
 | `13` | `--out` snapshot write failed (disk full, permission denied) |
 | `14` | Docker invocation failed (`docker` not on `PATH`, daemon unreachable, image build failed) |
@@ -262,14 +262,14 @@ the composition-shift baseline, and vice versa.
 
 | System | File path | Refresh command | Gates against |
 |---|---|---|---|
-| Composition-shift | `packages/bench/report/baselines/<scenario>-<scale>.top-n.json` | `pnpm --filter @causljs/bench bench:baseline:refresh` | Top-N hot-symbol distribution per `causl-hypotheses.ts` invariants |
+| Composition-shift | `packages/bench/report/baselines/<scenario>-<scale>.top-n.json` | `pnpm --filter @causl/bench bench:baseline:refresh` | Top-N hot-symbol distribution per `causl-hypotheses.ts` invariants |
 | Regression-gate | `packages/bench/fixtures/regression-baseline.json` | (capture `pnpm bench:report` output, see workflow) | Whole-cell median/p95/stddev/CoV per `regression-gate.ts` |
 
 **When each fires.** The composition-shift baseline is consulted by
-`pnpm --filter @causljs/bench bench:check-hypotheses` — it compares the
+`pnpm --filter @causl/bench bench:check-hypotheses` — it compares the
 current run's top-N self-time symbols against the committed top-N and
 flags previously-cold symbols that have entered the hot set. The
-regression-gate baseline is consulted by `pnpm --filter @causljs/bench
+regression-gate baseline is consulted by `pnpm --filter @causl/bench
 bench:gate` (invoked from `.github/workflows-disabled/bench-gate.yml`)
 — it compares the current run's whole-cell median / p95 / stddev /
 CoV against the committed `regression-baseline.json` and fails when a
@@ -277,12 +277,12 @@ cell regresses beyond its per-cell threshold.
 
 **Refresh procedure** for each:
 
-- **Composition-shift:** run `pnpm --filter @causljs/bench
+- **Composition-shift:** run `pnpm --filter @causl/bench
   bench:baseline:refresh [<scenario> <scale>]`. The CLI captures
   N=5 trials, takes the median top-N, and writes
   `report/baselines/<scenario>-<scale>.top-n.json`. Source:
   `packages/bench/src/hypotheses/baseline-cli.ts`.
-- **Regression-gate:** run `pnpm --filter @causljs/bench bench:report`,
+- **Regression-gate:** run `pnpm --filter @causl/bench bench:report`,
   then commit the produced `benchmark_results.json` over the existing
   `packages/bench/fixtures/regression-baseline.json` (the workflow at
   `.github/workflows-disabled/bench-gate.yml` shows the gate
@@ -322,7 +322,7 @@ re-evaluated cell-by-cell against the post-Rust noise floor.
 
 ### Required artefacts (every perf-touching PR)
 
-1. **`before.json`** — `pnpm --filter @causljs/bench bench:report` JSON
+1. **`before.json`** — `pnpm --filter @causl/bench bench:report` JSON
    captured against the merge base (or another pre-fix commit on
    `main`), committed alongside the PR's source changes. The file
    path must be referenced in the PR body so reviewers can re-diff
@@ -331,12 +331,12 @@ re-evaluated cell-by-cell against the post-Rust noise floor.
    is applied, also committed. The two artefacts together are the
    load-bearing evidence; one without the other is not acceptable.
 3. **`bench:diff` table in PR body** —
-   `pnpm --filter @causljs/bench bench:diff before.json after.json`
+   `pnpm --filter @causl/bench bench:diff before.json after.json`
    emits a Markdown table with median Δ%, p95 Δ%, CoV, and a
    significance flag per affected cell. Paste it verbatim into the PR
    body; reviewers anchor the §17.1 audit on this table.
 4. **`bench:gate` green** —
-   `pnpm --filter @causljs/bench bench:gate
+   `pnpm --filter @causl/bench bench:gate
     packages/bench/fixtures/regression-baseline.json after.json`
    must exit zero. CI runs this against the committed baseline; an
    intentional engine change that moves a cell beyond gate threshold
@@ -361,7 +361,7 @@ re-evaluated cell-by-cell against the post-Rust noise floor.
    distinguish a real architectural drop from a measurement artefact.
 7. **`bench:check-hypotheses` post-PR run** — refresh the
    composition-shift baselines via
-   `pnpm --filter @causljs/bench bench:baseline:refresh
+   `pnpm --filter @causl/bench bench:baseline:refresh
     [<scenario> <scale>]` after any PR that intentionally reshapes
    the engine's hot path; commit the new top-N baseline alongside
    the PR. See `packages/bench/README.md` §"Per-PR perf evidence" for
@@ -556,15 +556,15 @@ The seed-42 suffix in the scenario name is load-bearing: it pins the PRNG seed a
 
 ## Cold-start (#713a)
 
-A separate measurement run via `pnpm --filter @causljs/bench cold-start` spawns 50 fresh Node child processes per library; each spawn imports the library, builds 10 inputs + 5 derivations, commits once, and waits for the subscriber callback to fire. Wall is measured from the spawned process's first line through to the callback.
+A separate measurement run via `pnpm --filter @causl/bench cold-start` spawns 50 fresh Node child processes per library; each spawn imports the library, builds 10 inputs + 5 derivations, commits once, and waits for the subscriber callback to fire. Wall is measured from the spawned process's first line through to the callback.
 
 **This is documentation, not a SPEC gate.** SPEC §14.1 explicitly rejects percentile-ms thresholds without a stable shared runner — cold-start is published as adopter-visible information so teams choosing a library can see the bare-import-to-first-callback cost on a representative dev machine.
 
-Cold-start numbers depend heavily on hardware (M1/M2 ≪ x86 CI runner) and Node version; the fresh-process spawn is the only honest way to exclude warm code-cache effects. Re-run `pnpm --filter @causljs/bench cold-start` on your own hardware to compare against your target deployment environment. The harness lives at `packages/bench/src/cold-start/`; per-library mini-scripts for causl, jotai, redux, and mobx are committed alongside the driver.
+Cold-start numbers depend heavily on hardware (M1/M2 ≪ x86 CI runner) and Node version; the fresh-process spawn is the only honest way to exclude warm code-cache effects. Re-run `pnpm --filter @causl/bench cold-start` on your own hardware to compare against your target deployment environment. The harness lives at `packages/bench/src/cold-start/`; per-library mini-scripts for causl, jotai, redux, and mobx are committed alongside the driver.
 
 ### Headline (50 spawns × 4 libraries)
 
-Captured via `pnpm --filter @causljs/bench cold-start --spawns 50` on:
+Captured via `pnpm --filter @causl/bench cold-start --spawns 50` on:
 
 - **Hardware:** Apple Silicon M-series (Apple M5, arm64), macOS 25.4.
 - **Runtime:** Node.js v25.9.0 (Node 25.x), pnpm 10.33.2.
@@ -586,7 +586,7 @@ The `long-run-1M` scenario drives 1,000,000 sequential commits against a 1k-node
 The full 1M-commit run is ~10 min wall (causl-only) and is excluded from the `bench:report` sweep so PR CI stays under budget; jotai / redux / mobx land their long-run cells at the 100k scale per #775 / #781 / #782. The 1M reference run is reproduced by an operator when something changes the long-run retention path (commit-history cap default, retention-chain layout, subscriber dispatch index) via:
 
 ```sh
-pnpm --filter @causljs/bench bench:long-run-1M
+pnpm --filter @causl/bench bench:long-run-1M
 ```
 
 The driver lives at `packages/bench/scripts/long-run-1M.ts`; the captured envelope is committed at `packages/bench/report/long-run-1M-causl.json`.
@@ -653,13 +653,13 @@ The decision to ship the opt-in *and* keep the safe default mirrors the same-sha
 ```sh
 # Run 1: default (freeze on).
 BENCH_PROFILE=nightly FREEZE_IMPACT_TRIALS=5 \
-  pnpm --filter @causljs/bench exec tsx --expose-gc \
+  pnpm --filter @causl/bench exec tsx --expose-gc \
     src/freeze-impact-cli.ts \
     packages/bench/report/benchmark_results.default.json
 
 # Run 2: freeze off (opt-in).
 BENCH_PROFILE=nightly FREEZE_IMPACT_TRIALS=5 CAUSL_FREEZE_OFF_IN_PROD=1 \
-  pnpm --filter @causljs/bench exec tsx --expose-gc \
+  pnpm --filter @causl/bench exec tsx --expose-gc \
     src/freeze-impact-cli.ts \
     packages/bench/report/benchmark_results.freezeoff.json
 ```

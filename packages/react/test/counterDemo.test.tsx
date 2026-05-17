@@ -2,14 +2,14 @@
  * @packageDocumentation
  *
  * Phase 2 acceptance demo — Counter. The smallest possible end-to-end
- * MVU app composed against `@causljs/react`: a single input, an
+ * MVU app composed against `@causl/react`: a single input, an
  * increment, a decrement, a reset, and a derived "doubled" view that
  * only re-renders when its slice actually changes. Lives as a test
  * rather than a `/demo/` subapp because the acceptance criterion is
  * simply "it runs"; a vitest run is the cheapest viable gate.
  */
 
-import { createCausl, type Graph, type InputNode } from '@causljs/core'
+import { createCausl, type Graph, type InputNode } from '@causl/core'
 import { act, render, screen } from '@testing-library/react'
 import { type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

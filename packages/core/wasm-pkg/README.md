@@ -5,7 +5,7 @@ driver script at `tools/wasm-build/build.mjs`). Per issue #1103 each
 bridge ships TWO subdirectories — one per wasm-pack target:
 
   - `<bridge>-bundler/` — `--target bundler` shim. Consumed by the
-    `@causljs/core/wasm` loader (resolves the artefact via
+    `@causl/core/wasm` loader (resolves the artefact via
     `new URL('./pkg/<bridge>/engine_rs_bg.wasm', import.meta.url)`) +
     the bundler-interop fixtures under `e2e/bundler-interop/`. Needs
     a host bundler (webpack 5 / Vite 5 / esbuild) to rewrite the

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public barrel for `@causljs/formula`. Re-exports the formula
+ * Public barrel for `@causl/formula`. Re-exports the formula
  * grammar / AST types, parser entry point, domain model
  * (Cell / Sheet / Workbook), engine adapter that wires formulas into
  * the reactive graph, tagged result type for evaluation, and the
@@ -16,7 +16,7 @@
 // Wire-IR seam (issue #697 / epic #680): the pure-data AST / result
 // types live in `./ir.js`; `./grammar.js` and `./result.js` re-export
 // them so the legacy import paths keep working. Both paths surface
-// the identical type identity — `Ast` from `@causljs/formula` is the
+// the identical type identity — `Ast` from `@causl/formula` is the
 // same `Ast` as the future Rust enum will mirror byte-for-byte.
 export type { Ast, BinOp, CellRef } from './ir.js'
 export { FORMULA_IR_VERSION } from './ir.js'

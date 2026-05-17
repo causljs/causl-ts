@@ -2,7 +2,7 @@
  * useCauslSuspense — Suspense projection of Resource-shaped values.
  *
  * Closes #127. Closes Adoption-gap #2 (Jotai's Suspense atoms): the
- * tagged-union `ResourceState<T>` from `@causljs/sync` becomes a
+ * tagged-union `ResourceState<T>` from `@causl/sync` becomes a
  * value `T` that integrates with `<Suspense>` and React error
  * boundaries.
  *
@@ -21,21 +21,21 @@
  *                 `idle`. The contract is "suspend, not error".
  *
  * The selector returns the canonical `ResourceState<T>` from
- * `@causljs/sync` — no fork. `SuspendableResource<T>` is kept as a
+ * `@causl/sync` — no fork. `SuspendableResource<T>` is kept as a
  * type alias for backward compatibility with consumers that imported
  * it from this package.
  */
 
-import type { Graph } from '@causljs/core'
-import { assertNever, type ReadOnlyGraph } from '@causljs/core/internal'
-import type { ResourceState } from '@causljs/sync'
+import type { Graph } from '@causl/core'
+import { assertNever, type ReadOnlyGraph } from '@causl/core/internal'
+import type { ResourceState } from '@causl/sync'
 import { useContext } from 'react'
 import { CauslContext } from './context.js'
 import { useCausl } from './useCausl.js'
 
 /**
  * Backward-compatible alias for the canonical `ResourceState<T>` from
- * `@causljs/sync`. The previous shape was a structurally-incompatible
+ * `@causl/sync`. The previous shape was a structurally-incompatible
  * fork that invented `promise?` on `loading` and dropped `origin:
  * GraphTime` / `loadedAt` / `erroredAt`; consumers that only checked
  * the tag continue to type-check, while the engine-anchored fields

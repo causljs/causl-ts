@@ -1,5 +1,5 @@
-import { createCausl } from '@causljs/core'
-import { propertyTrials } from '@causljs/core-testing-internal'
+import { createCausl } from '@causl/core'
+import { propertyTrials } from '@causl/core-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {

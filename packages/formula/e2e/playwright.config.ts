@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Playwright config for the `@causljs/formula` 60fps dropped-frame
+ * Playwright config for the `@causl/formula` 60fps dropped-frame
  * harness (#226, closing the perceptual-perf slot of #149).
  *
  * Why a separate Playwright project from the vitest unit suite: a 60fps
@@ -14,7 +14,7 @@
  * Chromium itself emits, so the gate runs in headless Chromium.
  *
  * Why a Python `http.server` `webServer`: the harness page is a static
- * HTML fixture that imports the built `@causljs/core` ESM via a
+ * HTML fixture that imports the built `@causl/core` ESM via a
  * relative path served from the monorepo root. A trivial static server
  * is enough — we are not exercising any backend, only feeding the
  * browser the modules it needs to mount the diamond demo. Python ships

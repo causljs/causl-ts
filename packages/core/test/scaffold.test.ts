@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Scaffolding sanity check for the `@causljs/core` package. Confirms the
+ * Scaffolding sanity check for the `@causl/core` package. Confirms the
  * top-level barrel actually loads and exposes a `VERSION` placeholder, so
  * downstream tests can rely on the module graph being importable before
  * exercising any engine semantics.
@@ -14,7 +14,7 @@ import { VERSION } from '../src/index.js'
  * Verifies the package barrel is wired up and exports the expected
  * scaffolding surface.
  */
-describe('@causljs/core scaffolding', () => {
+describe('@causl/core scaffolding', () => {
   /**
    * The package must export a `VERSION` string placeholder. Type only —
    * the value is not pinned here.

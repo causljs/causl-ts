@@ -25,7 +25,7 @@
  *
  * Usage (test-only):
  *
- *   import { commitLogConsumerCount } from '@causljs/core-testing-internal'
+ *   import { commitLogConsumerCount } from '@causl/core-testing-internal'
  *
  *   const g = createCausl()
  *   expect(commitLogConsumerCount(g)).toBe(0)
@@ -35,13 +35,13 @@
  *   expect(commitLogConsumerCount(g)).toBe(0)
  *
  * The helper resolves the engine's testing-dispatch registry directly,
- * via a relative import into the `@causljs/core` source tree. Adapter
+ * via a relative import into the `@causl/core` source tree. Adapter
  * code has no production use for this number — it lives here, behind
  * the testing seam, because the underlying counter is engine-internal
  * gating, not a contract surface.
  */
 
-import type { Graph } from '@causljs/core'
+import type { Graph } from '@causl/core'
 import { lookupTestingDispatch } from '../../src/testing-dispatch.js'
 
 /**

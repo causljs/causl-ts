@@ -1,6 +1,6 @@
 # Migration Rule Catalogue (v0.1)
 
-> **Status.** Accepted. The Adoption Epic F PRs that originally referenced this document — #197 (migration guides), #198 (drift detector), #199 (validation procedure) — have all merged, and #225 added the runnable end-to-end harness. The catalogue ships at schema version `0.1`. The drift detector (`@causljs/migration-check`) consumes this document; the migration guides (`docs/migration/from-{jotai,mobx,redux}.md`) reference it by rule ID; the validation procedure (`docs/migration/validation.md`) cross-references it when reporting findings.
+> **Status.** Accepted. The Adoption Epic F PRs that originally referenced this document — #197 (migration guides), #198 (drift detector), #199 (validation procedure) — have all merged, and #225 added the runnable end-to-end harness. The catalogue ships at schema version `0.1`. The drift detector (`@causl/migration-check`) consumes this document; the migration guides (`docs/migration/from-{jotai,mobx,redux}.md`) reference it by rule ID; the validation procedure (`docs/migration/validation.md`) cross-references it when reporting findings.
 >
 > **Voice.** First person, as the team's representative.
 
@@ -51,7 +51,7 @@ predicate: <one-sentence description of when this rule fires>
 spec_ref: <SPEC.md anchor, e.g. "§5", "§9.1 row N", "§13">
 guide_section: <docs/migration/from-X.md heading, or 'cross-source'>
 detector_test: <packages/migration-check/test/<id>.test.ts path>
-since: <semver of @causljs/migration-check that introduced the rule>
+since: <semver of @causl/migration-check that introduced the rule>
 example_before: |
   // Pattern in the source library
 example_after: |
@@ -102,7 +102,7 @@ These IDs are **accepted**. The detector PR (#198) wrote the predicates and test
 | `R-01` | critical | `createSlice` reducers with multiple actions → typed `Msg` union + `update : Msg → Model → Commit` | A `createSlice` call with a `reducers` object. |
 | `R-02` | critical | `useSelector(state => ...)` → `useCausl((g) => g.read(node))` | A `useSelector` import or call. |
 | `R-03` | critical | `useDispatch()` callback → typed `useDispatch<Msg>()` | A `useDispatch` import or call from `react-redux`. |
-| `R-04` | important | `createAsyncThunk` → `@causljs/sync` `resource(graph, key, loader)` | A `createAsyncThunk` import or call. |
+| `R-04` | important | `createAsyncThunk` → `@causl/sync` `resource(graph, key, loader)` | A `createAsyncThunk` import or call. |
 | `R-05` | important | `createSelector(...)` memoized → `graph.derived` (engine memoizes by default) | A `createSelector` import or call. |
 | `R-06` | nice-to-have | `extraReducers` matching `pending|fulfilled|rejected` → resource state-tag narrowing | An `extraReducers` builder containing `addCase` for `*.pending`. |
 
@@ -122,26 +122,26 @@ These rules apply regardless of the source library — they catch common LLM-mig
 | `S-08` | nice-to-have | Imports from a deferred/non-existent symbol | Imports of phantom symbols from packages whose corresponding Adoption epic hasn't shipped. See the **Current state** note below. |
 | `S-09` | critical | Codemod-style transformation comments | A `// TODO(causl-migrate)` or similar marker indicating the LLM left a manual step undone. |
 
-> **Current state (as of v0.9.0) — S-08.** `useCauslSuspense`, `persistedInput`, and `useCauslFamily` are no longer phantom symbols — `@causljs/react` ships `useCauslSuspense` and `useCauslFamily`, and `@causljs/persistence` ships `persistedInput` (see PR #428 and the worked examples in `docs/migration/from-jotai.md`). The detector under `packages/migration-check/src/scan.ts` still emits `S-08` for `useCauslSuspense` / `persistedInput` imports as a leftover guard; the rule remains `nice-to-have` so it never blocks CI. If you hit it on a now-shipped symbol, treat the finding as an info note. We'll retire the unconditional emit in a follow-up; the rule ID stays reserved and continues to cover any future deferred symbol.
+> **Current state (as of v0.9.0) — S-08.** `useCauslSuspense`, `persistedInput`, and `useCauslFamily` are no longer phantom symbols — `@causl/react` ships `useCauslSuspense` and `useCauslFamily`, and `@causl/persistence` ships `persistedInput` (see PR #428 and the worked examples in `docs/migration/from-jotai.md`). The detector under `packages/migration-check/src/scan.ts` still emits `S-08` for `useCauslSuspense` / `persistedInput` imports as a leftover guard; the rule remains `nice-to-have` so it never blocks CI. If you hit it on a now-shipped symbol, treat the finding as an info note. We'll retire the unconditional emit in a follow-up; the rule ID stays reserved and continues to cover any future deferred symbol.
 
 ---
 
 ## Severity meanings
 
-| Severity | Effect on `npx causljs-migration-check` |
+| Severity | Effect on `npx causl-migration-check` |
 | --- | --- |
 | `critical` | Exit code 1 — fails CI. The migrated code violates a causl semantic guarantee or imports a non-existent surface. |
 | `important` | Exit code 0 with a warning summary. The migrated code is structurally valid but loses an idiomatic causl property (e.g. transactional batching). |
 | `nice-to-have` | Exit code 0 with an info note. The migrated code is fine; the rule flags an opportunity. |
 
-The exit-code contract is binding. A CI pipeline integrating `causljs-migration-check` at PR-time can rely on `critical` to block merge.
+The exit-code contract is binding. A CI pipeline integrating `causl-migration-check` at PR-time can rely on `critical` to block merge.
 
 ---
 
 ## How the catalogue evolves
 
 - **Adding a rule.** Open a PR that (a) appends a row to the table above, (b) adds the `RuleDescriptor` entry to `packages/migration-check/src/catalogue.ts` and the matching `detect*` function in `packages/migration-check/src/scan.ts`, (c) adds the failing-then-fixed test pair to `packages/migration-check/test/`, and (d) — if the rule is source-specific — updates `docs/migration/from-<source>.md` with the before/after example. All four must land together.
-- **Bumping a rule's severity.** A breaking change to consumers' CI exit codes. Requires a major version bump on `@causljs/migration-check` and an entry in the changelog naming the rule and the rationale.
+- **Bumping a rule's severity.** A breaking change to consumers' CI exit codes. Requires a major version bump on `@causl/migration-check` and an entry in the changelog naming the rule and the rationale.
 - **Deprecating a rule.** Mark `status: deprecated` in the descriptor; keep the row in this document with a strikethrough and a `Superseded by: <new-id>` note. Never reuse the rule ID.
 - **Schema-version bumps.** This document and `CATALOGUE_VERSION` in `packages/migration-check/src/catalogue.ts` share a schema version (currently `0.1`). When the schema changes (e.g. adding a new field to every rule), bump both.
 

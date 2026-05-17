@@ -1,12 +1,12 @@
 /**
  * @packageDocumentation
  *
- * Wiring tests for the `@causljs/core/internal` entrypoint. The
+ * Wiring tests for the `@causl/core/internal` entrypoint. The
  * internal entrypoint is the home of surfaces that exist on the
  * engine for adapter use but are deliberately NOT part of the
  * seven-method public commitment, NOT documented in the public
  * README, and NOT covered by SemVer guarantees on the
- * `@causljs/core` public exports — `_dispose` is the canonical
+ * `@causl/core` public exports — `_dispose` is the canonical
  * resident, and any future internal primitive joins it here until
  * it earns promotion to the second-tier extensions.
  *
@@ -29,7 +29,7 @@ import { INTERNAL_ENTRYPOINT } from '../src/internal.js'
  * the contract that adapter-only surfaces live behind a separate
  * entrypoint and never leak into the public API.
  */
-describe('@causljs/core/internal entrypoint', () => {
+describe('@causl/core/internal entrypoint', () => {
   /**
    * The source module must export the sentinel marker. A future
    * refactor that empties the file would silently break adapter
@@ -37,7 +37,7 @@ describe('@causljs/core/internal entrypoint', () => {
    */
   it('exports the INTERNAL_ENTRYPOINT marker', () => {
     // assert: the marker resolves and carries the documented value
-    expect(INTERNAL_ENTRYPOINT).toBe('@causljs/core/internal')
+    expect(INTERNAL_ENTRYPOINT).toBe('@causl/core/internal')
   })
 
   /**

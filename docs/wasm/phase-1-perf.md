@@ -121,7 +121,7 @@ This is acceptable for Phase-1 because:
    contract intact: a future PR that delivers a sub-3× ratio
    either ships a real architectural breakthrough (commitment
    13's named candidate: "promotion of the
-   `@causljs/engine-wasm` substrate to the default JS engine")
+   `@causl/engine-wasm` substrate to the default JS engine")
    or trips the gate by retiring a contract surface, and SPEC
    §17.5 names which trade-off the PR must justify in writing.
 

@@ -37,8 +37,8 @@ Three jobs run on every PR and on every push to `main` when
 | `ts` | `pnpm install` + `typecheck` + `build` + `test:run` across all packages, plus the named §14 perf-invariant steps, lint, commitment audits, and the test-d compile-time gate. Runs on a React peer-dep matrix (18.3.1 and 19.0.0 per #261). | ~2 min |
 | `rust` | `cargo fmt --check` + `cargo clippy -D warnings` + `cargo build --release` + `cargo test` for `tools/checker` | ~3 min (cold), ~30 s (warm) |
 | `size` | `andresz1/size-limit-action@v1` runs the `size-limit` cells in root `package.json` against PR head and merge base, posts a delta-vs-base comment, and fails on overage. Replaces the in-line `pnpm size` step that the `ts` job used to carry. | <1 min |
-| `formula-e2e` | Playwright dropped-frame gate for `@causljs/formula`'s 60fps spreadsheet demo (#226 / SPEC §14 perceptual perf). Depends on `ts`. | ~3 min |
-| `checker-gate` | Adopter's CI runs the same binary our CI runs — `@causljs/checker` resolves the matching `@causljs/checker-<target>` `optionalDependency` and execs its prebuilt artefact, the same one we publish from `release-checker.yml`. Locally this job builds the binary in-tree and runs `@causljs/checker`'s integration tests against the Phase 3 + Phase 4 demos. Depends on `ts` and `rust`. | <60 s warm (SPEC §16.6) |
+| `formula-e2e` | Playwright dropped-frame gate for `@causl/formula`'s 60fps spreadsheet demo (#226 / SPEC §14 perceptual perf). Depends on `ts`. | ~3 min |
+| `checker-gate` | Adopter's CI runs the same binary our CI runs — `@causl/checker` resolves the matching `@causl/checker-<target>` `optionalDependency` and execs its prebuilt artefact, the same one we publish from `release-checker.yml`. Locally this job builds the binary in-tree and runs `@causl/checker`'s integration tests against the Phase 3 + Phase 4 demos. Depends on `ts` and `rust`. | <60 s warm (SPEC §16.6) |
 
 ## SPEC §14 perf-invariant gates
 
@@ -54,8 +54,8 @@ argument):
 
 | Step | Backs SPEC §14 bullet | Script |
 | --- | --- | --- |
-| `perf-invariant — SPEC §14 gate` | #1 (recompute count) | `pnpm --filter @causljs/core run test:perf-invariant` |
-| `perf-invariant — SPEC §14 React subscription gate` | #2 (render scope) | `pnpm --filter @causljs/react run test:perf-invariant` |
+| `perf-invariant — SPEC §14 gate` | #1 (recompute count) | `pnpm --filter @causl/core run test:perf-invariant` |
+| `perf-invariant — SPEC §14 React subscription gate` | #2 (render scope) | `pnpm --filter @causl/react run test:perf-invariant` |
 
 The React-side step also runs the `family-grid.test.tsx` heap-delta
 leg with `CAUSL_HEAP_GATE=1` and `NODE_OPTIONS=--expose-gc` so the
@@ -84,7 +84,7 @@ JSON cannot be parsed. The most common operational failures are:
   formula / dependency chain.
 - **Determinism mismatch.** A commit's `changedNodes` references a
   node id that is not registered. Action: this is a bug in
-  `@causljs/core`'s commit log; file an issue.
+  `@causl/core`'s commit log; file an issue.
 
 ## Active: WASM build pipeline (`wasm.yml`)
 
@@ -111,8 +111,8 @@ and push to main and consists of two jobs:
    as an independent second-layer raw-byte gate.
 3. **`bundler-interop`** — matrix over **3 fixture apps** under
    `e2e/bundler-interop/` (`webpack5-app`, `vite5-app`, `esbuild-app`)
-   per #689. Each fixture imports `@causljs/core` (main barrel) and
-   dynamically imports `@causljs/core/wasm` (lazy-load entry); the
+   per #689. Each fixture imports `@causl/core` (main barrel) and
+   dynamically imports `@causl/core/wasm` (lazy-load entry); the
    per-fixture `verify.mjs` enforces the bundle-no-wasm-leak invariant
    — the main chunk must not contain `loadWasmBackend` /
    `WasmBackendUnavailableError` sentinels, and some other chunk MUST
@@ -122,7 +122,7 @@ and push to main and consists of two jobs:
 ### Stub-fallback for the bundler-interop job (#1108)
 
 The `bundler-interop` job runs `node e2e/bundler-interop/stub-wasm-pkg.mjs`
-between the `@causljs/core` build and the per-fixture install. The stubs
+between the `@causl/core` build and the per-fixture install. The stubs
 are minimal-valid 8-byte WASM modules committed under both
 `<bridge>-bundler/` and `<bridge>-nodejs/` artefact trees; they let
 webpack 5 (with `experiments.asyncWebAssembly`) statically resolve
@@ -170,15 +170,15 @@ when any of the classifier-input paths change, plus a daily cron at
 
 ## Disabled-but-checked-in: release flow (`release-checker.yml`)
 
-`release-checker.yml` is the publish path for `@causljs/checker`.
+`release-checker.yml` is the publish path for `@causl/checker`.
 Disabled along with the rest under PR #725. When re-enabled it fires
 on a `checker-v*` git tag and on `workflow_dispatch` (the latter
 runs build + checksum + artefact upload only — no Release, no npm
 publish — so the matrix can be dry-run without minting a tag).
 
 1. **`version-lockstep`** asserts the Cargo `version`, the
-   `@causljs/checker` npm `version`, and the `CAUSL_MODEL_SCHEMA`
-   constant exported from `@causljs/core` (`packages/core/src/ir.ts`)
+   `@causl/checker` npm `version`, and the `CAUSL_MODEL_SCHEMA`
+   constant exported from `@causl/core` (`packages/core/src/ir.ts`)
    all agree before any binary is built. The schema pin lives in
    `tools/checker/Cargo.toml` under `[package.metadata]
    causl_model_schema = "..."`. A bump in any of the three without
@@ -194,21 +194,21 @@ publish — so the matrix can be dry-run without minting a tag).
 3. **`github-release`** downloads all five artefacts and creates a
    GitHub Release for the tag, attaching every binary plus its
    `.sha256`.
-4. **`publish-npm`** publishes each `@causljs/checker-<target>` to
+4. **`publish-npm`** publishes each `@causl/checker-<target>` to
    the npm registry with `pnpm publish --no-git-checks --access public`,
    pinning the per-platform package version to match the tag.
    Authentication uses `${{ secrets.NPM_TOKEN }}`.
-5. **`publish-wrapper`** publishes `@causljs/checker` last, with its
+5. **`publish-wrapper`** publishes `@causl/checker` last, with its
    `optionalDependencies` rewritten from the `0.0.0` workspace
    placeholder to the just-published version.
 
-Adopter installs (`pnpm add -D @causljs/checker`) resolve to one of
+Adopter installs (`pnpm add -D @causl/checker`) resolve to one of
 the five per-platform packages by `os`/`cpu` filtering — no postinstall
 network fetch, no corporate-proxy blast radius.
 
 ## Divergence: SPEC §17.6 serde-bundle ceiling (#1150)
 
-The size-limit cell `@causljs/core wasm bridge — serde-json (raw)` in
+The size-limit cell `@causl/core wasm bridge — serde-json (raw)` in
 root `package.json` sits at **230 KB**, not the SPEC §17.6
 commitment-14 ceiling of **200 KB raw**. The current serde artefact
 is 213 KB raw / 66 KB Brotli — Brotli is under the 80 KB target, raw
@@ -226,7 +226,7 @@ pnpm install
 pnpm -r --filter './packages/*' run typecheck
 pnpm -r --filter './packages/*' run test:run
 cargo build --release --manifest-path tools/checker/Cargo.toml
-pnpm --filter @causljs/checker test:run
+pnpm --filter @causl/checker test:run
 ```
 
 For the WASM-side gates (requires Rust toolchain +

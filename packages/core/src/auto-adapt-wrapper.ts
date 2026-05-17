@@ -13,7 +13,7 @@
  *   1. The pure decision function — `shouldMigrate(stats, thresholds,
  *      history, commitTimings)` in `./auto-adapt.ts`.
  *   2. The `BackendEngine` seam (#681 / #1028) so a Phase-1 WASM-
- *      backend (`@causljs/core/wasm`'s {@link loadWasmBackend}) can be
+ *      backend (`@causl/core/wasm`'s {@link loadWasmBackend}) can be
  *      swapped in at runtime once the heuristic trips.
  *   3. The internal-API migration hydrate `_migrateFrom` (#1090)
  *      which bypasses the synthetic `'hydrate'` commit record so the
@@ -145,7 +145,7 @@ const STATS_HISTORY_CAP = 128
  * the JS engine does not do (initial fire is synchronous inside
  * `subscribe`).
  */
-const UNSEEN: unique symbol = Symbol('@causljs/core/auto-adapt-wrapper/unseen')
+const UNSEEN: unique symbol = Symbol('@causl/core/auto-adapt-wrapper/unseen')
 
 /**
  * Live `subscribe(node, observer)` registration tracked by the
@@ -239,7 +239,7 @@ export function createAutoAdaptGraph(
   let migrated = false
   let migrating = false
   // Resolved BackendEngine handle once `loadWasmBackend()` settles.
-  // Typed `unknown` so the wrapper does not pull `@causljs/core/wasm`
+  // Typed `unknown` so the wrapper does not pull `@causl/core/wasm`
   // into its static import graph (the dynamic import below keeps the
   // WASM entry point out of the main bundle).
   let wasmBackendReady: unknown = null
@@ -311,7 +311,7 @@ export function createAutoAdaptGraph(
    */
   function triggerMigration(): void {
     migrating = true
-    // Dynamic import keeps `@causljs/core/wasm` out of the main bundle.
+    // Dynamic import keeps `@causl/core/wasm` out of the main bundle.
     // The import path is the subpath the consumer wires through their
     // bundler — bundlers that do not understand the dynamic-import
     // form will tree-shake it as unreachable, leaving adopters who

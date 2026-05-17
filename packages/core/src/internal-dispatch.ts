@@ -1,8 +1,8 @@
 /**
  * @packageDocumentation
  *
- * Private-to-`@causljs/core` registry that bridges the engine closure
- * (in `graph.ts`) and the publicly-importable `@causljs/core/internal`
+ * Private-to-`@causl/core` registry that bridges the engine closure
+ * (in `graph.ts`) and the publicly-importable `@causl/core/internal`
  * entrypoint (in `internal.ts`). The bridge keeps adapter primitives
  * (e.g., `dispose`) callable from outside the engine without leaking
  * them onto the public {@link Graph} interface in `types.ts`.
@@ -12,7 +12,7 @@
  * package's `exports`). The shape lives here, separate from
  * `internal.ts`, so the engine can register dispatch entries without
  * pulling in the public-but-internal entrypoint module. Like every
- * surface behind `@causljs/core/internal`, this module is excluded
+ * surface behind `@causl/core/internal`, this module is excluded
  * from the public-method commitment and carries no SemVer guarantee.
  */
 
@@ -22,7 +22,7 @@ import type { Graph, GraphSnapshot, Node } from './types.js';
  * Adapter-layer operations that need engine-closure access. The shape
  * grows as new internal primitives accrete; each addition is recorded
  * alongside the named adapter consumer that justifies it (the disposal
- * hook below, for instance, is owned by `@causljs/react`'s
+ * hook below, for instance, is owned by `@causl/react`'s
  * `useCauslFamily` lifecycle).
  *
  * @internal
@@ -39,7 +39,7 @@ export interface InternalDispatch {
    * Migration hydrate (issue #1090). Applies a {@link GraphSnapshot}
    * to a fresh graph WITHOUT publishing the synthetic `'hydrate'`
    * commit record `Graph.hydrate` appends. Reachable only through
-   * `@causljs/core/internal`'s `_migrateFrom(graph, snap)` helper;
+   * `@causl/core/internal`'s `_migrateFrom(graph, snap)` helper;
    * adopters use `Graph.hydrate` for the documented SSR-restore path.
    *
    * Used by the WASM auto-adapt wrapper and the cross-backend
@@ -56,7 +56,7 @@ export interface InternalDispatch {
    * H1 adapter-exemption seam (issue #1241). Runs `fn` with the
    * engine's H1 hazard tracker suppressed for reads issued
    * synchronously from inside the body. Used by canonical
-   * `@causljs/react` hooks (`useCauslNode`, `useCausl`,
+   * `@causl/react` hooks (`useCauslNode`, `useCausl`,
    * `useCauslShallow`, `useCauslTypedArrayNode`) to wrap their
    * `useSyncExternalStore` `getSnapshot` body so the snapshot-
    * retention contract does not produce false-positive H1 warnings
@@ -74,7 +74,7 @@ export interface InternalDispatch {
    * not need to guard the import path on the environment.
    *
    * Reachable from outside the engine only via
-   * `@causljs/core/internal`'s `__causlAdapterRead(graph, fn)`
+   * `@causl/core/internal`'s `__causlAdapterRead(graph, fn)`
    * helper. The seam is INTERNAL and explicitly NOT part of any
    * SemVer-stable surface — adopter code MUST NOT depend on it.
    */
@@ -121,7 +121,7 @@ export function lookupInternalDispatch(graph: Graph): InternalDispatch {
   if (!d) {
     throw new Error(
       'Graph was not produced by createCausl() — internal dispatch unavailable. ' +
-        'Did you pass an unrelated object to an @causljs/core/internal helper?',
+        'Did you pass an unrelated object to an @causl/core/internal helper?',
     );
   }
   return d;

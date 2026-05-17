@@ -6,7 +6,7 @@
  * The schema-3 wire-format break is held by four invariants and these
  * tests pin each:
  *
- *   1. The schema constant in `@causljs/core` (TypeScript) and the Cargo
+ *   1. The schema constant in `@causl/core` (TypeScript) and the Cargo
  *      metadata pin in `tools/checker/Cargo.toml` are equal. A
  *      one-sided bump trips the lockstep workflow at CI time and trips
  *      this test at PR time.

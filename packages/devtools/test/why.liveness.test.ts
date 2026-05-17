@@ -22,7 +22,7 @@
  * non-trivial classification.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import type { WhyResult } from '../src/index.js'
 import { whyNotUpdated, whyUpdated } from '../src/index.js'

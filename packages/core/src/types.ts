@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Public type vocabulary for `@causljs/core`. Defines the branded
+ * Public type vocabulary for `@causl/core`. Defines the branded
  * node descriptors, the commit/transaction shapes, and the
  * {@link Graph} interface that realises the canonical seven-method
  * primitive surface (`createCausl`, `input`, `derived`, `commit`,
@@ -64,7 +64,7 @@ export type GraphTime = number
 
 // Internal brand symbol — gives Node<T> its phantom type parameter
 // without leaking a runtime value into the public API.
-const _NODE_BRAND_TAG: unique symbol = Symbol('@causljs/core/Node')
+const _NODE_BRAND_TAG: unique symbol = Symbol('@causl/core/Node')
 /**
  * Internal phantom-tag type used to brand {@link Node} descriptors.
  *
@@ -747,7 +747,7 @@ export interface CreateCauslOptions {
    * @remarks
    * `'wasm'` is intentionally NOT an accepted value on the synchronous
    * `createCausl` constructor — loading the WASM artifact requires an
-   * async `import('@causljs/core/wasm')` + `loadWasmBackend()` call.
+   * async `import('@causl/core/wasm')` + `loadWasmBackend()` call.
    * Adopters who want WASM unconditionally drive `loadWasmBackend()`
    * directly; the canonical adopter-facing path for opt-in is `'auto'`.
    */
@@ -790,7 +790,7 @@ export interface CreateCauslOptions {
    * @remarks
    * Default is **`false`** (opt-in) per the panel review of #1241. PR
    * #1238 originally shipped with an auto-detected dev/prod default,
-   * but the canonical `@causljs/react` adapter holds the `read()`
+   * but the canonical `@causl/react` adapter holds the `read()`
    * return inside `useSyncExternalStore`'s snapshot cache for tearing
    * detection — that single retained reference triggered the warning
    * on every commit for any adapter usage.
@@ -801,7 +801,7 @@ export interface CreateCauslOptions {
    *     who want the dev safety net opt in explicitly with
    *     `createCausl({ enableH1HazardWarning: true })`.
    *   - **B.** An internal `__causl_*` adapter-exemption seam (used by
-   *     `@causljs/react`'s canonical hooks) suppresses H1 tracking for
+   *     `@causl/react`'s canonical hooks) suppresses H1 tracking for
    *     reads inside an adapter's `getSnapshot` boundary, so opt-in
    *     adopters do not see false positives from official adapters.
    *   - **C.** The instrumentation is wrapped in
@@ -847,7 +847,7 @@ export interface CreateCauslOptions {
    *
    * The shape is `{ afterN?: number; intervalMs?: number }` — kept as
    * a structural type here so `./types.js` does not depend on the
-   * `@causljs/core/wasm` subpath (which the main barrel must never pull
+   * `@causl/core/wasm` subpath (which the main barrel must never pull
    * in). The canonical declaration is `BatchedFlushOptions` in
    * `packages/core/wasm/index.ts`.
    */
@@ -891,7 +891,7 @@ export interface CreateCauslOptions {
    *
    * The canonical declaration is `WasmEngineMode` in
    * `packages/core/wasm/index.ts`; the literal union is inlined here
-   * so `./types.js` does not depend on the `@causljs/core/wasm`
+   * so `./types.js` does not depend on the `@causl/core/wasm`
    * subpath (which the main barrel must never pull in).
    */
   readonly engine?: 'js-ssot' | 'rust-ssot'
@@ -1157,7 +1157,7 @@ export interface Graph {
    *   seven.
    * @throws {@link NodeDisposedError} if `node.id` has been released
    *   through the adapter-layer `dispose` hook
-   *   (`@causljs/core/internal`). Disposal records a tombstone keyed
+   *   (`@causl/core/internal`). Disposal records a tombstone keyed
    *   by node id; subsequent subscribe calls surface this typed error
    *   rather than the generic `UnknownNodeError` so adapter authors
    *   can branch on "released" vs. "never registered" — the
@@ -1309,7 +1309,7 @@ export interface Graph {
    *   lineage for an id the graph has never seen.
    * @throws {@link NodeDisposedError} if `node.id` has been released
    *   through the adapter-layer `dispose` hook
-   *   (`@causljs/core/internal`). The typed disposal error mirrors
+   *   (`@causl/core/internal`). The typed disposal error mirrors
    *   the contract on `read` and `subscribe` so adapter code can
    *   branch on "released" vs. "never registered" no matter which
    *   read-side primitive surfaced the post-disposal access.
@@ -1339,7 +1339,7 @@ export interface Graph {
    *   top.
    * @throws {@link NodeDisposedError} if `node.id` has been released
    *   through the adapter-layer `dispose` hook
-   *   (`@causljs/core/internal`). Adapter code branches on this typed
+   *   (`@causl/core/internal`). Adapter code branches on this typed
    *   error to distinguish "released" from "never registered" — the
    *   same discriminator `read`/`subscribe`/`explain` already produce.
    *

@@ -71,7 +71,7 @@ There is no fixpoint. There is no oracle graph.
 
 I track the rate per release and publish it here. v0 baseline:
 
-- **0** false positives observed against the `@causljs/core` Phase 1
+- **0** false positives observed against the `@causl/core` Phase 1
   test suite, the Phase 3 spreadsheet demo, and the Phase 4 async demo.
 - The `bound-exceeded` finding is informational (not a violation of
   the engine) but counts toward the report's exit code 1; tests that

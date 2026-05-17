@@ -28,13 +28,13 @@
  * tree maintain isolated family namespaces, so a key collision in one
  * provider does not leak a node into the other.
  *
- * Disposal goes through `@causljs/core/internal`'s `dispose` rather
+ * Disposal goes through `@causl/core/internal`'s `dispose` rather
  * than a method on the public {@link Graph} interface. The engine's
  * canonical public surface is a small, load-bearing set of primitives
  * the engine cannot exist without; "this node's lifetime is bounded
  * by a component's mount" is an adapter-level concern, not a primitive
  * application code should reach for, so the dispose primitive lives
- * behind the `@causljs/core/internal` entrypoint and is not covered
+ * behind the `@causl/core/internal` entrypoint and is not covered
  * by the public package's SemVer guarantees. Routing through the
  * internal entrypoint keeps the public surface honest — a
  * leading-underscore method on `Graph` would still be public — and
@@ -42,8 +42,8 @@
  * is the only layer that owns the "component mount" concept.
  */
 
-import type { Graph, Node } from '@causljs/core'
-import { __causlAdapterRead, dispose } from '@causljs/core/internal'
+import type { Graph, Node } from '@causl/core'
+import { __causlAdapterRead, dispose } from '@causl/core/internal'
 import { useContext, useEffect } from 'react'
 import { CauslContext } from './context.js'
 
@@ -89,7 +89,7 @@ export type FamilyFactory<T> = (graph: FamilyGraph, key: string) => Node<T>
  * Returns a stable `Node<T>` for `key` within the enclosing
  * `<CauslProvider>`. The factory runs once per key per provider;
  * subsequent mounts of the same key return the cached handle. The
- * node is disposed via `@causljs/core/internal`'s `dispose` when the
+ * node is disposed via `@causl/core/internal`'s `dispose` when the
  * last consumer unmounts (deferred to the next microtask so
  * StrictMode's double-invoke does not destroy and recreate the node).
  *

@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/devtools-bridge",
+  "name": "@causl/devtools-bridge",
   "version": "0.0.0",
   "private": true,
   "description": "Internal: bridges Causl commits to the Redux DevTools Extension protocol. SPEC §13 defers 'devtools as a shippable product'; this package realises §11 inspection primitives end-to-end and is held private until either a downstream UI earns its place or §13 is amended.",
@@ -28,9 +28,9 @@
       "target": "es2022"
     }
   },
-  "dependencies": { "@causljs/core": "workspace:*" },
+  "dependencies": { "@causl/core": "workspace:*" },
   "devDependencies": {
-    "@causljs/core-testing-internal": "workspace:*",
+    "@causl/core-testing-internal": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "eslint": "^9.39.4",

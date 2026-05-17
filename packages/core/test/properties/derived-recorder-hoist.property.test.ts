@@ -20,7 +20,7 @@
  *      inconsistent upstream snapshot mid-commit. The diamond shape
  *      (B, C derived from A; D derived from B + C) is the canonical
  *      witness; a per-derived `glitchDetector` from
- *      `@causljs/core-testing-internal` watches every random topology
+ *      `@causl/core-testing-internal` watches every random topology
  *      that contains the diamond pattern.
  *
  *   3. **Dep-tracking accuracy** — each derived's post-recompute
@@ -48,7 +48,7 @@ import {
   derivedDeps,
   glitchDetector,
   propertyTrials,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 
 /**
  * Mulberry32 — the same tiny seeded PRNG the existing iterative-

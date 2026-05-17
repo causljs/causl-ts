@@ -7,7 +7,7 @@
  * connection — whichever the message's contract owns.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools } from '../src/connect.js'
 

@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * React provider component for `@causljs/react`. `<CauslProvider>`
+ * React provider component for `@causl/react`. `<CauslProvider>`
  * wraps a subtree, accepting a host-constructed {@link Graph} and an
  * optional MVU {@link Update} runner, and routes both through
  * {@link CauslContext}. The provider deliberately does not own the
@@ -12,7 +12,7 @@
  * `useSyncExternalStore` callers from re-subscribing on every render.
  */
 
-import type { Graph } from '@causljs/core'
+import type { Graph } from '@causl/core'
 import type { JSX, ReactNode } from 'react'
 import { useMemo } from 'react'
 import {

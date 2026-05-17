@@ -1,7 +1,7 @@
-// Fixture entry — exercises both shapes of the @causljs/core import
+// Fixture entry — exercises both shapes of the @causl/core import
 // surface a real adopter would touch.
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 
 // Synchronous use of the main barrel. Just constructing the graph is
 // enough to keep tree-shaking honest; webpack must not DCE this
@@ -18,7 +18,7 @@ globalThis.__causlHandle = causl
 // land it would throw `WasmBackendUnavailableError` at runtime, but
 // that throw is a runtime concern, not a bundler-interop one.
 export async function loadWasmLazy() {
-  const mod = await import('@causljs/core/wasm')
+  const mod = await import('@causl/core/wasm')
   return mod
 }
 

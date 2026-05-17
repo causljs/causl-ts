@@ -13,7 +13,7 @@ defined in Phase 6.2. Borrow ideas from `stateright`, `loom`, and
 >   passes: `SubscribeWithoutDispose`, `CommitFromSubscribe`,
 >   `CrossGraphRead`, `UseAfterDispose`). It is one-shot, never
 >   enumerates state, and is wired into CI as the per-PR gate via
->   `@causljs/checker`.
+>   `@causl/checker`.
 > - `tools/enumerator/` is the **from-scratch BFS** described here,
 >   targeting the same IR. Per SPEC §16.0 / §16.4 the linter is
 >   what ships; the enumerator is **deferred PLANNED** per #272
@@ -82,14 +82,14 @@ shipped surface.
 - `#52` — Define `CauslModel` IR + JSON schema (the data the JS
   side exports; the data the Rust side consumes). **Shipped;**
   IR is at schema 3 today (post-§16A schema bumps).
-- `#53` — Implement `graph.exportModel()` in `@causljs/core`.
+- `#53` — Implement `graph.exportModel()` in `@causl/core`.
   **Shipped.**
 - `#54` — Set up `tools/checker/` Rust crate skeleton. **Shipped.**
 - `#55` — Implement the bounded model checker (the from-scratch
   BFS). **Split.** The static linter shipped under
   `tools/checker/`; the bounded BFS landed under `tools/enumerator/`
   and is deferred PLANNED per #272. Both crates target the same IR.
-- `#56` — Ship the `@causljs/checker` npm wrapper. **Shipped**
+- `#56` — Ship the `@causl/checker` npm wrapper. **Shipped**
   (per-platform `optionalDependencies`, devDependency only — see
   SPEC §16.7).
 - `#57` — Wire `causl-check` into CI on the Phase 3 + Phase 4

@@ -7,7 +7,7 @@
  * runtime error path.
  */
 
-import { createCausl, type Graph } from '@causljs/core'
+import { createCausl, type Graph } from '@causl/core'
 import { act, render, screen } from '@testing-library/react'
 import { useRef, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -148,7 +148,7 @@ describe('useCausl(selector)', () => {
    * mutates mid-render).
    *
    * Wiring: the hook calls `narrowCapability(graph)` from
-   * `@causljs/core/internal` at the entry boundary. The Proxy throws
+   * `@causl/core/internal` at the entry boundary. The Proxy throws
    * `CapabilityViolation` on any non-allowed property access.
    */
   describe('selector receives a narrowed capability (not the engine)', () => {

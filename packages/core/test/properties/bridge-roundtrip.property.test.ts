@@ -36,7 +36,7 @@
  * gc-classic,gc-builtins}-nodejs/` after a successful `pnpm wasm:build`
  * (issue #1103 extended the build driver to emit both `--target
  * bundler` and `--target nodejs` artefacts per bridge — the bundler
- * shim is consumed by the `@causljs/core/wasm` loader + bundler-interop
+ * shim is consumed by the `@causl/core/wasm` loader + bundler-interop
  * fixtures, the nodejs shim is consumed by this suite). The nodejs
  * shim uses `fs.readFileSync` + `WebAssembly.instantiate` so Node's
  * ESM loader can `import()` it directly without a bundler step. The

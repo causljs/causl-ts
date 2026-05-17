@@ -8,9 +8,9 @@
 - Both shipped via PR #459 (engine + race detection) and PR #460 (async adapter), merged in the Phase-7 cycle that produced the EPICs below.
 
 ## What's already shipped (per surveys)
-- `@causljs/core` — §3 theorems property-tested; §4 IR schema 2; §5 eight phases A–H + F.4/F.5/F.6 dotted suffixes; §6 three regions implemented (Engine + ResourceFleet + ConflictRegistry); §7 layering enforced via ESLint inversion gate + `narrowCapability`; §8 canonical pair + four extension hooks; §9 five DU examples + 17-row §9.1 catalogue; §10 worked-example required-green; §11 inspection primitives; §12 19 public surface items (7 canonical + 12 second-tier); §14 perf gates + bundle budget; §15 property suite + 1000-trial floor + conformance walker; §16 eight-pass static linter; §17 twelve commitments anchored.
-- `@causljs/sync` — `resource()` + `createConflictRegistry()` + `singleConflictWhen` shipped per existing implementation.
-- `@causljs/checker` — Rust binary with eight one-shot passes (`Schema`, `Bounds`, `UnknownDep`, `Cycle`, `Determinism`, `Monotonic`, `GlitchPropagation`, `OrphanDep`); per-platform npm wrappers; release-checker version-lockstep workflow.
+- `@causl/core` — §3 theorems property-tested; §4 IR schema 2; §5 eight phases A–H + F.4/F.5/F.6 dotted suffixes; §6 three regions implemented (Engine + ResourceFleet + ConflictRegistry); §7 layering enforced via ESLint inversion gate + `narrowCapability`; §8 canonical pair + four extension hooks; §9 five DU examples + 17-row §9.1 catalogue; §10 worked-example required-green; §11 inspection primitives; §12 19 public surface items (7 canonical + 12 second-tier); §14 perf gates + bundle budget; §15 property suite + 1000-trial floor + conformance walker; §16 eight-pass static linter; §17 twelve commitments anchored.
+- `@causl/sync` — `resource()` + `createConflictRegistry()` + `singleConflictWhen` shipped per existing implementation.
+- `@causl/checker` — Rust binary with eight one-shot passes (`Schema`, `Bounds`, `UnknownDep`, `Cycle`, `Determinism`, `Monotonic`, `GlitchPropagation`, `OrphanDep`); per-platform npm wrappers; release-checker version-lockstep workflow.
 
 ## EPIC status roll-up (all shipped)
 
@@ -26,7 +26,7 @@ All 13 EPICs scoped from this plan are CLOSED. The closing GH issue is named on 
 | EPIC-6 — Race-detection CI | #468 | CLOSED 2026-05-03 | Three-tier hierarchy (`.github/workflows/race-detection.yml`) shipped; Tier-1/2/3 all wired. |
 | EPIC-7 — Apalache differential corpus | #472 | CLOSED 2026-05-03 | 10-model corpus + `apalache-diff` CI job shipped. |
 | EPIC-8 — SPEC.async §10.5 fixtures | #474 | CLOSED 2026-05-03 | Four `vitest` files lifted from the spec into runnable form. |
-| EPIC-9 — SPEC.async §15 property suite | #475 | CLOSED 2026-05-03 | 8 properties at 1000-trial floor; `@causljs/sync-testing-internal` shipped. |
+| EPIC-9 — SPEC.async §15 property suite | #475 | CLOSED 2026-05-03 | 8 properties at 1000-trial floor; `@causl/sync-testing-internal` shipped. |
 | EPIC-10 — SPEC.async §3.1 theorem gates | #478 | CLOSED 2026-05-03 | Four theorem property tests + type-d fixtures shipped. |
 | EPIC-11 — SPEC.async §14.2 bundle gates | #477 | CLOSED 2026-05-03 | Per-primitive sub-import bundle budget gates shipped. |
 | EPIC-12 — SPEC.async race-row audit | (see Phase-7 race-detection meta) | CLOSED 2026-05-03 | Race-row inventory reconciled against §9.1 catalogue. |
@@ -66,7 +66,7 @@ The list below is preserved for context. Every item is now shipped per the roll-
 
 ### Adapter side (SPEC.async.md)
 8. **SPEC.async §10.5 Full executable test fixtures** — four `vitest` files (`spec-async-10-1-direct-commit.test.ts`, `-10-2-mvu-front-door.test.ts`, `-10-3-conflict-registry.test.ts`, `-10-4-disposed-mid-load.test.ts`). The TypeScript code blocks already exist in the spec; this EPIC lifts them out of the spec into runnable test files plus their CI integration. **Independent.** (Shipped: issue #474.)
-9. **SPEC.async §15 Property suite + `@causljs/sync-testing-internal`** — 8 properties (4 Resource, 4 Conflict) at the §15.2 1000-trial floor; the `@causljs/sync-testing-internal` package with generators + harness factories + shrinking-aware shape helpers; conformance-walker enrolment. **Independent.** (Shipped: issue #475.)
+9. **SPEC.async §15 Property suite + `@causl/sync-testing-internal`** — 8 properties (4 Resource, 4 Conflict) at the §15.2 1000-trial floor; the `@causl/sync-testing-internal` package with generators + harness factories + shrinking-aware shape helpers; conformance-walker enrolment. **Independent.** (Shipped: issue #475.)
 10. **SPEC.async §3.1 Theorem CI gates** — four property tests (one per Theorem 1–4) plus the type-d fixtures. Each theorem's predicate, generator, and CI anchor are written down in the spec; this EPIC ships them as the runnable form. **Independent.** (Shipped: issue #478.)
 
 ### Items the team has decided to keep DEFERRED or NOT-PLANNED

@@ -111,7 +111,7 @@ function foo() { return x; }</code>`;
 });
 
 test('Bash tutorial: raw source → Prism .token.* spans (no false TypeDoc detection)', () => {
-  const fixture = `<code class="codeblock-source" data-lang="bash">pnpm add @causljs/core
+  const fixture = `<code class="codeblock-source" data-lang="bash">pnpm add @causl/core
 pnpm install</code>`;
   const code = mountFixture(fixture);
   const textSpan = code.querySelector('.codeblock-text');

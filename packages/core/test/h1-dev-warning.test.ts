@@ -29,7 +29,7 @@
  *      arms the tracker.
  *   5. **NEW (#1241)**: Reads issued under the
  *      `__causlAdapterRead(graph, fn)` seam (used by canonical
- *      `@causljs/react` hooks) are exempted from H1 tracking.
+ *      `@causl/react` hooks) are exempted from H1 tracking.
  *
  * The WeakRef-based tracker is best-effort by design: V8 may keep a
  * referent alive past the last user-side reference (escape analysis,
@@ -335,7 +335,7 @@ describe('H1 hazard dev-only warning (#1155 / #1241, SPEC §15.1)', () => {
   /**
    * #1241 — the adapter-exemption seam. Reads issued under
    * `__causlAdapterRead(graph, fn)` (the helper canonical
-   * `@causljs/react` hooks wrap their `getSnapshot` body in) bypass
+   * `@causl/react` hooks wrap their `getSnapshot` body in) bypass
    * the H1 hazard tracker even with the opt-in flag armed.
    *
    * The mechanism is a closure-scoped depth counter the engine

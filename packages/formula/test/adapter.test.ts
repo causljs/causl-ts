@@ -10,7 +10,7 @@
  * `valueOr` and inspect the discriminated `kind` field on error results.
  */
 
-import { createCausl, type Node } from '@causljs/core'
+import { createCausl, type Node } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import {
   cellId,

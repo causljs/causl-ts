@@ -3,8 +3,8 @@
  *
  * The catalogue's stability claim is that AST-driven predicates
  * survive aliasing, comment camouflage, and reformatting. Because
- * `@causljs/migration-check` does not yet depend on `fast-check`
- * (and the `@causljs/core/testing` `propertyTrials` helper itself
+ * `@causl/migration-check` does not yet depend on `fast-check`
+ * (and the `@causl/core/testing` `propertyTrials` helper itself
  * is a thin fast-check wrapper that we'd need to add as a dev
  * dep), this file uses a hand-rolled deterministic generator over
  * a small shape grammar — sufficient to catch the classes of

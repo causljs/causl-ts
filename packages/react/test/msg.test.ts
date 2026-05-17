@@ -10,7 +10,7 @@
  * and `assertNever` throws when reached via a typing escape hatch.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import {
   assertNever,

@@ -29,7 +29,7 @@ I write app-side properties as four pieces, in this order:
 3. **An oracle.** A second function with the *same* `(Model, Msg) → Model` shape, written at the level of abstraction the property is pinning. For the parity case it is a Redux-style reducer; for the no-double-commit case it is a counter that asserts each `Msg` advances time by exactly one. The oracle and the update do not have to agree on the implementation — they have to agree on the observable.
 4. **A property.** Generate a random `Msg[]` with `fast-check`, dispatch through the update, observe via `subscribe` (or a step-by-step in-process model), assert the invariant against the oracle.
 
-Wrap the call to `fc.assert` with `propertyTrials('your-label')` from `@causljs/core/testing` so the §15.2 1000-trial floor is enforced and the seed logs a reproducible `CAUSL_FUZZ_SEED=…` hint on failure.
+Wrap the call to `fc.assert` with `propertyTrials('your-label')` from `@causl/core/testing` so the §15.2 1000-trial floor is enforced and the seed logs a reproducible `CAUSL_FUZZ_SEED=…` hint on failure.
 
 `packages/core/test/spec-15.2-conformance.test.ts` walks the workspace and rejects any `fc.assert` below 1000 trials; the broadened walker post-#437 picks up `**/*.property.test.{ts,tsx}` anywhere under `packages/<pkg>/test/`, so a property suite added in `packages/<your-app>/test/` is mechanically gated without further wiring.
 
@@ -40,7 +40,7 @@ Wrap the call to `fc.assert` with `propertyTrials('your-label')` from `@causljs/
 ```ts
 import * as fc from 'fast-check'
 import { describe, it } from 'vitest'
-import { propertyTrials } from '@causljs/core/testing'
+import { propertyTrials } from '@causl/core/testing'
 
 // 1. The Msg union — the same one useDispatch<Msg>() accepts.
 type Msg =
@@ -132,7 +132,7 @@ The property: *for any `Msg` sequence, the count of canonical commits equals the
 ```ts
 import * as fc from 'fast-check'
 import { describe, it } from 'vitest'
-import { propertyTrials } from '@causljs/core/testing'
+import { propertyTrials } from '@causl/core/testing'
 
 type Msg = { readonly kind: 'submit'; readonly id: string }
 

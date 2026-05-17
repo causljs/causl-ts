@@ -14,8 +14,8 @@
  *   const view = useCausl((g) => ({ a: g.read(a), b: g.read(b) }))
  */
 
-import type { Graph } from '@causljs/core'
-import { __causlAdapterRead, narrowCapability, type ReadOnlyGraph } from '@causljs/core/internal'
+import type { Graph } from '@causl/core'
+import { __causlAdapterRead, narrowCapability, type ReadOnlyGraph } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 

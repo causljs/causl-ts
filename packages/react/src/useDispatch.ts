@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Dispatch hook for `@causljs/react`. {@link useDispatch} is the
+ * Dispatch hook for `@causl/react`. {@link useDispatch} is the
  * read-write companion to {@link useCausl}: it returns a
  * referentially-stable function that forwards application messages
  * into the MVU runner installed on the surrounding

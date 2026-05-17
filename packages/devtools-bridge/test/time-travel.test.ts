@@ -19,7 +19,7 @@
  *      anchored to the requested moment).
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools } from '../src/index.js'
 

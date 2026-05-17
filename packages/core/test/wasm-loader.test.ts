@@ -1,11 +1,11 @@
 /**
  * @packageDocumentation
  *
- * Pinning tests for the `@causljs/core/wasm` lazy-load entry point
+ * Pinning tests for the `@causl/core/wasm` lazy-load entry point
  * (issue #684, evolved by #1065). Three contracts are exercised:
  *
- *   1. **Out-of-bundle.** Importing the main `@causljs/core` barrel
- *      must not pull `@causljs/core/wasm` into the loaded module
+ *   1. **Out-of-bundle.** Importing the main `@causl/core` barrel
+ *      must not pull `@causl/core/wasm` into the loaded module
  *      graph. The §14.2 bundle ceiling depends on this — a
  *      regression here means every adopter pays the WASM cost
  *      whether they want it or not.
@@ -35,7 +35,7 @@ import { afterEach, describe, expect, it } from 'vitest'
  * covers the qualitative property — "the wasm module graph must
  * not be reachable from the main barrel".
  */
-describe('@causljs/core barrel does not pull in @causljs/core/wasm', () => {
+describe('@causl/core barrel does not pull in @causl/core/wasm', () => {
   it('main bundle text contains no wasm-loader sentinels', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
@@ -58,7 +58,7 @@ describe('@causljs/core barrel does not pull in @causljs/core/wasm', () => {
     // re-exported by the main barrel (see `packages/core/src/index.ts`
     // §"Pluggable WASM bridge interface" comment) so adopters can
     // probe the host BEFORE deciding whether to call
-    // `loadWasmBackend()` from `@causljs/core/wasm`. Their presence in
+    // `loadWasmBackend()` from `@causl/core/wasm`. Their presence in
     // the main bundle does NOT pull in `loadWasmBackend()` or any
     // WASM artefact loader; the gate rows above already lock the
     // load-side surface out of the main bundle. (The pre-#1014 draft
@@ -72,7 +72,7 @@ describe('@causljs/core barrel does not pull in @causljs/core/wasm', () => {
   })
 })
 
-describe('@causljs/core/wasm — loader skeleton', () => {
+describe('@causl/core/wasm — loader skeleton', () => {
   afterEach(async () => {
     // Drop the module-level cache between tests so the
     // concurrent-share assertion is hermetic.

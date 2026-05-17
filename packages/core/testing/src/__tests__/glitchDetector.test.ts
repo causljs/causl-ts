@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { glitchDetector } from '../glitchDetector.js'
 
 describe('glitchDetector', () => {

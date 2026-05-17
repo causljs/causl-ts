@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Primary subscription hook for `@causljs/react`. {@link useCausl}
+ * Primary subscription hook for `@causl/react`. {@link useCausl}
  * binds a selector over the {@link Graph} to React's
  * `useSyncExternalStore`, providing concurrent-render-safe reads with
  * a `GraphTime`-consistent snapshot per render. Re-renders are gated
@@ -12,8 +12,8 @@
  * (strict-mode double invocation, concurrent retries).
  */
 
-import type { Graph } from '@causljs/core'
-import { __causlAdapterRead, narrowCapability, type ReadOnlyGraph } from '@causljs/core/internal'
+import type { Graph } from '@causl/core'
+import { __causlAdapterRead, narrowCapability, type ReadOnlyGraph } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 
@@ -38,7 +38,7 @@ import { CauslContext } from './context.js'
  * principle of least authority applied at the React boundary. The
  * selector cannot reach `commit`, `input`, `derived`, or
  * `exportModel`; any attempt throws `CapabilityViolation` from
- * `@causljs/core/internal` (the type narrowing forbids it at compile
+ * `@causl/core/internal` (the type narrowing forbids it at compile
  * time, the Proxy enforces it at runtime against `as any` coerced
  * leaks). See #229.
  */

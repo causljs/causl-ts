@@ -19,8 +19,8 @@ If you need fresh profiles, run:
 pnpm tsx packages/bench/src/profile/cells/causl-linear-chain-1k.ts
 pnpm tsx packages/bench/src/profile/cells/causl-scrolling-viewport-10k.ts
 # Or via the bench harness (heavier ESM-loader frames; less useful for engine work):
-pnpm --filter @causljs/bench run bench:profile:cpu causl linear-chain 1000
-pnpm --filter @causljs/bench run bench:profile:cpu causl scrolling-viewport 10000
+pnpm --filter @causl/bench run bench:profile:cpu causl linear-chain 1000
+pnpm --filter @causl/bench run bench:profile:cpu causl scrolling-viewport 10000
 ```
 
 ## causl × linear-chain × 1k — top 5 by self-time

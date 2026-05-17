@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * causl-drift CLI — `npx @causljs/drift [path]`
+ * causl-drift CLI — `npx @causl/drift [path]`
  *
  * Exits 0 on clean. Exits 1 with the report on stdout if findings exist.
  */

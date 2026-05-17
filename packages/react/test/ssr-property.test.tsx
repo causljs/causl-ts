@@ -24,7 +24,7 @@
  * interleaving collapses to one GraphTime." This file plugs that gap
  * by leaning on the shared property generator (`propertyDag` +
  * `buildPropertyDag`) and the GraphTime trace assertion
- * (`assertConsistentGraphTime`) from `@causljs/core/testing`.
+ * (`assertConsistentGraphTime`) from `@causl/core/testing`.
  *
  * Trial floor
  * -----------
@@ -34,14 +34,14 @@
  * exactly this reason.
  */
 
-import { createCausl, type Node } from '@causljs/core'
+import { createCausl, type Node } from '@causl/core'
 import {
   assertConsistentGraphTime,
   buildPropertyDag,
   propertyDag,
   propertyTrials,
   type TraceEntry,
-} from '@causljs/core/testing'
+} from '@causl/core/testing'
 import { act, cleanup, render } from '@testing-library/react'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'

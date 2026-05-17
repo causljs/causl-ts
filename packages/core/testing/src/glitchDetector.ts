@@ -39,7 +39,7 @@
  *   detector.dispose()
  */
 
-import type { Graph, Node, GraphTime, Unsubscribe } from '@causljs/core'
+import type { Graph, Node, GraphTime, Unsubscribe } from '@causl/core'
 
 export interface GlitchDetector<T> {
   /** Number of (value, deps) pairs where D(t) !== f(deps(t)). */

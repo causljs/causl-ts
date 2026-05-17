@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Tests for the core domain model exposed by `@causljs/formula`: `Cell`,
+ * Tests for the core domain model exposed by `@causl/formula`: `Cell`,
  * `Sheet`, `Workbook`, and the `cellId` namespacing helper. The suite
  * pins two design commitments. First, the information-model namespace
  * is its own thing — identifiers like `cell:wb1:Sheet1:A1` belong to

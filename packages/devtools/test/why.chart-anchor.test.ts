@@ -27,7 +27,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 
 import { whyNotUpdated, whyUpdated } from '../src/index.js'

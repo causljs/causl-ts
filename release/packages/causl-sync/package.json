@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/sync",
+  "name": "@causl/sync",
   "version": "0.2.0",
   "description": "Async resource and conflict bindings for Causl — resource(key, loader), staleness guards, conflict registry.",
   "license": "MIT",
@@ -18,7 +18,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@causljs/core": "^0.2.0"
+    "@causl/core": "^0.2.0"
   },
   "sideEffects": false
 }

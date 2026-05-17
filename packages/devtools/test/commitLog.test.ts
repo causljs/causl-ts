@@ -19,7 +19,7 @@
  * engine's bounded log retained, so opt-in retention is required.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { commitLog } from '../src/index.js'
 

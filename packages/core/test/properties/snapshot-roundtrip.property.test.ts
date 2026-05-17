@@ -44,7 +44,7 @@ import {
   assertConsistentGraphTime,
   type DagSpec,
   type TraceEntry,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 import {
   createCausl,
   type Graph,

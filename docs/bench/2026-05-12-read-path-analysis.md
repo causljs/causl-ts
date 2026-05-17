@@ -4,7 +4,7 @@ Source: `packages/core/src/graph.ts` (commit `67a67bba`, 6933 LOC).
 
 This is a deep-read of the two hot read paths in the engine:
 
-1. The public `graph.read(node)` surface — used by adapters (`@causljs/react`),
+1. The public `graph.read(node)` surface — used by adapters (`@causl/react`),
    tests, and direct callers.
 2. The `get(node)` accessor passed into derived `compute()` callbacks — the
    intra-engine dependency-recording read.

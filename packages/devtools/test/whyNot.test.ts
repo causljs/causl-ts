@@ -18,7 +18,7 @@
  * retention is a hard precondition.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { whyNotUpdated } from '../src/index.js'
 

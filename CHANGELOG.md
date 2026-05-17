@@ -7,7 +7,7 @@ first stable release ships.
 
 ## [0.2.0] - 2026-05-16
 
-First versioned release of the `@causljs/*` TypeScript-only bundle.
+First versioned release of the `@causl/*` TypeScript-only bundle.
 Ships as a GitHub Release (`v0.2.0`) with four `.tgz` tarball assets
 attached, plus the unminified per-package tree committed under
 `release/` at this tag for audit traceability.
@@ -27,8 +27,8 @@ attached, plus the unminified per-package tree committed under
 - `release/` tree at the v0.2.0 tag — committed un-minified copy
   matching the source `packages/*/dist/`. Lets reviewers diff the
   shipped tarballs against a known reference.
-- `"sideEffects": false` on `@causljs/core`, `@causljs/sync`,
-  `@causljs/react`, `@causljs/formula` package.json files. Enables
+- `"sideEffects": false` on `@causl/core`, `@causl/sync`,
+  `@causl/react`, `@causl/formula` package.json files. Enables
   bundler tree-shaking; downstream apps that import a subset of the
   barrel pay only for what they use.
 - Root `.gitignore` carve-out for `release/packages/*/dist/` so script
@@ -46,25 +46,25 @@ attached, plus the unminified per-package tree committed under
 
 | Package | Runtime (brotli q11, minified) | + Types | npm tarball |
 | --- | ---: | ---: | ---: |
-| `@causljs/core` | **14.36 KiB** | 47.50 KiB | 76 KiB |
-| `@causljs/sync` | 2.40 KiB | 2.38 KiB | 9 KiB |
-| `@causljs/react` | 1.75 KiB | 12.73 KiB | 20 KiB |
-| `@causljs/formula` | 2.96 KiB | 9.22 KiB | 16 KiB |
+| `@causl/core` | **14.36 KiB** | 47.50 KiB | 76 KiB |
+| `@causl/sync` | 2.40 KiB | 2.38 KiB | 9 KiB |
+| `@causl/react` | 1.75 KiB | 12.73 KiB | 20 KiB |
+| `@causl/formula` | 2.96 KiB | 9.22 KiB | 16 KiB |
 | **TOTAL** | **21.46 KiB** | 71.83 KiB | 121 KiB |
 
 ### Excluded from v0.2.0
 
-- All WASM artefacts (`@causljs/core/wasm` subpath; the `gc-builtins`,
+- All WASM artefacts (`@causl/core/wasm` subpath; the `gc-builtins`,
   `gc-classic`, and `serde` bridge cdylibs under
   `packages/core/wasm-pkg/`). Tracked separately under the
   Zero-boundary WASM engine epic (#1558).
-- `@causljs/checker` (+ native Linux/macOS/Windows x64/arm64 binary
+- `@causl/checker` (+ native Linux/macOS/Windows x64/arm64 binary
   shards).
-- `@causljs/devtools`, `@causljs/devtools-bridge`, `@causljs/hypothesis`,
-  `@causljs/migration-check`, `@causljs/persistence`,
-  `@causljs/sync-testing-internal`.
-- The `./internal` and `./testing` subpath exports on `@causljs/core`;
-  the `./resource` and `./conflict` exports on `@causljs/sync`.
+- `@causl/devtools`, `@causl/devtools-bridge`, `@causl/hypothesis`,
+  `@causl/migration-check`, `@causl/persistence`,
+  `@causl/sync-testing-internal`.
+- The `./internal` and `./testing` subpath exports on `@causl/core`;
+  the `./resource` and `./conflict` exports on `@causl/sync`.
 
 Adopters who need any of the above install from the source workspace.
 
@@ -72,7 +72,7 @@ Adopters who need any of the above install from the source workspace.
 
 ### Known limitations
 
-- **`@causljs/core/wasm` Phase-1 is a TS wrapper, NOT a Rust engine
+- **`@causl/core/wasm` Phase-1 is a TS wrapper, NOT a Rust engine
   (#1126).** The `WasmBackend` returned by `loadWasmBackend()` in
   0.9.0 is a TS engine wrapped in the FFI shape — the interface is
   stable and the cross-bridge byte-identity gate is enforced (#1071),
@@ -197,14 +197,14 @@ Adopters who need any of the above install from the source workspace.
 
 - **React playground (`causl-org/playground/`) (#666).** Ports the
   Vue/Monaco REPL to a React 19 `createRoot` app embedded in a static
-  HTML page under `causl-org/`. Loads Monaco `0.52.2` and `@causljs/core`
+  HTML page under `causl-org/`. Loads Monaco `0.52.2` and `@causl/core`
   from CDN at runtime — no build step. The SPEC §10 worked example is
   pre-loaded; supports run, reset, and a console shim that captures
   `console.log` / `error` / `warn` to the output pane.
 
 - **React spreadsheet demo (`causl-org/spreadsheet/`) (#666).** Ports
   the Vue §16 Phase 3 100-cell diamond demo to React 19. Loads
-  `@causljs/core`, `@causljs/formula`, and `@causljs/devtools` from esm.sh.
+  `@causl/core`, `@causl/formula`, and `@causl/devtools` from esm.sh.
   Columns A–D with 10 rows plus E1 summary; editable column A inputs;
   live `replaceMany` formula editing; `whyUpdated` introspection; commit
   log (most recent 20 entries). Exposes `window.demo` for console
@@ -462,16 +462,16 @@ specifically needs to know about.
   (`schema | time | nodes | commits | events | scopes | bridges`),
   full IRSubscribe / IRDispose / IRRead / IRTxSet field shapes
   with serde rename rules. The `spec-ir-parity.test.ts` gate
-  (`@causljs/core`) trips at PR time when SPEC text drifts from
+  (`@causl/core`) trips at PR time when SPEC text drifts from
   source.
-- **`@causljs/sync`: `whyUpdated` / `whyNotUpdated` decoders +
+- **`@causl/sync`: `whyUpdated` / `whyNotUpdated` decoders +
   `RESOURCE_UPDATE_REASONS`** (#577). Closed seven-arm enumeration
   per SPEC.async §11.1: `fetch-begin | fetch-resolved | fetch-stale
   | fetch-rejected | invalidated | failed | dep-changed`. Decode
   a `CommitForDecoding` + pre/post-state pair into the matching
   reason. `whyNotUpdated` returns `'no-dep-overlap' |
   'object-is-deduped' | null`.
-- **`@causljs/hypothesis`: SPEC §16.5.1 surface expanded** (#571).
+- **`@causl/hypothesis`: SPEC §16.5.1 surface expanded** (#571).
   New: `hypothesis(name, body)` factory returning
   `NamedHypothesis<S>`; `holds(p).until(q)` / `holds(p).weakUntil(q)`
   builder; `fromPredicate(name, p)` factory. Semantic fixes:
@@ -500,7 +500,7 @@ specifically needs to know about.
   commitment ledger lives at `docs/commitment-audit.md`.
 
 ### Added
-- `@causljs/core`: `graph.simulate(intent, run): SimulateResult` — the
+- `@causl/core`: `graph.simulate(intent, run): SimulateResult` — the
   SPEC §5 dry-run API. Predicts what `commit(intent, run)` would do
   without committing: runs the staging + recompute pipeline against a
   transient view, captures the would-be `Commit` plus the staged-input
@@ -516,18 +516,18 @@ specifically needs to know about.
   `CommitInProgressError` on re-entry. Closes #367.
 
 ### Added — review-fix sweep
-- `@causljs/core`: `subscribeCommits(observer)` (SPEC §11), an
+- `@causl/core`: `subscribeCommits(observer)` (SPEC §11), an
   `onObserverError` hook on `createCausl({...})`, a configurable
   `commitHistoryCap`, and `exportModel()` returning the CauslModel
   IR.
-- `@causljs/formula`: `FormulaResult` discriminated union (`value` |
+- `@causl/formula`: `FormulaResult` discriminated union (`value` |
   `error`); `FormulaError` with kinds `div-by-zero`, `unresolved-ref`,
   `non-numeric`, `unknown-function`, `argument-error`, `propagated`.
-- `@causljs/sync`: full `Conflict` lifecycle — `resolve(id, payload)`,
+- `@causl/sync`: full `Conflict` lifecycle — `resolve(id, payload)`,
   `ignore(id)`, `supersede(id, by)` with subscriber-visible status flips.
-- `@causljs/devtools`: `WhyResult.reason` tagged enum; `replaceMany()`
+- `@causl/devtools`: `WhyResult.reason` tagged enum; `replaceMany()`
   for batched live-derivation edits.
-- `@causljs/react`: `useCauslShallow(selector)` — shallow-equality
+- `@causl/react`: `useCauslShallow(selector)` — shallow-equality
   hook for object/array selectors; `shallowEqual` helper.
 - Property-test seed reproduction: `CAUSL_FUZZ_SEED=<n> pnpm test:run`.
 - Husky pre-commit + GitHub Actions CI shape adapted from webapp.

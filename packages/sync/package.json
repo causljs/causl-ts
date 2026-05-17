@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/sync",
+  "name": "@causl/sync",
   "version": "0.2.0",
   "description": "Async resource and conflict bindings for Causl \u2014 resource(key, loader), staleness guards, conflict registry.",
   "license": "MIT",
@@ -39,11 +39,11 @@
     "directory": "test-d"
   },
   "dependencies": {
-    "@causljs/core": "workspace:*"
+    "@causl/core": "workspace:*"
   },
   "devDependencies": {
-    "@causljs/core-testing-internal": "workspace:*",
-    "@causljs/sync-testing-internal": "workspace:*",
+    "@causl/core-testing-internal": "workspace:*",
+    "@causl/sync-testing-internal": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
     "eslint": "^9.39.4",
@@ -55,7 +55,6 @@
   },
   "sideEffects": false,
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
     "access": "public"
   }
 }

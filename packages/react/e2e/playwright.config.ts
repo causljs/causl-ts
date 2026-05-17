@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Playwright config for the `@causljs/react` 1000-cell `useCauslNode`
+ * Playwright config for the `@causl/react` 1000-cell `useCauslNode`
  * dropped-frames gate (#765, deferred from #677 / PR #737).
  *
  * Mirrors `packages/formula/e2e/playwright.config.ts` — same single-

@@ -50,7 +50,7 @@ callout above).
 ### Tier 1 — fast PR gate
 
 - **causl-check static passes**: schema validation, bounds, unknown-dep, cycle, determinism, glitch-propagation, monotonic-commit, orphan-dep, subscribe-without-dispose, use-after-dispose, cross-graph-read, commit-from-subscribe.
-- **Property fuzz** at the 1000-trial floor (per `spec-15.2-conformance.test.ts` walker enforcement) for `@causljs/core`'s closed-DU invariants.
+- **Property fuzz** at the 1000-trial floor (per `spec-15.2-conformance.test.ts` walker enforcement) for `@causl/core`'s closed-DU invariants.
 - Refusal-to-run on bound exceedance — `causl-check` short-circuits if the IR exceeds `--max-nodes` or `--max-commits`, surfacing the truthful "model too big for this tier" verdict rather than silently truncating.
 
 ### Tier 2 — bounded enumerator (medium)
@@ -72,7 +72,7 @@ callout above).
 A model graduates from Tier 1 to Tier 2 when:
 
 1. **Coverage gap.** A §9.1 race row that the static linter cannot fully decide remains uncovered by Tier 1's property fuzz at the 1000-trial floor. Most commonly: rows whose proof requires reasoning over async-resolution interleaving (row 6, row 11) or over `Msg`-dispatch traversal (row 9).
-2. **Adopter request.** A team integrating `@causljs/sync` or `@causljs/devtools-bridge` requests deeper bounded-enumerator coverage on a specific PR by applying the `race-detection-tier-2` label.
+2. **Adopter request.** A team integrating `@causl/sync` or `@causl/devtools-bridge` requests deeper bounded-enumerator coverage on a specific PR by applying the `race-detection-tier-2` label.
 3. **Differential-test pin.** A change to the engine's commit pipeline (Phase A–H), the conflict-registry mutators, or the resource-state machine. These are the load-bearing surfaces SPEC §16.7 names as the Apalache corpus's anchors.
 
 A model graduates from Tier 2 to Tier 3 when:

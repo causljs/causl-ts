@@ -1,5 +1,5 @@
 {
-  "name": "@causljs/react",
+  "name": "@causl/react",
   "version": "0.2.0",
   "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
   "license": "MIT",
@@ -18,8 +18,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@causljs/core": "^0.2.0",
-    "@causljs/sync": "^0.2.0"
+    "@causl/core": "^0.2.0",
+    "@causl/sync": "^0.2.0"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

@@ -12,7 +12,7 @@
  * loudly.
  *
  * Counters are wired through the shared testing seam at
- * `@causljs/core-testing-internal` (PR #205). The seam wraps user
+ * `@causl/core-testing-internal` (PR #205). The seam wraps user
  * `compute` closures with an instrumented Compute<T> that counts each
  * engine-driven invocation against a stable label. Counting at this
  * boundary keeps the canonical-seven public surface unchanged: no
@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCausl, type Node } from '../src/index.js'
 import { dispose } from '../src/internal.js'
-import { recomputeCounter } from '@causljs/core-testing-internal'
+import { recomputeCounter } from '@causl/core-testing-internal'
 
 describe('recompute-count invariant — O(|affected|) gate (#145)', () => {
   it('a commit that changes one input recomputes only its dependents', () => {

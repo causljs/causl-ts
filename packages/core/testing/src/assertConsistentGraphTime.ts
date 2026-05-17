@@ -25,7 +25,7 @@
  *   }), { numRuns: 1000 })
  */
 
-import type { GraphTime } from '@causljs/core'
+import type { GraphTime } from '@causl/core'
 
 export interface TraceEntry {
   /** Identifier for the render frame this tuple was captured in. */

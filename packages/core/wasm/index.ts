@@ -1,19 +1,19 @@
 /**
  * @packageDocumentation
  *
- * `@causljs/core/wasm` — opt-in WASM backend entry point.
+ * `@causl/core/wasm` — opt-in WASM backend entry point.
  *
  * This subpath is the lazy-load seam for the WebAssembly-backed
- * engine described in EPIC #680. Importing `@causljs/core` does **not**
+ * engine described in EPIC #680. Importing `@causl/core` does **not**
  * pull this module in; only callers who explicitly
- * `import('@causljs/core/wasm')` (or who flip `createCausl({ backend:
+ * `import('@causl/core/wasm')` (or who flip `createCausl({ backend:
  * 'wasm' | 'auto' })` past the auto-adapt threshold once #686 lands)
  * pay the WASM bundle cost.
  *
  * The cost shape:
  *
- *   - `@causljs/core` main bundle: tiny loader stub (~1 KB).
- *   - `@causljs/core/wasm`: ~60–120 KB compressed WASM module + ~5 KB
+ *   - `@causl/core` main bundle: tiny loader stub (~1 KB).
+ *   - `@causl/core/wasm`: ~60–120 KB compressed WASM module + ~5 KB
  *     of JS bindings, fetched on demand.
  *
  * For this skeleton (PR #684), the WASM artifacts produced by #682
@@ -150,7 +150,7 @@ export interface Bridge {
  * SPEC §6 statechart-extension-point seam types.
  *
  * Re-exported from `packages/core/src/backend.ts` (the source-of-truth
- * declarations) so the `@causljs/core/wasm` entry point resolves to the
+ * declarations) so the `@causl/core/wasm` entry point resolves to the
  * canonical originals rather than locally-declared mirrors. Prior
  * revisions of this file declared identical-but-distinct copies; for
  * a semver-major / 0.9.0 ship the types must collapse to one
@@ -158,7 +158,7 @@ export interface Bridge {
  * cannot drift between barrels (issue #1121).
  *
  * The re-export form contributes zero runtime bytes — `tsup --dts`
- * elides `export type` statements at emit time — so the `@causljs/core/wasm`
+ * elides `export type` statements at emit time — so the `@causl/core/wasm`
  * §14.2 bundle-size cell is unaffected.
  *
  * @see {@link https://github.com/iasbuilt/causl/issues/1121} — type-canonicality cleanup.
@@ -232,7 +232,7 @@ export interface WasmBackendOptions {
    * esbuild 0.20 + `--loader:.wasm=file`, and Node 22+ ESM).
    *
    * Set this to a CDN URL (e.g.
-   * `https://cdn.jsdelivr.net/npm/@causljs/core@<ver>/wasm/`) when
+   * `https://cdn.jsdelivr.net/npm/@causl/core@<ver>/wasm/`) when
    * the host CSP `connect-src` directive forbids same-origin
    * fetches of `.wasm` blobs. Adopters MUST whitelist the chosen
    * origin explicitly — the loader does not auto-fallback.
@@ -254,7 +254,7 @@ export interface WasmBackendOptions {
    * comparison, and the gate works around it by threading the same
    * name through both engines.
    *
-   * Defaults to `'@causljs/core/wasm:<bridge>'` so unrelated callers
+   * Defaults to `'@causl/core/wasm:<bridge>'` so unrelated callers
    * cannot accidentally collide with a TS-engine instance that uses
    * the default-minted name. Adopters who want migration between TS
    * and WASM backends pass the same `name` to `createCausl({ name })`
@@ -495,7 +495,7 @@ function bridgeArtifactSegment(bridge: BridgeId): string {
  *
  * @example
  * ```ts
- * import { loadWasmBackend } from '@causljs/core/wasm'
+ * import { loadWasmBackend } from '@causl/core/wasm'
  *
  * const backend = await loadWasmBackend()
  * const commit = backend.commit('intent', new Map([['x', 1]]))
@@ -526,7 +526,7 @@ export class WasmBackendUnavailableError extends Error {
   readonly code = 'CAUSL_WASM_NOT_BUILT' as const
   constructor(bridge: BridgeId) {
     super(
-      `@causljs/core/wasm: backend artifact for bridge '${bridge}' is not yet built. ` +
+      `@causl/core/wasm: backend artifact for bridge '${bridge}' is not yet built. ` +
         `WASM support is gated on issues #682, #683, and #693; until those land, ` +
         `pin backend: 'js' or use the default auto path which stays on the TS engine.`,
     )
@@ -572,7 +572,7 @@ export class RustSsotDowngradedError extends Error {
   readonly code = RUST_SSOT_DOWNGRADE_ERROR_CODE
   constructor(divergenceDetail: string) {
     super(
-      `@causljs/core/wasm: engine: 'rust-ssot' graph sticky-downgraded to ` +
+      `@causl/core/wasm: engine: 'rust-ssot' graph sticky-downgraded to ` +
         `'js-ssot' (Decision 6 tier 2, K=1 fail-safe) after a per-flush ` +
         `byte-divergence. No further Rust promotion will be attempted for ` +
         `this graph's lifetime; the JS engine remains the canonical ` +
@@ -713,7 +713,7 @@ export interface BatchedFlushBridge {
  *
  * Passed via `createCausl({ batchedFlush })` (auto-backend path) or
  * `loadWasmBackend({ batchedFlush })` (direct path). Per-graph, NOT
- * global (option-c doc §2.3) — multi-graph adopters (`@causljs/sync`,
+ * global (option-c doc §2.3) — multi-graph adopters (`@causl/sync`,
  * embedded use-cases) opt in per graph without cross-graph coupling.
  *
  * **Omitting `batchedFlush` entirely is byte-identical to dev
@@ -1853,7 +1853,7 @@ class WasmBackend implements BackendEngine {
 
   /**
    * Internal-API migration hydrate (issue #1090). Routes through
-   * `@causljs/core/internal`'s `_migrateFrom(graph, snap)` so the
+   * `@causl/core/internal`'s `_migrateFrom(graph, snap)` so the
    * wrapped TS engine adopts the snapshot WITHOUT publishing the
    * synthetic `'hydrate'` commit record. The migration boundary
    * itself isn't a commit; `now` starts where the snapshot left off

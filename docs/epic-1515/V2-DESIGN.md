@@ -202,7 +202,7 @@ Rationale:
    seam (CONSTRAINTS §1b row) is the natural future promotion point
    without coupling.
 3. **An env/build flag is rejected** because it is not per-graph.
-   Multi-graph adopters (`@causljs/sync`, embedded) must be able to
+   Multi-graph adopters (`@causl/sync`, embedded) must be able to
    opt one graph into rust-ssot without cross-graph coupling —
    exactly the per-graph constraint option-c §2.3 pinned for
    `batchedFlush`. A build flag also makes the rollback story
@@ -405,7 +405,7 @@ for option (c), now checked against the rust-ssot swap:
    default stays JS-SSOT.** The band only moves if rust-ssot
    becomes the default, which is the *tripwire-gated future
    decision explicitly out of #1515 scope*. The §17.5 lower-bound
-   clause already names "promotion of the opt-in `@causljs/core/wasm`
+   clause already names "promotion of the opt-in `@causl/core/wasm`
    substrate to the default engine" as the candidate that would
    "deserve a SPEC §17 amendment of its own" (SPEC §17.5). That
    amendment belongs to the *future promotion decision*, not to

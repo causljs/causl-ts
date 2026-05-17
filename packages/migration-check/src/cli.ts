@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * causljs-migration-check CLI — `npx @causljs/migration-check [path]`
+ * causl-migration-check CLI — `npx @causl/migration-check [path]`
  *
  * Exit-code contract (RULE_CATALOGUE.md §Severity meanings):
  *
@@ -33,7 +33,7 @@ main().then(
     process.exit(code)
   },
   (err) => {
-    process.stderr.write(`causljs-migration-check: ${err}\n`)
+    process.stderr.write(`causl-migration-check: ${err}\n`)
     process.exit(2)
   },
 )

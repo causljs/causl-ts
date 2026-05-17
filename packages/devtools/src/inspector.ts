@@ -16,7 +16,7 @@
  * recomputes.
  */
 
-import type { Graph, GraphTime, Node, Explanation, Unsubscribe } from '@causljs/core'
+import type { Graph, GraphTime, Node, Explanation, Unsubscribe } from '@causl/core'
 
 /**
  * Capability handed to {@link inspect} and {@link watchInspect}.

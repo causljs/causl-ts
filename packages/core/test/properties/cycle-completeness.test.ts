@@ -33,11 +33,11 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { createCausl, type Node } from '../../src/index.js'
-import { buildPropertyDag, propertyDag } from '@causljs/core-testing-internal'
+import { buildPropertyDag, propertyDag } from '@causl/core-testing-internal'
 import { propertyOptions } from './seed.js'
 
 // =====================================================================
-// DAG generator: imported from `@causljs/core-testing-internal` (the
+// DAG generator: imported from `@causl/core-testing-internal` (the
 // shared seam — EPIC #285 sub-issue #297). Local aliases preserve
 // the call-site naming the rest of the file uses.
 // =====================================================================

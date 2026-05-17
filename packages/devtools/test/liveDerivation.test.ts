@@ -14,7 +14,7 @@
  * subscribers observe each swap as a regular value emission.
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { liveDerived } from '../src/index.js'
 

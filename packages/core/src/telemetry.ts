@@ -157,7 +157,7 @@ export interface EngineTelemetry {
    * Count of user-registered input nodes — excludes the engine-owned
    * `commitLog` derived. Maintained as a running counter; bumps on
    * `graph.input(...)` and decrements on `dispose(graph, inputNode)`
-   * via `@causljs/core/internal`.
+   * via `@causl/core/internal`.
    */
   readonly inputs: number
   /**

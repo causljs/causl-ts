@@ -8,7 +8,7 @@
  * resolved value is stable until the next state transition."
  */
 
-import { createCausl } from '@causljs/core'
+import { createCausl } from '@causl/core'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../../src/index.js'
 

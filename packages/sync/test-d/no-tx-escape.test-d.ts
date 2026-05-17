@@ -14,7 +14,7 @@
  * resource transition routes through `graph.commit(intent, run)`,
  * and `Tx` (the transaction handle) cannot escape the `run` callback.
  * If a future API addition returns a `Tx` (or a partial that carries
- * its `set` method) from a public `@causljs/sync` export, the staged
+ * its `set` method) from a public `@causl/sync` export, the staged
  * writes can be deferred past Phase A — and the §3 atomicity
  * contract becomes a hope, not a guarantee.
  *
@@ -31,7 +31,7 @@
  */
 
 import { expectAssignable } from 'tsd'
-import type { Tx } from '@causljs/core'
+import type { Tx } from '@causl/core'
 import {
   ForbiddenResourceTransitionError,
   type ConflictKind,
@@ -67,14 +67,14 @@ const _setIsForbidden: false = false satisfies SetIsForbidden
 void _setIsForbidden
 void state
 
-// ─── Lock 3: Tx is NOT exported from @causljs/sync ────────────────────
+// ─── Lock 3: Tx is NOT exported from @causl/sync ────────────────────
 
-// The @causljs/sync barrel must NOT re-export Tx. Adopters who need
-// Tx must import from @causljs/core directly — that import path is
+// The @causl/sync barrel must NOT re-export Tx. Adopters who need
+// Tx must import from @causl/core directly — that import path is
 // the seam where the §17 commitment 7 review applies.
 //
 // Encoded as a type-level membership check. If `Tx` ever becomes a
-// key of the @causljs/sync barrel, this AssertEquals trips at compile
+// key of the @causl/sync barrel, this AssertEquals trips at compile
 // time — the union widens to include 'Tx' and the literal 'never'
 // assertion fails.
 type SyncBarrelKeys = keyof typeof import('../src/index.js')

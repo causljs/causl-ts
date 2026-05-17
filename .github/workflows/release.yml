@@ -1,20 +1,18 @@
 name: release
 
-# Tag-triggered publish to GitHub Packages (https://npm.pkg.github.com)
-# for every non-private @causljs/* package whose package.json carries a
-# publishConfig.registry pointed at GitHub Packages.
+# Tag-triggered publish to npmjs.com (https://registry.npmjs.org/) for
+# every non-private @causl/* package in the workspace.
 #
-# Trigger: push of an annotated tag matching `v*.*.*` (e.g. `v0.2.1`).
+# Trigger: push of an annotated tag matching `v*.*.*` (e.g. `v0.3.0`).
 # Manual trigger via workflow_dispatch is also available for re-runs.
 #
 # Required repo settings:
-#  - The repo (or its owning org) must allow GitHub Actions to publish
-#    packages: Settings → Actions → General → Workflow permissions →
-#    "Read and write permissions".
-#  - Each package's package.json declares `publishConfig.registry =
-#    https://npm.pkg.github.com`. The scope (`@causljs`) must match the
-#    GitHub org/user under which this repo lives, otherwise GitHub
-#    rejects the publish with 403.
+#  - Secret `NPM_TOKEN` (Settings → Secrets and variables → Actions →
+#    New repository secret). Must be an npmjs.com "Automation" token
+#    (NOT "Read-only") with publish permission on the @causl scope.
+#    Generate at https://www.npmjs.com/settings/<user>/tokens.
+#  - The `@causl` npmjs.com organization must exist and your account
+#    must be a maintainer with publish rights on the scope.
 
 on:
   push:
@@ -33,11 +31,15 @@ concurrency:
 
 jobs:
   publish:
-    name: Publish @causljs/* to GitHub Packages
+    name: Publish @causl/* to npmjs.com
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      # `id-token: write` is needed if/when we enable npm provenance
+      # (publishConfig.provenance: true). Cheap to grant unconditionally
+      # so adopters can flip the package.json switch without revisiting
+      # this workflow. See https://docs.npmjs.com/generating-provenance-statements
+      id-token: write
 
     steps:
       - name: Checkout
@@ -48,12 +50,12 @@ jobs:
         # to avoid ERR_PNPM_BAD_PM_VERSION when the two diverge.
         uses: pnpm/action-setup@v4
 
-      - name: Setup Node 20 (with GitHub Packages registry)
+      - name: Setup Node 20 (with npmjs.com registry)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@causljs'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@causl'
           cache: 'pnpm'
 
       - name: Install
@@ -63,20 +65,22 @@ jobs:
         run: pnpm -r --filter './packages/**' run build
 
       # `pnpm publish -r` walks every workspace package, honours each
-      # package.json's `private: true` (skips them), uses the
-      # publishConfig.registry override, and rewrites `workspace:*`
-      # ranges to literal versions on publish. `--no-git-checks` skips
-      # the "working tree clean" gate (the tag commit IS the clean
-      # state, but pnpm sometimes flags the .npmrc rewrite from
-      # setup-node as dirty).
+      # package.json's `private: true` (skips them), rewrites
+      # `workspace:*` ranges to literal versions on publish, and posts
+      # to whatever registry-url setup-node wrote into ~/.npmrc.
+      # `--no-git-checks` skips the "working tree clean" gate (the tag
+      # commit IS the clean state, but pnpm sometimes flags the
+      # .npmrc rewrite as dirty). `--access public` is required the
+      # first time a scoped package is published or npm rejects with
+      # 402 "Payment Required" assuming you wanted a private package.
       - name: Publish (dry-run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
-        run: pnpm -r --filter './packages/**' publish --no-git-checks --dry-run
+        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks --dry-run
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != 'true') }}
-        run: pnpm -r --filter './packages/**' publish --no-git-checks
+        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

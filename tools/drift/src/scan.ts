@@ -47,7 +47,7 @@ const PATTERNS: readonly Pattern[] = [
     category: 'redux-hook',
     regex: /\b(useSelector|useDispatch|useStore)\s*\(/g,
     token: (m) => m[1] ?? m[0],
-    suggestion: 'Replace with useCausl / useDispatch (typed) from @causljs/react.',
+    suggestion: 'Replace with useCausl / useDispatch (typed) from @causl/react.',
   },
   {
     category: 'mobx-observer',

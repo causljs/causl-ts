@@ -57,7 +57,7 @@ import {
   buildPropertyDag,
   propertyDag,
   propertyTrials,
-} from '@causljs/core-testing-internal'
+} from '@causl/core-testing-internal'
 
 describe('cascade-task #3 — fused affected/indegree in recomputeAffected', () => {
   /**

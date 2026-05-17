@@ -6,7 +6,7 @@
  * Promise contract for the `loading` arm and the `idle` arm.
  */
 
-import { createCausl, type Graph } from '@causljs/core'
+import { createCausl, type Graph } from '@causl/core'
 import { render, screen, waitFor } from '@testing-library/react'
 import { Component, Suspense, type ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'

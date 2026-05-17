@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * Typed-array projection hook for `@causljs/react` (#688, sub-task of
+ * Typed-array projection hook for `@causl/react` (#688, sub-task of
  * #680). {@link useCauslTypedArrayNode} subscribes to a single
  * {@link Node} whose value is bulk numeric data and returns a typed
  * array view (`Float64Array`, `Uint8Array`, `Int32Array`, ...) that
@@ -48,8 +48,8 @@
  * @see {@link https://github.com/iasbuilt/causl/issues/1031} — `loadWasmBackend()` loader stub.
  */
 
-import type { Node } from '@causljs/core'
-import { __causlAdapterRead } from '@causljs/core/internal'
+import type { Node } from '@causl/core'
+import { __causlAdapterRead } from '@causl/core/internal'
 import { useCallback, useContext, useDebugValue, useRef, useSyncExternalStore } from 'react'
 import { CauslContext } from './context.js'
 
@@ -81,7 +81,7 @@ export type CauslTypedArrayCtor<T extends CauslTypedArray> = {
 
 /**
  * WASM-backend availability probe — resolved once at module load via
- * {@link loadWasmBackend} from `@causljs/core/wasm`. The hook reads
+ * {@link loadWasmBackend} from `@causl/core/wasm`. The hook reads
  * this synchronously after the first render via a one-shot effect to
  * decide whether to take the zero-copy WASM-memory path or the
  * JS-engine fallback.
@@ -117,12 +117,12 @@ let wasmBackendProbe: Promise<boolean> | null = null
  * resolves to `true` if a backend is reachable and `false` if
  * `loadWasmBackend()` throws (or the loader module itself is
  * unavailable, e.g. when the host bundler tree-shook the
- * `@causljs/core/wasm` subpath).
+ * `@causl/core/wasm` subpath).
  *
  * @remarks
- * The dynamic `import('@causljs/core/wasm')` is deliberate: the
+ * The dynamic `import('@causl/core/wasm')` is deliberate: the
  * subpath is an opt-in entry point and should not be force-loaded by
- * `@causljs/react`'s main bundle. Bundlers that exclude the subpath
+ * `@causl/react`'s main bundle. Bundlers that exclude the subpath
  * (or set up CSP forbidding wasm fetch) see the dynamic-import
  * rejection and the hook falls back cleanly to the JS engine.
  *
@@ -136,7 +136,7 @@ function probeWasmBackend(): Promise<boolean> {
       // are the seam the WASM artefacts plug into; until they ship,
       // `loadWasmBackend()` throws `WasmBackendUnavailableError` and
       // the fallback path takes over.
-      const mod = (await import('@causljs/core/wasm')) as {
+      const mod = (await import('@causl/core/wasm')) as {
         loadWasmBackend: () => Promise<unknown>
       }
       await mod.loadWasmBackend()

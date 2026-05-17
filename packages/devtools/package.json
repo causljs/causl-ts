@@ -1,7 +1,8 @@
 {
   "name": "@causl/devtools",
   "version": "0.1.0",
-  "description": "Inspection primitives for Causl \u2014 commit log, node inspector, why-did-this-update views.",
+  "description": "Inspection primitives for Causl — commit log, node inspector, why-did-this-update views.",
+  "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

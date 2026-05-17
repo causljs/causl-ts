@@ -1,6 +1,6 @@
 {
   "name": "@causl/formula",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
     "dev": "tsup src/index.ts --format esm --dts --watch",
@@ -36,5 +39,6 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  }
+  },
+  "sideEffects": false
 }

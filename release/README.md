@@ -9,11 +9,11 @@ path**; no WASM artefacts, no native checker binaries.
 
 | Package | Runtime (brotli) | + Types (brotli) | Raw on disk |
 | --- | ---: | ---: | ---: |
-| **@causl/core** v0.2.0 (`packages/causl-core/`) | 21.43 KiB | 47.50 KiB | 297.0 KiB |
+| **@causl/core** v0.2.0 (`packages/causl-core/`) | 21.70 KiB | 47.50 KiB | 298.6 KiB |
 | **@causl/sync** v0.2.0 (`packages/causl-sync/`) | 3.83 KiB | 2.38 KiB | 20.0 KiB |
 | **@causl/react** v0.2.0 (`packages/causl-react/`) | 2.27 KiB | 12.73 KiB | 56.2 KiB |
 | **@causl/formula** v0.2.0 (`packages/causl-formula/`) | 5.03 KiB | 9.22 KiB | 52.8 KiB |
-| **TOTAL** | **32.57 KiB** | 71.83 KiB | 426.0 KiB |
+| **TOTAL** | **32.83 KiB** | 71.83 KiB | 427.6 KiB |
 
 **Runtime (brotli)** is the headline number — the compressed `.js`
 that an adopter's browser fetches over the wire after the bundler
@@ -28,7 +28,7 @@ the browser at runtime.
 Useful only as a sanity check; not a meaningful "release size" number.
 
 Total runtime payload across the four bundled packages:
-**32.57 KiB (brotli)**.
+**32.83 KiB (brotli)**.
 
 ## Install (per package, from this directory)
 

@@ -750,6 +750,9 @@ function parseCauslModel(input) {
   return { ok: true, value: input };
 }
 
+// src/env.ts
+var NODE_ENV_IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 // src/graph.ts
 var DEFAULT_COMMIT_HISTORY_CAP = 0;
 var DEFAULT_SNAPSHOT_RETENTION_CAP = 0;
@@ -830,7 +833,7 @@ function createCausl(options = {}) {
   const freezeIfDev = makeFreezeIfDev(flags);
   const enableH1HazardWarning = options.enableH1HazardWarning ?? false;
   let h1HazardTrack = null;
-  if (process.env.NODE_ENV !== "production") {
+  if (!NODE_ENV_IS_PRODUCTION) {
     h1HazardTrack = enableH1HazardWarning ? [] : null;
   }
   let adapterReadDepth = 0;
@@ -1487,7 +1490,7 @@ function createCausl(options = {}) {
   }
   function read(node) {
     const value = readEntry(node);
-    if (process.env.NODE_ENV !== "production") {
+    if (!NODE_ENV_IS_PRODUCTION) {
       if (h1HazardTrack !== null && activeReadTracker === null && adapterReadDepth === 0 && value !== null && (typeof value === "object" || typeof value === "function")) {
         h1HazardTrack.push({
           ref: new WeakRef(value),
@@ -1503,7 +1506,7 @@ function createCausl(options = {}) {
   }
   const H1_HAZARD_TRACK_CAP = 4096;
   function pruneH1HazardTrack() {
-    if (process.env.NODE_ENV === "production") return;
+    if (NODE_ENV_IS_PRODUCTION) return;
     if (h1HazardTrack === null) return;
     let write = 0;
     for (let read2 = 0; read2 < h1HazardTrack.length; read2++) {
@@ -1515,7 +1518,7 @@ function createCausl(options = {}) {
     h1HazardTrack.length = write;
   }
   function checkH1HazardOnCommit() {
-    if (process.env.NODE_ENV === "production") return;
+    if (NODE_ENV_IS_PRODUCTION) return;
     if (h1HazardTrack === null || h1HazardTrack.length === 0) return;
     let write = 0;
     for (let read2 = 0; read2 < h1HazardTrack.length; read2++) {
@@ -1533,7 +1536,7 @@ function createCausl(options = {}) {
     h1HazardTrack.length = write;
   }
   function runInAdapterReadMode(fn) {
-    if (process.env.NODE_ENV === "production") {
+    if (NODE_ENV_IS_PRODUCTION) {
       return fn();
     }
     adapterReadDepth++;
@@ -1541,6 +1544,37 @@ function createCausl(options = {}) {
       return fn();
     } finally {
       adapterReadDepth--;
+    }
+  }
+  function recordDerivedRollback(h, id, makeRec) {
+    const m = h.map;
+    if (m !== void 0) {
+      if (!m.has(id)) m.set(id, makeRec());
+      return;
+    }
+    if (h.singleId === void 0) {
+      h.singleId = id;
+      h.single = makeRec();
+      return;
+    }
+    if (h.singleId === id) {
+      return;
+    }
+    const promoted = /* @__PURE__ */ new Map();
+    promoted.set(h.singleId, h.single);
+    promoted.set(id, makeRec());
+    h.map = promoted;
+    h.singleId = void 0;
+    h.single = void 0;
+  }
+  function derivedRollbackIsEmpty(h) {
+    return h.map === void 0 && h.singleId === void 0;
+  }
+  function forEachDerivedRollback(h, fn) {
+    if (h.singleId !== void 0) fn(h.singleId, h.single);
+    const m = h.map;
+    if (m !== void 0) {
+      for (const [id, prior] of m) fn(id, prior);
     }
   }
   function recomputeAffected(seedChanged, rollback) {
@@ -1625,19 +1659,12 @@ function createCausl(options = {}) {
       const wasComputed = e.computed;
       const prevDeps = e.deps;
       if (rollback !== void 0) {
-        let m = rollback.map;
-        if (m === void 0) {
-          m = /* @__PURE__ */ new Map();
-          rollback.map = m;
-        }
-        if (!m.has(id)) {
-          m.set(id, {
-            value: e.value,
-            deps: e.deps,
-            computed: e.computed,
-            lastTime: e.lastTime
-          });
-        }
+        recordDerivedRollback(rollback, id, () => ({
+          value: e.value,
+          deps: e.deps,
+          computed: e.computed,
+          lastTime: e.lastTime
+        }));
       }
       computeDerived(e);
       processedThisPass.add(id);
@@ -1670,25 +1697,18 @@ function createCausl(options = {}) {
       if (!e || e.kind !== "derived") continue;
       const before = e.value;
       const wasComputed = e.computed;
-      let m = rollback.map;
-      if (m === void 0) {
-        m = /* @__PURE__ */ new Map();
-        rollback.map = m;
-      }
-      if (!m.has(id)) {
-        m.set(id, {
-          value: e.value,
-          // #703 Win 3 — capture by reference; `setDeps` swaps the
-          // reference rather than mutating in place, so the prior
-          // set stays a valid pre-recompute snapshot for the
-          // commit() catch-arm rollback. Same invariant as Phase D's
-          // capture site above; same property-test gate
-          // (`test/properties/setDeps-immutability.test.ts`).
-          deps: e.deps,
-          computed: e.computed,
-          lastTime: e.lastTime
-        });
-      }
+      recordDerivedRollback(rollback, id, () => ({
+        value: e.value,
+        // #703 Win 3 — capture by reference; `setDeps` swaps the
+        // reference rather than mutating in place, so the prior
+        // set stays a valid pre-recompute snapshot for the
+        // commit() catch-arm rollback. Same invariant as Phase D's
+        // capture site above; same property-test gate
+        // (`test/properties/setDeps-immutability.test.ts`).
+        deps: e.deps,
+        computed: e.computed,
+        lastTime: e.lastTime
+      }));
       computeDerived(e);
       if (!wasComputed || !Object.is(before, e.value)) {
         changedThisPhase.push(id);
@@ -1821,6 +1841,10 @@ function createCausl(options = {}) {
     const inputRollbackEntries = [];
     const inputRollbackPriorValues = [];
     const inputRollbackPriorLastWrite = [];
+    let fastInputRollbackActive = false;
+    let fastInputRollbackEntry;
+    let fastInputRollbackPriorValue;
+    let fastInputRollbackPriorLastWrite = 0;
     const beforeNow = now;
     let txAlive = true;
     const tx = {
@@ -1856,7 +1880,11 @@ function createCausl(options = {}) {
       }
     };
     const changedInputIds = [];
-    const derivedRollback = { map: void 0 };
+    const derivedRollback = {
+      map: void 0,
+      singleId: void 0,
+      single: void 0
+    };
     let commitHistorySnapshot = null;
     const commitLogValueBeforeF4 = commitLogEntry.value;
     const commitLogLastTimeBeforeF4 = commitLogEntry.lastTime;
@@ -1891,7 +1919,19 @@ function createCausl(options = {}) {
       }
       const stagedLen = stagedWriteEntries.length;
       let rollbackLen = inputRollbackEntries.length;
-      if (stagedLen > 0) {
+      if (stagedLen === 1 && rollbackLen === 0) {
+        const e = stagedWriteEntries[0];
+        const v = stagedWriteValues[0];
+        if (!Object.is(e.value, v)) {
+          fastInputRollbackActive = true;
+          fastInputRollbackEntry = e;
+          fastInputRollbackPriorValue = e.value;
+          fastInputRollbackPriorLastWrite = e.lastWriteTime;
+          e.value = v;
+          inputSerializableMemo.delete(e.id);
+          changedInputIds.push(e.id);
+        }
+      } else if (stagedLen > 0) {
         const cap = rollbackLen + stagedLen;
         inputRollbackEntries.length = cap;
         inputRollbackPriorValues.length = cap;
@@ -1916,6 +1956,9 @@ function createCausl(options = {}) {
         }
       }
       now += 1;
+      if (fastInputRollbackActive) {
+        fastInputRollbackEntry.lastWriteTime = now;
+      }
       for (let i = 0, n = inputRollbackEntries.length; i < n; i++) {
         inputRollbackEntries[i].lastWriteTime = now;
       }
@@ -1975,11 +2018,17 @@ function createCausl(options = {}) {
       if (commitObservers.size > 0) {
         phaseH_dispatchCommitObservers(c, now);
       }
-      if (process.env.NODE_ENV !== "production") {
+      if (!NODE_ENV_IS_PRODUCTION) {
         if (h1HazardTrack !== null) checkH1HazardOnCommit();
       }
       return c;
     } catch (err) {
+      if (fastInputRollbackActive) {
+        const e = fastInputRollbackEntry;
+        e.value = fastInputRollbackPriorValue;
+        inputSerializableMemo.delete(e.id);
+        e.lastWriteTime = fastInputRollbackPriorLastWrite;
+      }
       for (let i = 0, n = inputRollbackEntries.length; i < n; i++) {
         const e = inputRollbackEntries[i];
         e.value = inputRollbackPriorValues[i];
@@ -1989,8 +2038,8 @@ function createCausl(options = {}) {
       for (let i = 0, n = stagedWriteEntries.length; i < n; i++) {
         stagedWriteEntries[i].lastStagedAt = -1;
       }
-      if (derivedRollback.map !== void 0) {
-        for (const [id, prior] of derivedRollback.map) {
+      if (!derivedRollbackIsEmpty(derivedRollback)) {
+        forEachDerivedRollback(derivedRollback, (id, prior) => {
           const e = entries.get(id);
           if (e && e.kind === "derived") {
             e.value = prior.value;
@@ -1998,7 +2047,7 @@ function createCausl(options = {}) {
             e.computed = prior.computed;
             e.lastTime = prior.lastTime;
           }
-        }
+        });
       }
       if (commitHistorySnapshot !== null) {
         commitHistory.length = 0;
@@ -2080,7 +2129,11 @@ function createCausl(options = {}) {
       }
     };
     const changedInputIds = [];
-    const derivedRollback = { map: void 0 };
+    const derivedRollback = {
+      map: void 0,
+      singleId: void 0,
+      single: void 0
+    };
     let prediction = null;
     let predictedError = null;
     try {
@@ -2154,8 +2207,8 @@ function createCausl(options = {}) {
         inputSerializableMemo.delete(e.id);
         e.lastWriteTime = inputRollbackPriorLastWrite[i];
       }
-      if (derivedRollback.map !== void 0) {
-        for (const [id, prior] of derivedRollback.map) {
+      if (!derivedRollbackIsEmpty(derivedRollback)) {
+        forEachDerivedRollback(derivedRollback, (id, prior) => {
           const e = entries.get(id);
           if (e && e.kind === "derived") {
             e.value = prior.value;
@@ -2163,7 +2216,7 @@ function createCausl(options = {}) {
             e.computed = prior.computed;
             e.lastTime = prior.lastTime;
           }
-        }
+        });
       }
       now = beforeNow;
       txAlive = false;

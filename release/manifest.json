@@ -6,9 +6,9 @@
       "name": "@causl/core",
       "version": "0.2.0",
       "slug": "causl-core",
-      "bytes": 304160,
-      "runtime_raw_bytes": 114423,
-      "runtime_compressed_bytes": 21949,
+      "bytes": 305790,
+      "runtime_raw_bytes": 116053,
+      "runtime_compressed_bytes": 22216,
       "types_raw_bytes": 189737,
       "types_compressed_bytes": 48635,
       "compression": "brotli"

@@ -19,5 +19,6 @@
   ],
   "dependencies": {
     "@causl/core": "^0.2.0"
-  }
+  },
+  "sideEffects": false
 }

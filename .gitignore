@@ -73,6 +73,12 @@ node_modules/
 
 # Build output
 dist/
+# …with one carve-out: the `release/` tree IS the per-package shippable
+# artefact, committed to the `release` branch by `tools/release/release.py`.
+# Re-include the directory itself (parent-exclusion override) and every
+# file under it (content re-inclusion).
+!release/packages/*/dist/
+!release/packages/*/dist/**
 build/
 out/
 .next/

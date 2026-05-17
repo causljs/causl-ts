@@ -19,9 +19,21 @@
  *     option keyed by relative file path so prohibitively-slow or
  *     coverage-math-pinned properties can opt out with a documented
  *     reason at the call site.
+ *
+ * - `no-graph-upcast` (issue #9):
+ *     Closes the S-3 third gate from SPEC.async §S-3 / EPIC-12. Flags
+ *     `value as Graph` / `value as unknown as Graph` /
+ *     `value as any as Graph` upcasts in source — the only escape hatch
+ *     by which adopter code can silence the compile-time gate and
+ *     smuggle a full-Graph reference past the narrowing boundary
+ *     before the runtime `narrowCapability` Proxy gets a chance to
+ *     fire. Brand-casts (`as GraphTime`, `as GraphSnapshot`, etc.) are
+ *     NOT flagged. The rule has an `allowlist` option for the runtime-
+ *     gate test fixtures that deliberately synthesise the leak shape.
  */
 
 import noHardcodedPropertyTrials from './rules/no-hardcoded-property-trials.js'
+import noGraphUpcast from './rules/no-graph-upcast.js'
 
 const plugin = {
   meta: {
@@ -30,6 +42,7 @@ const plugin = {
   },
   rules: {
     'no-hardcoded-property-trials': noHardcodedPropertyTrials,
+    'no-graph-upcast': noGraphUpcast,
   },
 }
 

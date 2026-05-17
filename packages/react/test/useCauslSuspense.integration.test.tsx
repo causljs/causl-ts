@@ -508,13 +508,48 @@ describe('Suspense integration scenarios (#128)', () => {
     await waitFor(() => expect(screen.getByTestId('v').textContent).toBe('42'))
   })
 
-  // TODO(review-205, P0): the `idle → throw Error` contract regression
-  // (see PR #183 review comments, action items for #182) needs a
-  // failing test that locks in the *correct* behaviour (suspend, not
-  // error). The 5 todos above are promoted by #233; this 6th stays
-  // in place because the spec decision is still open and tracked
-  // by #228 (which depends on #224 landing the source-side fix).
-  it.todo(
-    'idle contract — `idle` resource suspends rather than throwing (currently throws; awaiting #228/#224)',
-  )
+  /**
+   * idle contract (closes #7) — `idle` resources MUST suspend (throw a
+   * thenable), not error. Two assertions:
+   *
+   *   1. Suspense fallback wins; the error boundary stays clean.
+   *   2. The value thrown by the hook is a thenable (has a `.then`
+   *      method) and is NOT an `Error` instance. This pins the
+   *      Suspense protocol — React keys off `typeof thrown.then ===
+   *      'function'` to decide "suspend"; an Error instance would be
+   *      routed to the nearest error boundary instead.
+   */
+  it('idle contract — `idle` resource suspends rather than throwing (closes #7)', () => {
+    const g = createCausl()
+    const r = g.input<SuspendableResource<number>>('r', { state: 'idle' })
+    const thrown: unknown[] = []
+    function View() {
+      try {
+        const v = useCauslSuspense((graph) => graph.read(r))
+        return <span data-testid="v">{v}</span>
+      } catch (x) {
+        thrown.push(x)
+        throw x
+      }
+    }
+    render(
+      <ErrorBoundary fallback={(e) => <span data-testid="err">{(e as Error).message}</span>}>
+        <Suspense fallback={<span data-testid="loading">…</span>}>
+          <View />
+        </Suspense>
+      </ErrorBoundary>,
+      { wrapper: harness(g) },
+    )
+    // Suspense wins, not the error boundary.
+    expect(screen.getByTestId('loading')).toBeTruthy()
+    expect(screen.queryByTestId('err')).toBeNull()
+    expect(screen.queryByTestId('v')).toBeNull()
+    // The thrown value is a thenable (React's Suspense protocol),
+    // never an Error (which would be routed to the error boundary).
+    expect(thrown.length).toBeGreaterThanOrEqual(1)
+    for (const t of thrown) {
+      expect(t).not.toBeInstanceOf(Error)
+      expect(typeof (t as { then?: unknown }).then).toBe('function')
+    }
+  })
 })

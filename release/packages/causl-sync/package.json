@@ -1,0 +1,23 @@
+{
+  "name": "@causl/sync",
+  "version": "0.2.0",
+  "description": "Async resource and conflict bindings for Causl — resource(key, loader), staleness guards, conflict registry.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "@causl/core": "^0.2.0"
+  }
+}

@@ -1,31 +1,70 @@
 #!/usr/bin/env sh
-# pre-push — heavier CI-parity gates that would slow an interactive
-# commit too much but are cheap enough to run before a network push.
+# pre-push — heavier CI-parity gates that don't fit in pre-commit's
+# interactive budget. The fast/medium CI gates (typecheck, build, lint,
+# size, vendor-manifest) already ran in .husky/pre-commit; this hook
+# adds the network-adjacent gates that need npm install / fixture
+# builds before the push lands.
 #
-# CI ↔ pre-push parity:
-#   - `pnpm run build` + `pnpm run size` mirrors the only TypeScript-side
-#     gate that actively blocks PR merge today, posted by
-#     `.github/workflows/bundle-budget.yml` via the
-#     `andresz1/size-limit-action@v1` action. The action internally runs
-#     `pnpm install` + the `build_script: build` + `pnpm run size`; the
-#     install half is skipped here because a developer pushing changes
-#     already has node_modules resolved against the lockfile.
+# Escape hatches:
+#   - `SKIP_PREPUSH=1 git push ...`    — skip the hook body entirely.
+#   - `git push --no-verify`           — git-native bypass.
 #
-# Skipped on this host vs CI:
-#   - `wasm.yml` (wasm-pack build matrix + size cells on .wasm output)
-#     and `four-way-classifier.yml` (cargo test/run of
-#     tools/enumerator/diff) require a Rust toolchain + wasm-pack +
-#     binaryen 119. Both workflows are paths-filtered or defensively
-#     skip when their inputs are absent, so the network-side check
-#     remains authoritative. Contributors touching those surfaces are
-#     expected to run the respective `pnpm wasm:build` / `cargo test`
-#     commands by hand.
+# ─── CI ↔ pre-push parity ────────────────────────────────────────────
 #
-# To skip ad-hoc (e.g. WIP push to a personal fork) use
-# `git push --no-verify`.
+# Workflow                              Job(s) mirrored here
+# ─────────────────────────────────────  ─────────────────────────────
+# wasm.yml :: bundler-interop matrix    e2e/bundler-interop/{webpack5,
+#                                       vite5,esbuild}-app: install +
+#                                       build + verify (bundle-no-
+#                                       wasm-leak invariant per #689).
+#
+# NOT mirrored locally (require non-pnpm toolchains; CI gate remains
+# authoritative):
+#   - wasm.yml cargo-check + wasm-pack matrix  — needs Rust + wasm-pack
+#                                                 + binaryen 119
+#   - four-way-classifier.yml                  — needs Rust + cargo
+#   - cross-backend-fuzz.yml                   — nightly cron only
+#
+# Tests are NOT mirrored here: the active CI lanes (main-fast,
+# bundle-budget, vendor-manifest) do not include `pnpm test:run`.
+# Tests live in `pnpm validate` for local manual use and in the
+# heavier release-lane verification that runs before publish.
 
-echo "pre-push: building all packages (mirrors bundle-budget.yml install/build)"
-pnpm run build
+if [ "${SKIP_PREPUSH:-0}" = "1" ]; then
+  echo "pre-push: SKIP_PREPUSH=1 set — skipping all hooks"
+  exit 0
+fi
 
-echo "pre-push: running size-limit gate (mirrors bundle-budget.yml \`pnpm run size\`)"
-pnpm run size
+set -e
+
+# bundler-interop — mirrors wasm.yml's bundler-interop matrix
+# (webpack5-app, vite5-app, esbuild-app). The matrix legs each
+# `npm install --no-save` their deps from outside the pnpm
+# workspace (by design — fixtures must consume @causl/core the
+# way an external adopter would), then build, then verify the
+# bundle-no-wasm-leak invariant via `node verify.mjs`.
+#
+# Each leg costs ~15-30s wall-clock on first install (npm cache
+# warmups thereafter). Use SKIP_PREPUSH=1 if pushing a docs-only
+# or non-bundle-affecting change.
+if [ -d e2e/bundler-interop ]; then
+  echo "pre-push: building @causl/core (required by bundler-interop fixtures)"
+  pnpm --filter @causl/core run build
+
+  echo "pre-push: stubbing wasm-pkg artefacts (matches wasm.yml step)"
+  node e2e/bundler-interop/stub-wasm-pkg.mjs
+
+  for fixture in webpack5-app vite5-app esbuild-app; do
+    dir="e2e/bundler-interop/$fixture"
+    if [ ! -d "$dir" ]; then
+      echo "pre-push: $dir absent — skipping"
+      continue
+    fi
+    echo "pre-push: bundler-interop ($fixture) — npm install + build + verify"
+    (cd "$dir" && npm install --no-save --no-audit --no-fund && npm run build && npm run verify)
+  done
+else
+  echo "pre-push: e2e/bundler-interop/ absent — nothing to do"
+fi
+
+echo "pre-push: all gates green ✓"

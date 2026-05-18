@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# pre-push — heavier CI-parity gates that would slow an interactive
+# commit too much but are cheap enough to run before a network push.
+#
+# CI ↔ pre-push parity:
+#   - `pnpm run build` + `pnpm run size` mirrors the only TypeScript-side
+#     gate that actively blocks PR merge today, posted by
+#     `.github/workflows/bundle-budget.yml` via the
+#     `andresz1/size-limit-action@v1` action. The action internally runs
+#     `pnpm install` + the `build_script: build` + `pnpm run size`; the
+#     install half is skipped here because a developer pushing changes
+#     already has node_modules resolved against the lockfile.
+#
+# Skipped on this host vs CI:
+#   - `wasm.yml` (wasm-pack build matrix + size cells on .wasm output)
+#     and `four-way-classifier.yml` (cargo test/run of
+#     tools/enumerator/diff) require a Rust toolchain + wasm-pack +
+#     binaryen 119. Both workflows are paths-filtered or defensively
+#     skip when their inputs are absent, so the network-side check
+#     remains authoritative. Contributors touching those surfaces are
+#     expected to run the respective `pnpm wasm:build` / `cargo test`
+#     commands by hand.
+#
+# To skip ad-hoc (e.g. WIP push to a personal fork) use
+# `git push --no-verify`.
+
+echo "pre-push: building all packages (mirrors bundle-budget.yml install/build)"
+pnpm run build
+
+echo "pre-push: running size-limit gate (mirrors bundle-budget.yml \`pnpm run size\`)"
+pnpm run size

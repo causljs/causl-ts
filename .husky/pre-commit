@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# pre-commit — fast, per-staged-file checks that mirror the lightweight
+# half of the CI surface. Heavier CI gates (build + size, wasm-pack,
+# cross-backend property suites) run from .husky/pre-push instead so an
+# interactive commit stays sub-second on a typed edit.
+#
+# CI ↔ pre-commit parity:
+#   - eslint --fix on staged TS sources matches the lint convention CI
+#     enforces (see workflows-disabled/ci.yml `Lint` step, and
+#     `lint-staged` config in root package.json). lint-staged scopes the
+#     pass to staged files only so a commit that touches one file does
+#     not re-walk the whole tree.
+#   - vendor-manifest check matches `.github/workflows/vendor-manifest.yml`
+#     (paths-filtered on `causl-org/vendor/**` and the two scripts).
+#
+# Heavier CI checks live in .husky/pre-push:
+#   - `pnpm run build` + `pnpm run size` (matches `bundle-budget.yml`
+#     and the historical `size — bundle-size gate` step in CI).
+#
+# CI gates intentionally NOT mirrored locally:
+#   - wasm.yml — requires Rust toolchain + wasm-pack + binaryen 119.
+#     The workflow is itself defensive (skips legs when bridge crates
+#     or workspaces are absent); demanding the full chain on every
+#     contributor machine is out of scope for hook parity.
+#   - four-way-classifier.yml — requires Rust + cargo build of
+#     tools/enumerator/diff. Same toolchain rationale as wasm.yml.
+#   - cross-backend-fuzz.yml, release.yml, release-on-merge.yml —
+#     not gated on PR/push-to-main (cron / tag / release-branch only).
+
+# 1. lint-staged — eslint --fix on staged TS sources only.
+pnpm exec lint-staged
+
+# 2. vendor-manifest gate — only when vendored bytes or the refresh /
+#    check scripts are part of the staged set, mirroring the CI
+#    workflow's `paths:` filter.
+if git diff --cached --name-only --diff-filter=ACMR \
+    | grep -E '^(causl-org/vendor/|scripts/(refresh|check)-vendor-manifest\.sh$)' \
+    > /dev/null; then
+  echo "pre-commit: vendor paths staged — running scripts/check-vendor-manifest.sh"
+  bash scripts/check-vendor-manifest.sh
+fi

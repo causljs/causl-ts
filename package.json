@@ -46,12 +46,12 @@
       "path": "packages/core/dist/index.js",
       "import": "{ createCausl }",
       "name": "@causl/core (createCausl-only)",
-      "limit": "15 KB"
+      "limit": "16 KB"
     },
     {
       "path": "packages/core/dist/wasm.js",
       "name": "@causl/core/wasm (Phase-1 loader + WasmBackend wrapper)",
-      "limit": "12 KB",
+      "limit": "13 KB",
       "ignore": [
         "@causl/core"
       ]

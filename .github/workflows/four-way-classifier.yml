@@ -36,8 +36,20 @@ name: four-way-classifier
 #     archived as an artifact so reviewers can read the per-row
 #     verdict subset without re-running.
 
+# Triggers (CI split — see .github/workflows/main-fast.yml header):
+#   - PRs targeting `release` (merge-gate verification, with the same
+#     paths-filter so PRs that don't touch the classifier surface are
+#     unaffected)
+#   - push to `release` (post-merge re-verification)
+#   - Nightly cron (unchanged — daily ledger run)
+#   - workflow_dispatch (ad-hoc / re-run)
+#
+# Moved off the `main` lane on 2026-05-17 per the CI split: this is a
+# heavy classifier (Rust build + corpus walk + report generation), not
+# a build/lint gate.
 on:
   pull_request:
+    branches: [release]
     paths:
       - 'tools/enumerator/diff/**'
       - 'tools/enumerator/corpus/**'
@@ -50,6 +62,8 @@ on:
       - 'packages/core/wasm/**'
       - 'packages/core/test/properties/replay-determinism.test.ts'
       - '.github/workflows/four-way-classifier.yml'
+  push:
+    branches: [release]
   schedule:
     # Daily at 07:15 UTC, ten minutes after the apalache-diff job.
     - cron: '15 7 * * *'

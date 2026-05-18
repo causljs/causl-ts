@@ -842,6 +842,22 @@ function v2ByteCompareResult(
   return { equal: js === rust, js, rust }
 }
 
+/**
+ * Buffered-commit flush coordinator for the WASM backend's batch path.
+ *
+ * @remarks
+ * Bridges the per-commit {@link WasmStateMirror} updates onto a single
+ * `commit_batch` Rust call when either the count threshold ({@link BatchedFlush.afterN})
+ * or the time threshold ({@link BatchedFlush.intervalMs}) trips. Under
+ * the default `js-ssot` mode the buffer carries shadow inputs only and
+ * `commit_batch` is a no-op compare; under `rust-ssot` mode the buffer
+ * also carries the JS-canonical {@link Commit} per slot so the V2.2
+ * byte-identity guard (#1530) can diff the Rust projection against the
+ * SSOT JS result that `WasmBackend.commit()` already returned.
+ *
+ * @see {@link https://github.com/iasbuilt/causl/issues/1501} — C.3 PR 2 (time-trigger introduction).
+ * @see {@link https://github.com/iasbuilt/causl/issues/1530} — V2.2 byte-identity per-flush guard.
+ */
 export class BatchedFlush {
   /** Count-based flush threshold. `1` = flush every commit (default). */
   readonly afterN: number

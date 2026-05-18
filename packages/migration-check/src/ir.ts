@@ -46,6 +46,17 @@ export type DriftCategory =
   /** cross-source or causl-idiomatic finding (S-NN rules) */
   | 'cross-source'
 
+/**
+ * Single migration-drift finding emitted by {@link scanFile}.
+ *
+ * @remarks
+ * The shape carries everything a downstream dashboard or pre-commit
+ * gate needs to render an actionable diagnostic: the catalogue-stable
+ * `ruleId`, the file/line/column triple, the matched source token, and
+ * the human-facing `suggestion` that points to the corresponding
+ * RULE_CATALOGUE.md row. `severity` drives the CLI exit code via
+ * `severityToExitCode`.
+ */
 export interface DriftFinding {
   /** Stable rule ID from `docs/migration/RULE_CATALOGUE.md`. */
   readonly ruleId: RuleId

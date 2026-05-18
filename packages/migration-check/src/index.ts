@@ -35,6 +35,16 @@ export type {
   Severity,
 } from './catalogue.js'
 
+/**
+ * Caller options for {@link scanDirectory}.
+ *
+ * @remarks
+ * The directory walker has only two adopter-visible knobs: which file
+ * extensions to consume, and which path fragments to skip. Both have
+ * deliberate defaults that reflect "what an adopter actually wants" —
+ * see {@link scanDirectory} for the defaults and the rule-catalogue
+ * rationale for including `.mjs` / `.cjs` out of the box.
+ */
 export interface ScanOptions {
   /**
    * File extensions to scan; default
@@ -69,6 +79,23 @@ const ZERO_BY_SEVERITY: Record<Severity, number> = {
   'nice-to-have': 0,
 }
 
+/**
+ * Recursively scan a directory tree for migration drift.
+ *
+ * @param root - Absolute or relative path to the directory to scan. Used
+ *   as the base for the `relative` path stored on each finding.
+ * @param options - Optional {@link ScanOptions} overriding the default
+ *   extension set and skip list.
+ * @returns A {@link DriftReport} carrying the union of every per-file
+ *   finding plus the aggregated `byCategory` / `byRuleId` / `bySeverity`
+ *   counts and the `filesScanned` total.
+ *
+ * @remarks
+ * Each file is read once and dispatched through {@link scanFile} so the
+ * rule catalogue stays the single source of truth. Symbolic links are
+ * not followed beyond what `fs.readdir` returns; the entry-name match
+ * against {@link ScanOptions.skip} is substring-based, not glob-based.
+ */
 export async function scanDirectory(
   root: string,
   options: ScanOptions = {},

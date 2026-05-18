@@ -124,38 +124,9 @@
       "ignore": [
         "@causl/core"
       ]
-    },
-    {
-      "path": "packages/bench/fixtures/jotai-full.ts",
-      "name": "jotai (full import)",
-      "limit": "20 KB"
-    },
-    {
-      "path": "packages/bench/fixtures/jotai-min.ts",
-      "name": "jotai (atom-only)",
-      "limit": "20 KB"
-    },
-    {
-      "path": "packages/bench/fixtures/redux-toolkit-full.ts",
-      "name": "@reduxjs/toolkit (full import)",
-      "limit": "60 KB"
-    },
-    {
-      "path": "packages/bench/fixtures/redux-toolkit-min.ts",
-      "name": "@reduxjs/toolkit (configureStore-only)",
-      "limit": "60 KB"
-    },
-    {
-      "path": "packages/bench/fixtures/mobx-full.ts",
-      "name": "mobx (full import)",
-      "limit": "30 KB"
-    },
-    {
-      "path": "packages/bench/fixtures/mobx-min.ts",
-      "name": "mobx (observable+computed)",
-      "limit": "30 KB"
     }
   ],
+  "//size-limit-bench-fixtures": "The 6 competitor-baseline cells (jotai full+min, redux-toolkit full+min, mobx full+min) were dropped in #19 because the `packages/bench/fixtures/*.ts` sources moved out of this slice into the sibling `causljs/causl-bench` repo when the parent `iasbuilt/causl` monorepo was split. The cells are restored by an aggregator workflow that runs `pnpm size` across both repos — tracked separately from the per-slice budget gate enforced here. The deleted cells were: jotai full (≤20 KB), jotai atom-only (≤20 KB), @reduxjs/toolkit full (≤60 KB), @reduxjs/toolkit configureStore-only (≤60 KB), mobx full (≤30 KB), mobx observable+computed (≤30 KB).",
   "devDependencies": {
     "0x": "^6.0.0",
     "@changesets/cli": "^2.27.0",

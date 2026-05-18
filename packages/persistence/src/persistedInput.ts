@@ -157,6 +157,20 @@ export type PersistenceError =
  */
 export type PersistenceErrorHandler = (err: PersistenceError) => void
 
+/**
+ * Configuration for {@link persistedInput}.
+ *
+ * @typeParam T - Value type stored under {@link PersistedInputOptions.key}.
+ *
+ * @remarks
+ * The shape captures the four moving parts of write-through persistence
+ * — *where* (`key` + `storage`), *what version* (`version` + `migrate`),
+ * *what to do on failure* (`preserveOnError` + `onError`), and a
+ * deprecated migration-only callback retained for adopter compatibility.
+ * The defaults (`preserveOnError: true`, `onError: console.warn`) mirror
+ * the issue #138 contract: persistence failures are observable but never
+ * fatal, and the on-disk envelope is never silently discarded.
+ */
 export interface PersistedInputOptions<T> {
   /** Storage key under which the envelope is written. */
   readonly key: string
@@ -212,6 +226,34 @@ const defaultOnError: PersistenceErrorHandler = (err) => {
   console.warn(`[causl/persistence] ${err.kind} failure`, err)
 }
 
+/**
+ * Create an {@link InputNode} whose value is written through to a
+ * {@link StorageAdapter} on every commit that changes it.
+ *
+ * @typeParam T - Stored value type. Cannot be a {@link DerivedNode}-like
+ *   shape; the {@link AssertNotDerived} brand enforces this at compile
+ *   time so a future refactor cannot silently widen the boundary.
+ *
+ * @param graph - Engine handle exposing the `input`, `read`, and
+ *   `subscribeCommits` capabilities the adapter needs.
+ * @param id - {@link NodeId} for the resulting input node.
+ * @param initial - Fallback value used when storage is empty, the
+ *   envelope fails to parse, or version migration is unavailable.
+ * @param options - {@link PersistedInputOptions} bundle (`key`,
+ *   `storage`, `version`, optional `migrate` / `preserveOnError` /
+ *   `onError` / `onMigrationFailure`).
+ * @returns A live {@link InputNode}`<T>` whose value mirrors the
+ *   storage envelope. Writes go through `tx.set` exactly as for a
+ *   regular `graph.input`.
+ *
+ * @remarks
+ * The write hook is driven off `subscribeCommits` filtered by
+ * `commit.changedNodes`, not `graph.subscribe`, so the initial value
+ * is *not* round-tripped back to storage on cold start. On
+ * serialise / migrate / quota failures the error is funnelled through
+ * `options.onError` (default `console.warn`) and the on-disk envelope
+ * is preserved when `preserveOnError` is true (default).
+ */
 export function persistedInput<T>(
   graph: PersistenceGraph,
   id: NodeId,

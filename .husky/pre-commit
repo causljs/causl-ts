@@ -1,41 +1,92 @@
 #!/usr/bin/env sh
-# pre-commit — fast, per-staged-file checks that mirror the lightweight
-# half of the CI surface. Heavier CI gates (build + size, wasm-pack,
-# cross-backend property suites) run from .husky/pre-push instead so an
-# interactive commit stays sub-second on a typed edit.
+# pre-commit — full local-runnable union of CI checks across every
+# workflow under .github/workflows/. Per user directive (chore/precommit
+# CI-parity, mirrors the causl-wasm work in PR #59 on the sibling
+# repo): pre-commit is the full CI-check set, not a fast-feedback
+# subset. The interactive cost is paid in exchange for "if the hook
+# passes, CI passes" certainty.
 #
-# CI ↔ pre-commit parity:
-#   - eslint --fix on staged TS sources matches the lint convention CI
-#     enforces (see workflows-disabled/ci.yml `Lint` step, and
-#     `lint-staged` config in root package.json). lint-staged scopes the
-#     pass to staged files only so a commit that touches one file does
-#     not re-walk the whole tree.
-#   - vendor-manifest check matches `.github/workflows/vendor-manifest.yml`
-#     (paths-filtered on `causl-org/vendor/**` and the two scripts).
+# Escape hatches:
+#   - `SKIP_PRECOMMIT=1 git commit ...` — skip the hook body entirely
+#     (useful for WIP commits on a personal branch).
+#   - `git commit --no-verify` — git-native bypass; same effect.
 #
-# Heavier CI checks live in .husky/pre-push:
-#   - `pnpm run build` + `pnpm run size` (matches `bundle-budget.yml`
-#     and the historical `size — bundle-size gate` step in CI).
+# ─── CI ↔ pre-commit parity ──────────────────────────────────────────
 #
-# CI gates intentionally NOT mirrored locally:
-#   - wasm.yml — requires Rust toolchain + wasm-pack + binaryen 119.
-#     The workflow is itself defensive (skips legs when bridge crates
-#     or workspaces are absent); demanding the full chain on every
-#     contributor machine is out of scope for hook parity.
-#   - four-way-classifier.yml — requires Rust + cargo build of
-#     tools/enumerator/diff. Same toolchain rationale as wasm.yml.
-#   - cross-backend-fuzz.yml, release.yml, release-on-merge.yml —
-#     not gated on PR/push-to-main (cron / tag / release-branch only).
+# Workflow                                    Job(s) mirrored here
+# ─────────────────────────────────────────── ────────────────────────
+# main-fast.yml                               typecheck + build + lint
+# bundle-budget.yml                           pnpm run size
+# vendor-manifest.yml          (paths-filt.)  scripts/check-vendor-manifest.sh
+#
+# Deferred to .husky/pre-push (heavier, network-adjacent):
+#   - e2e/bundler-interop/ — npm install + bundler builds + verify
+#     (mirrors wasm.yml's `bundler-interop` job).
+#
+# NOT mirrored locally (require non-pnpm toolchains; CI gate remains
+# authoritative):
+#   - wasm.yml cargo-check + wasm-pack matrix  — needs Rust + wasm-pack
+#                                                 + binaryen 119
+#   - four-way-classifier.yml                  — needs Rust + cargo
+#   - cross-backend-fuzz.yml                   — nightly cron only
+#   - release.yml / release-on-merge.yml       — tag / release-branch
+#                                                 publish gates
+#
+# Each step prints a banner so a failed hook surfaces WHICH gate
+# failed without scrolling.
 
-# 1. lint-staged — eslint --fix on staged TS sources only.
+if [ "${SKIP_PRECOMMIT:-0}" = "1" ]; then
+  echo "pre-commit: SKIP_PRECOMMIT=1 set — skipping all hooks"
+  exit 0
+fi
+
+set -e
+
+# 0. lint-staged — eslint --fix on staged TS sources (auto-fix pass
+#    that re-stages corrected bytes before the workspace-wide lint).
+#    Kept first so the workspace `pnpm lint` below sees the fixed
+#    files rather than re-flagging them.
+echo "pre-commit [0/5]: lint-staged (eslint --fix on staged TS files)"
 pnpm exec lint-staged
 
-# 2. vendor-manifest gate — only when vendored bytes or the refresh /
-#    check scripts are part of the staged set, mirroring the CI
-#    workflow's `paths:` filter.
+# 1. Typecheck — mirrors main-fast.yml `Type check` step.
+echo "pre-commit [1/5]: pnpm typecheck (mirrors main-fast.yml)"
+pnpm typecheck
+
+# 2. Build — mirrors main-fast.yml `Build packages` step. Also a
+#    prerequisite for `pnpm size` and `e2e/bundler-interop` (the
+#    size-limit cells read packages/<name>/dist/*).
+echo "pre-commit [2/5]: pnpm build (mirrors main-fast.yml; required by size gate)"
+pnpm build
+
+# 3. Lint — mirrors main-fast.yml `Lint` step. Workspace-wide so
+#    cross-file rules (e.g. causl/no-graph-upcast per #9) see the
+#    full graph, not just the staged-files subset lint-staged saw.
+echo "pre-commit [3/5]: pnpm lint (mirrors main-fast.yml)"
+pnpm lint
+
+# 4. Size — mirrors bundle-budget.yml `pnpm run size` step. Reads
+#    the size-limit cells in root package.json against the dist/
+#    artefacts produced in step 2. NOTE: known red on main per
+#    issue #22 (@causl/core/wasm cell sits ~2.5 KB over the 13 KB
+#    ceiling). Until #22 closes, contributors hitting this on an
+#    unrelated change should use SKIP_PRECOMMIT=1 or --no-verify;
+#    the gate is preserved here so the moment the cell goes green
+#    the hook starts catching new drift.
+echo "pre-commit [4/5]: pnpm size (mirrors bundle-budget.yml)"
+pnpm size
+
+# 5. Vendor-manifest — mirrors vendor-manifest.yml. Paths-filtered
+#    to match the workflow: only fires when vendored bytes or the
+#    refresh/check scripts are part of the staged set.
+echo "pre-commit [5/5]: vendor-manifest gate (mirrors vendor-manifest.yml)"
 if git diff --cached --name-only --diff-filter=ACMR \
     | grep -E '^(causl-org/vendor/|scripts/(refresh|check)-vendor-manifest\.sh$)' \
     > /dev/null; then
   echo "pre-commit: vendor paths staged — running scripts/check-vendor-manifest.sh"
   bash scripts/check-vendor-manifest.sh
+else
+  echo "pre-commit: no vendor paths staged — skipping (matches workflow paths: filter)"
 fi
+
+echo "pre-commit: all gates green ✓"

@@ -22,4 +22,9 @@ export type {
 } from './persistedInput.js'
 export { persistedInput } from './persistedInput.js'
 
+/**
+ * Package version identifier; rewritten by the release tooling at
+ * publish time. The literal `'0.0.0'` in source means "not yet
+ * stamped" — the published artefact carries the real semver.
+ */
 export const VERSION = '0.0.0'

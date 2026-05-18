@@ -214,6 +214,16 @@ export type DispatchEvent =
  */
 type ReduxMessage = DevtoolsMessage
 
+/**
+ * Caller options for {@link connectDevtools}.
+ *
+ * @remarks
+ * Kept deliberately small: the Redux DevTools Extension protocol
+ * surface is fixed, so the bridge only needs to know what label the
+ * panel should display the graph under. Every other knob (recording
+ * state, lock, baseline tracking) is bridge-state owned and not part
+ * of the adopter-visible configuration.
+ */
 export interface ConnectOptions {
   /** Display name in the Redux DevTools panel. Defaults to `"causl"`. */
   readonly name?: string

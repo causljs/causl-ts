@@ -36,10 +36,23 @@ name: bundle-budget
 # cells. The wasm artefact ceilings are enforced (with a red CI on
 # violation) inside `wasm.yml`'s `size-limit` step.
 
+# Triggers (CI split — see .github/workflows/main-fast.yml header):
+#   - PRs targeting `release` (merge-gate verification)
+#   - push to `release` (post-merge re-verification)
+#   - workflow_dispatch (ad-hoc / re-run)
+#
+# This workflow moved off the `main` lane on 2026-05-17 so that PR-CI
+# on main stays sub-five-minute. As a SIDE EFFECT this also stops the
+# bundle-budget red status on `main` documented in issue #19 — that is
+# NOT the fix for #19 (the size-limit cells still reference paths that
+# don't exist in this split repo). The underlying issue must still be
+# resolved before this workflow can be relied on as a release gate.
 on:
   pull_request:
+    branches: [release]
   push:
-    branches: [main]
+    branches: [release]
+  workflow_dispatch:
 
 jobs:
   bundle-budget:

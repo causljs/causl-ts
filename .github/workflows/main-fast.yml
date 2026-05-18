@@ -1,0 +1,73 @@
+name: main-fast
+
+# Fast lane for the `main` branch (and PRs targeting main).
+#
+# Per the CI contract introduced alongside this file:
+#
+#   - `main` push + PRs targeting `main`  -> ONLY build + lint
+#   - `release` push + PRs targeting `release` -> FULL verification
+#     (tests, e2e, bundle-budget, vendor-manifest, wasm matrix,
+#     four-way-classifier, etc. — each lives in its own workflow).
+#
+# Husky hooks remain the local safety net for the FULL set — see
+# `.husky/pre-commit` and `.husky/pre-push`. CI on `main` deliberately
+# trades thoroughness for sub-five-minute feedback so PR authors can
+# iterate quickly; the merge gate to `release` re-runs every heavy
+# check before anything ships.
+#
+# What runs here:
+#   1. TypeScript typecheck across the workspace (`pnpm typecheck`)
+#   2. TypeScript build across the workspace (`pnpm build`)
+#   3. ESLint across the workspace (`pnpm lint`)
+#
+# What deliberately does NOT run here:
+#   - Unit / integration / property tests   -> release-side
+#   - E2E (Playwright, formula 60fps gate)  -> release-side
+#   - size-limit / bundle-budget            -> release-side
+#     (see bundle-budget.yml — also documents the #19 carve-out)
+#   - vendor MANIFEST.json freshness gate    -> release-side
+#   - wasm-pack matrix + bundler-interop    -> release-side
+#   - four-way classifier + apalache-diff    -> release-side / nightly
+#   - commitment-audit + test-d / tsd gates  -> release-side
+#
+# A new Rust crate landing in this repo (none today — the wasm.yml
+# crates are defensive-future) should add a sibling `cargo-fast` job
+# here that runs `cargo check` only; `cargo test` + `clippy -D warnings`
+# stay on the release lane.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: main-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ts-fast:
+    name: TypeScript — typecheck + build + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint

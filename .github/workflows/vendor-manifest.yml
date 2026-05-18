@@ -8,8 +8,17 @@ name: vendor-manifest
 # scripts/refresh-vendor.sh and commit both the regenerated vendor
 # bundle and the updated MANIFEST.json.
 
+# Triggers (CI split — see .github/workflows/main-fast.yml header):
+#   - PRs targeting `release` (merge-gate verification)
+#   - push to `release` (post-merge re-verification)
+#   - workflow_dispatch (ad-hoc / re-run)
+#
+# Vendor freshness is a verification gate (recomputes hashes, compares
+# against manifest), not a build/lint step — moved off the `main` lane
+# to the release-side per the 2026-05-17 split.
 on:
   pull_request:
+    branches: [release]
     paths:
       - 'causl-org/vendor/**'
       - 'scripts/refresh-vendor.sh'
@@ -17,12 +26,13 @@ on:
       - '.github/workflows/vendor-manifest.yml'
   push:
     branches:
-      - main
+      - release
     paths:
       - 'causl-org/vendor/**'
       - 'scripts/refresh-vendor.sh'
       - 'scripts/check-vendor-manifest.sh'
       - '.github/workflows/vendor-manifest.yml'
+  workflow_dispatch:
 
 jobs:
   check-vendor-manifest:

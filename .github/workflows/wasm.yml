@@ -27,10 +27,20 @@ name: wasm
 # to skip on PRs that don't touch the wasm side; deferred until the
 # pipeline is doing real work.
 
+# Triggers (CI split — see .github/workflows/main-fast.yml header):
+#   - PRs targeting `release` (merge-gate verification)
+#   - push to `release` (post-merge re-verification)
+#   - workflow_dispatch (ad-hoc / re-run)
+#
+# The wasm-pack matrix + binaryen install + bundler-interop fixtures are
+# the heaviest workflow in this repo — kept on the release lane so PRs
+# to `main` stay fast. workflow_dispatch lets you run it on demand
+# against any branch.
 on:
   push:
-    branches: [main]
+    branches: [release]
   pull_request:
+    branches: [release]
   workflow_dispatch:
 
 # Cancel superseded runs on the same branch — the Rust toolchain

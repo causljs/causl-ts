@@ -136,7 +136,7 @@ Per the decomposition agent's research (full table also lives on `#1147` body af
 | A.11 | 7-file split DECISION ticket (not implementation) | transition/* | (refactor — table of reasons-to-change defended in PR description) | 2 | A.10 |
 | A.12 | BackendEngine trait decomposition | tools/engine-rs-core/src/backend.rs | (refactor — Transitioner/Reader/Persister/Observable carve-out) | 1 | A.11 |
 
-**Estimated Phase A total: 23 days single-developer, ~5 weeks calendar.** At one micro-ticket per 5-hour Claude session, **13 sessions of focused work**. With backpressure from validation re-runs and any defer-to-next-session boundaries, plan **15-18 sessions** for Phase A alone.
+**Estimated Phase A total: 23 days single-developer, ~5 weeks calendar.** At one micro-ticket per 5-hour focused work session, **13 sessions of focused work**. With backpressure from validation re-runs and any defer-to-next-session boundaries, plan **15-18 sessions** for Phase A alone.
 
 ## 6. failing_against_stub corpus — 20 categories
 

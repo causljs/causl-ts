@@ -5,7 +5,8 @@
  * glitchDetector, assertConsistentGraphTime, assertResultStability,
  * propertyTrials, propertyDag, disposedTombstoneSize) is surfaced from
  * `@causl/core` itself, even though the helpers live in the sibling
- * `@causl/core-testing-internal` workspace package.
+ * `@causl/core-testing-internal` workspace package
+ * (`packages/core/testing/`).
  *
  * The internal workspace exists because the helpers transitively import
  * type-only declarations from `@causl/core`. Hosting them in a separate
@@ -15,13 +16,23 @@
  * conformance bridge — can write `import { ... } from '@causl/core/testing'`
  * without depending on the private workspace name.
  *
- * Build note: tsup is configured with `--noExternal
- * @causl/core-testing-internal`, which inlines the helper sources into
- * `dist/testing.js`. Inlining is necessary because the internal package
- * ships TypeScript directly (its `main` points at `./src/index.ts`),
- * and a downstream `node_modules` consumer cannot resolve raw `.ts` at
- * runtime. The type-only `@causl/core` imports inside testing-internal
- * are erased before bundling, so no runtime cycle is introduced.
+ * Build note: the re-export is written as a relative import into the
+ * sibling workspace's `src/` tree rather than the package specifier
+ * `@causl/core-testing-internal`. This is load-bearing for type
+ * generation: tsup inlines the runtime sources into `dist/testing.js`
+ * (the internal package's `main` points at raw `.ts`), but the emitted
+ * `dist/testing.d.ts` previously contained
+ * `export * from '@causl/core-testing-internal'` — a specifier that does
+ * not resolve in any downstream `node_modules` because the workspace
+ * package is `private: true` and unpublished (causljs/causl-ts#31).
+ * Using a relative path here forces TypeScript to inline the actual
+ * declarations into `dist/testing.d.ts`, so consumers get real types
+ * for `recomputeCounter`, `glitchDetector`, etc. without any phantom
+ * package dependency. The runtime behaviour is unchanged — the helper
+ * sources still bundle into `dist/testing.js` exactly as before.
  */
 
-export * from '@causl/core-testing-internal'
+// Relative import (not the `@causl/core-testing-internal` specifier) so
+// that `tsup --dts` inlines the declarations into `dist/testing.d.ts`.
+// See the block comment above for the full rationale.
+export * from '../testing/src/index.js'

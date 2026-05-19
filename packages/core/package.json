@@ -1,6 +1,6 @@
 {
   "name": "@causl/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Semantic core for Causl — transactional state for tangled dependency graphs.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

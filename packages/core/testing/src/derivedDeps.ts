@@ -11,7 +11,7 @@
  *
  * Usage (property-test only):
  *
- *   import { derivedDeps } from '@causl/core-testing-internal'
+ *   import { derivedDeps } from '@causl/core/testing'
  *
  *   const g = createCausl()
  *   const a = g.input('a', 1)

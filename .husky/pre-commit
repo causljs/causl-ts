@@ -46,23 +46,23 @@ set -e
 #    that re-stages corrected bytes before the workspace-wide lint).
 #    Kept first so the workspace `pnpm lint` below sees the fixed
 #    files rather than re-flagging them.
-echo "pre-commit [0/5]: lint-staged (eslint --fix on staged TS files)"
+echo "pre-commit [0/6]: lint-staged (eslint --fix on staged TS files)"
 pnpm exec lint-staged
 
 # 1. Typecheck — mirrors main-fast.yml `Type check` step.
-echo "pre-commit [1/5]: pnpm typecheck (mirrors main-fast.yml)"
+echo "pre-commit [1/6]: pnpm typecheck (mirrors main-fast.yml)"
 pnpm typecheck
 
 # 2. Build — mirrors main-fast.yml `Build packages` step. Also a
 #    prerequisite for `pnpm size` and `e2e/bundler-interop` (the
 #    size-limit cells read packages/<name>/dist/*).
-echo "pre-commit [2/5]: pnpm build (mirrors main-fast.yml; required by size gate)"
+echo "pre-commit [2/6]: pnpm build (mirrors main-fast.yml; required by size gate)"
 pnpm build
 
 # 3. Lint — mirrors main-fast.yml `Lint` step. Workspace-wide so
 #    cross-file rules (e.g. causl/no-graph-upcast per #9) see the
 #    full graph, not just the staged-files subset lint-staged saw.
-echo "pre-commit [3/5]: pnpm lint (mirrors main-fast.yml)"
+echo "pre-commit [3/6]: pnpm lint (mirrors main-fast.yml)"
 pnpm lint
 
 # 4. Size — mirrors bundle-budget.yml `pnpm run size` step. Reads
@@ -73,13 +73,21 @@ pnpm lint
 #    unrelated change should use SKIP_PRECOMMIT=1 or --no-verify;
 #    the gate is preserved here so the moment the cell goes green
 #    the hook starts catching new drift.
-echo "pre-commit [4/5]: pnpm size (mirrors bundle-budget.yml)"
+echo "pre-commit [4/6]: pnpm size (mirrors bundle-budget.yml)"
 pnpm size
 
-# 5. Vendor-manifest — mirrors vendor-manifest.yml. Paths-filtered
+# 5. @causl/core/testing tarball-consumer typecheck — mirrors
+#    main-fast.yml's `#31 regression` step. Fast (pack + npm install
+#    of a single tarball + tsc on one tiny file, ~5-10s). Catches
+#    `dist/testing.d.ts` regressing back to an unresolvable external
+#    re-export (the #31 class of bug).
+echo "pre-commit [5/6]: #31 regression — pack-and-typecheck @causl/core/testing (mirrors main-fast.yml)"
+bash scripts/check-core-testing-types.sh
+
+# 6. Vendor-manifest — mirrors vendor-manifest.yml. Paths-filtered
 #    to match the workflow: only fires when vendored bytes or the
 #    refresh/check scripts are part of the staged set.
-echo "pre-commit [5/5]: vendor-manifest gate (mirrors vendor-manifest.yml)"
+echo "pre-commit [6/6]: vendor-manifest gate (mirrors vendor-manifest.yml)"
 if git diff --cached --name-only --diff-filter=ACMR \
     | grep -E '^(causl-org/vendor/|scripts/(refresh|check)-vendor-manifest\.sh$)' \
     > /dev/null; then

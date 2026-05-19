@@ -25,7 +25,7 @@
  *
  * Usage (test-only):
  *
- *   import { commitLogConsumerCount } from '@causl/core-testing-internal'
+ *   import { commitLogConsumerCount } from '@causl/core/testing'
  *
  *   const g = createCausl()
  *   expect(commitLogConsumerCount(g)).toBe(0)

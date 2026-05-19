@@ -13,7 +13,7 @@
  *
  * Usage:
  *
- *   import { disposedTombstoneSize } from '@causl/core-testing-internal'
+ *   import { disposedTombstoneSize } from '@causl/core/testing'
  *
  *   const g = createCausl({ disposedTombstoneCap: 4 })
  *   // ... churn fresh ids and dispose them ...

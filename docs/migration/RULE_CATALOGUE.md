@@ -12,7 +12,7 @@ I published this catalogue because Epic F's three PRs (#197 migration guides, #1
 
 - Where each rule lives (guide bullet vs detector predicate vs validation check).
 - What severity means.
-- How a guide reader's LLM identifies which rule a given pattern violates.
+- How a guide reader identifies which rule a given pattern violates.
 
 That disagreement is the failure mode the catalogue eliminates. Every drift-detector rule carries a stable `RULE_ID`, every migration guide cites those rule IDs in its "before/after" examples, and the validation procedure cross-references the catalogue when reporting findings.
 
@@ -108,7 +108,7 @@ These IDs are **accepted**. The detector PR (#198) wrote the predicates and test
 
 ### Cross-source / causl-idiomatic (S-NN)
 
-These rules apply regardless of the source library — they catch common LLM-migration mistakes.
+These rules apply regardless of the source library — they catch common manual-migration mistakes.
 
 | ID | Severity | Title | Predicate (sketch) |
 | --- | --- | --- | --- |
@@ -120,7 +120,7 @@ These rules apply regardless of the source library — they catch common LLM-mig
 | `S-06` | important | Untyped `Msg` union (string-typed actions) | `dispatch('foo')` or `dispatch({ type: 'foo' })` without a discriminated `Msg` union type annotation. |
 | `S-07` | important | `useState`/`useReducer` for state that should be a `graph.input`/`derived` | A `useState` whose value is read by another component via context or prop-drilling — the canonical signal that it should be lifted into the graph. |
 | `S-08` | nice-to-have | Imports from a deferred/non-existent symbol | Imports of phantom symbols from packages whose corresponding Adoption epic hasn't shipped. See the **Current state** note below. |
-| `S-09` | critical | Codemod-style transformation comments | A `// TODO(causl-migrate)` or similar marker indicating the LLM left a manual step undone. |
+| `S-09` | critical | Codemod-style transformation comments | A `// TODO(causl-migrate)` or similar marker indicating the migration left a manual step undone. |
 
 > **Current state (as of v0.9.0) — S-08.** `useCauslSuspense`, `persistedInput`, and `useCauslFamily` are no longer phantom symbols — `@causl/react` ships `useCauslSuspense` and `useCauslFamily`, and `@causl/persistence` ships `persistedInput` (see PR #428 and the worked examples in `docs/migration/from-jotai.md`). The detector under `packages/migration-check/src/scan.ts` still emits `S-08` for `useCauslSuspense` / `persistedInput` imports as a leftover guard; the rule remains `nice-to-have` so it never blocks CI. If you hit it on a now-shipped symbol, treat the finding as an info note. We'll retire the unconditional emit in a follow-up; the rule ID stays reserved and continues to cover any future deferred symbol.
 
@@ -149,6 +149,6 @@ The exit-code contract is binding. A CI pipeline integrating `causl-migration-ch
 
 ## What this catalogue is *not*
 
-- Not a codemod definition. The team committed in Epic F (shipped under #197/#198/#199, with the end-to-end harness landing in #225) to LLM-driven migration, not jscodeshift transformations. Rules describe *predicates over migrated code*, not transformations from source to target.
+- Not a codemod definition. The team committed in Epic F (shipped under #197/#198/#199, with the end-to-end harness landing in #225) to guide-driven manual migration, not jscodeshift transformations. Rules describe *predicates over migrated code*, not transformations from source to target.
 - Not a complete list of patterns the source libraries support. Coverage starts at the foot-guns and grows as user reports come in.
 - Not a substitute for the migration guides. The guides teach; the catalogue audits. Both are required.

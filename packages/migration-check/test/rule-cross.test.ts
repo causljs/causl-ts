@@ -1,7 +1,7 @@
 /**
  * Per-rule fixture corpus for the S-NN (cross-source / causl-
  * idiomatic) family. These rules fire regardless of the source
- * library and catch common LLM-migration mistakes.
+ * library and catch common manual-migration mistakes.
  */
 
 import { describe, expect, it } from 'vitest'

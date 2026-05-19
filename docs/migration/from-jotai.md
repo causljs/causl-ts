@@ -1,9 +1,9 @@
 # Migrating from Jotai to Causl
 
 This guide is the source of truth for what changes when a Jotai
-codebase moves to Causl. It is written for humans (and their
-LLM assistants) doing the migration by hand — every pattern below
-has a worked example and a rationale.
+codebase moves to Causl. It is written for humans doing the
+migration by hand — every pattern below has a worked example and
+a rationale.
 
 I deliberately do **not** ship a codemod. The contract that backs
 this guide is `docs/migration/RULE_CATALOGUE.md`, and the drift

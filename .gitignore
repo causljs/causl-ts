@@ -117,46 +117,25 @@ lerna-debug.log*
 !.env.example
 !.env.sample
 
-# ---- AI tooling: anything dropped under a .<tool>/ directory or .<tool>* file ----
-# Aider — pair-programming CLI
+# ---- Editor/agent tooling artifacts: anything dropped under a .<tool>/ directory or .<tool>* file ----
 .aider*
-
-# Anthropic Claude Code — CLI/agent + worktrees
 .claude/
-
-# Cline — VS Code agent (and Roo Code fork)
 .cline/
 .clinerules
 .roo/
 .roocode/
-
-# Codeium / Windsurf — completion + IDE
 .codeium/
 .windsurf/
 .windsurfrules
-
-# OpenAI Codex CLI
 .codex/
-
-# Continue — open-source agent
 .continue/
-
-# GitHub Copilot — instructions & local state
 .copilot/
 .copilot-instructions.md
-
-# Cursor — AI editor
 .cursor/
 .cursorrules
 .cursorignore
-
-# Google Gemini CLI
 .gemini/
-
-# JetBrains Junie
 .junie/
-
-# Qodo (formerly CodiumAI)
 .qodo/
 
 # Playwright runtime artifacts (#226 — formula e2e harness)
@@ -182,8 +161,8 @@ packages/checker-*/bin/stackrat-check.exe
 packages/checker-*/*.tgz
 
 
-# Claude-generated session docs at repo root — plans, reviews, design
-# RFCs, debug traces. The permanent root .md allowlist below is the
+# Scratch session docs at repo root — plans, reviews, design RFCs,
+# debug traces. The permanent root .md allowlist below is the
 # canonical set; anything else lives in the org-level scratch
 # (`causljs-tmp/` adjacent to the repo working dirs) and never gets
 # committed.

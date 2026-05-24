@@ -319,8 +319,14 @@ export function createAutoAdaptGraph(
     // module.
     void (async () => {
       try {
+        // Call the wasm module's `activateAutoMigrationBackend` re-export
+        // rather than `loadWasmBackend` directly: this wrapper is statically
+        // reachable from `createCausl`, so naming `loadWasmBackend` here would
+        // leak that symbol into a consumer's main bundle chunk and trip the
+        // bundle-no-wasm-leak gate (#689 / §14.2). The re-export keeps the
+        // loader name confined to the lazily-imported `@causl/core/wasm` chunk.
         const wasmMod = (await import('../wasm/index.js')) as {
-          readonly loadWasmBackend: (opts?: {
+          readonly activateAutoMigrationBackend: (opts?: {
             readonly graphName?: string
             readonly batchedFlush?: {
               readonly afterN?: number
@@ -352,7 +358,7 @@ export function createAutoAdaptGraph(
         const graphName = options.name
         const batchedFlush = options.batchedFlush
         const engine = options.engine
-        wasmBackendReady = await wasmMod.loadWasmBackend({
+        wasmBackendReady = await wasmMod.activateAutoMigrationBackend({
           ...(graphName !== undefined ? { graphName } : {}),
           ...(batchedFlush !== undefined ? { batchedFlush } : {}),
           ...(engine !== undefined ? { engine } : {}),

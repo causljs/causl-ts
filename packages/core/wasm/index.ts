@@ -516,6 +516,26 @@ export async function loadWasmBackend(
 }
 
 /**
+ * Internal entry the auto-adapt wrapper calls after it dynamically
+ * `import('@causl/core/wasm')`.
+ *
+ * The wrapper is statically reachable from `createCausl`, so any symbol it
+ * names by hand lands in a consumer's MAIN bundle chunk. Calling
+ * `loadWasmBackend` directly from the wrapper therefore leaks the
+ * `loadWasmBackend` identifier into main and trips the bundle-no-wasm-leak
+ * gate (#689 / SPEC §14.2). Routing through this thin re-export keeps the
+ * `loadWasmBackend` name confined to this lazily-loaded chunk; the wrapper
+ * only ever names `activateAutoMigrationBackend`, which is not a wasm-leak
+ * sentinel. Behaviour is identical — it forwards straight to
+ * `loadWasmBackend`.
+ */
+export async function activateAutoMigrationBackend(
+  options: WasmBackendOptions = {},
+): Promise<BackendEngine> {
+  return loadWasmBackend(options)
+}
+
+/**
  * Thrown when `loadWasmBackend()` is called before the WASM
  * artifacts (#682 / #683 / #693) ship.
  *

@@ -25,6 +25,18 @@ export default defineConfig({
     rollupOptions: {
       // No externals — we want @causl/core fully bundled so the
       // grep-the-output gate has something to grep.
+      //
+      // `build.lib` defaults `preserveEntrySignatures` to 'strict',
+      // which makes Rollup emit `main.js` as a thin re-export *facade*
+      // and hoist the entry's own code (including the
+      // `globalThis.__causlHandle = …` assignment the verify gate
+      // anchors on) into a separate `chunk.index.*.js`. Setting it to
+      // `false` lets Rollup inline the entry module directly into
+      // `main.js` so the gate's "entry not tree-shaken to a no-op"
+      // check sees `__causlHandle` in the main chunk. The dynamic
+      // `import('@causl/core/wasm')` is unaffected — dynamic imports
+      // still split into their own chunk regardless of this knob.
+      preserveEntrySignatures: false,
       output: {
         chunkFileNames: 'chunk.[name].[hash].js',
         entryFileNames: 'main.js',

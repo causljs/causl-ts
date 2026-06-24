@@ -1,7 +1,20 @@
 # `packages/core/wasm-pkg/` — bridge artefact tree
 
-Per-bridge `.wasm` artefacts produced by `pnpm wasm:build` (issue #683
-driver script at `tools/wasm-build/build.mjs`). Per issue #1103 each
+> **Build driver not present in this TS-only repo.** There is **no**
+> `tools/wasm-build/build.mjs` in this checkout and `pnpm wasm:build`
+> is not wired here — this repo is the pure-TypeScript reference and
+> ships only the 8-byte stub artefacts described below. The real
+> `.wasm` artefacts are produced by the Python build/package tooling in
+> [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm)
+> (`scripts/build_wasm.py` runs `wasm-pack` + `wasm-opt`;
+> `scripts/package_wasm.py` places the `.wasm` + glue + typings at a
+> consumer's `--dest`). The `pnpm wasm:build` / `tools/wasm-build`
+> references below are retained as the **historical layout** these
+> stubs were modelled against; treat them as describing the artefact
+> tree shape, not a command runnable from this repo.
+
+Per-bridge `.wasm` artefacts (in `causljs/causl-wasm`, produced by its
+Python build tooling — see the note above). Per issue #1103 each
 bridge ships TWO subdirectories — one per wasm-pack target:
 
   - `<bridge>-bundler/` — `--target bundler` shim. Consumed by the
@@ -82,16 +95,17 @@ a working code path on the first compile.
 
 ## Replacing stubs with real artefacts
 
-```sh
-pnpm wasm:build
-```
-
-The `tools/wasm-build/build.mjs` driver invokes `wasm-pack build` once
-per bridge crate and lands the produced `engine_rs_bg.wasm` plus the
-generated TypeScript bindings into the directories above. The size-
-limit cells then gate against the produced bytes; a PR that pushes a
-bridge past its cap fails the `size` job until the cap is renegotiated
-under the SPEC §14.2.1 written-team-consensus rule.
+The real artefacts are **not** built from this repo. They are produced
+in [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm) by its
+Python build tooling — `scripts/build_wasm.py` (needs the Rust
+toolchain; runs `wasm-pack build` per bridge crate + `wasm-opt -Oz`)
+and `scripts/package_wasm.py` (stdlib-only CPython; places the
+`engine_rs_bg.wasm` + generated TypeScript bindings at a consumer's
+`--dest` and emits a version + sha256 manifest). When those artefacts
+are placed over the stubs in the directories above, the size-limit
+cells gate against the produced bytes; a PR that pushes a bridge past
+its cap fails the `size` job until the cap is renegotiated under the
+SPEC §14.2.1 written-team-consensus rule.
 
 ## See also
 

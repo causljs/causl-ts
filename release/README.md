@@ -1,5 +1,17 @@
 # causl 0.2.0 — release bundle
 
+> **Staleness note.** This bundle was last cut at **0.2.0**
+> (2026-05-16); the source workspace has since moved on
+> (`@causl/core` is now `0.3.1`, with post-0.2.0 race-class catalogue
+> refinements not present in this tree). Installing from `release/`
+> gets you a months-old bundle. Regenerate before shipping:
+> `pnpm -r build && python3 tools/release/release.py`.
+>
+> Also note: this is the OSS pure-TypeScript path. For the production /
+> enterprise path the engine is the Rust→WASM core
+> ([`causljs/causl-wasm`](https://github.com/causljs/causl-wasm)) reached
+> through the thin TS API ([`causljs/causl-client`](https://github.com/causljs/causl-client)).
+
 This directory is built by `tools/release/release.py`. It contains the
 minimum viable subset of `@causl/*` packages needed to ship a real
 TypeScript application against the causl engine — the **TypeScript-only
@@ -66,14 +78,14 @@ deployments that want a small dependency footprint.
 ## Reproducing this bundle
 
 ```sh
-pnpm -r build           # produce the source dist trees
-python3 tools/release.py   # build this directory
+pnpm -r build                    # produce the source dist trees
+python3 tools/release/release.py # build this directory
 ```
 
 For the full surface (every subpath export retained, source maps kept):
 
 ```sh
-python3 tools/release.py --full
+python3 tools/release/release.py --full
 ```
 
 ## Manifest

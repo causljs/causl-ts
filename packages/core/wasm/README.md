@@ -15,14 +15,21 @@
 > `JsonValue::Object(BTreeMap<SmolStr, JsonValue>)` value tree
 > (post-#1078; an IndexMap swap is under investigation in #1152).
 >
-> The **real Rust engine port** is the post-0.9.0 epic
-> [#1133](https://github.com/iasbuilt/causl/issues/1133) — _deferred_
-> behind the GO/NO-GO criteria documented in the epic body. 15
-> implementation sub-issues (#1134–#1148), 7 panel-review sub-issues
-> (#1154–#1160), and 4 current-code defect issues (#1150–#1153) are
-> filed; the bundle-ceiling amendment, NodeId generational disposal,
-> JsonValue object-representation bench, and property-test tier
-> sweep have already merged via PRs #1161–#1164.
+> **Where the real Rust engine lives now.** The real Rust engine has
+> since *shipped* — out of this repo, in
+> [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm)
+> (`engine-rs-core` + `engine-rs-bridge`), where `rust-ssot` is the
+> unconditional production default, consumed through the thin TS API in
+> [`causljs/causl-client`](https://github.com/causljs/causl-client).
+> The dual-engine differential reference is
+> [`causljs/causl-ts-wasm-engine`](https://github.com/causljs/causl-ts-wasm-engine).
+> The "deferred / GO-NO-GO-gated" framing below reflects **this**
+> TS-only repo's frozen Phase-1 state, not the org-wide reality. The
+> historical port epic was tracked under the org's pre-split issue
+> tracker (the `iasbuilt/causl` links scattered through this repo's
+> `docs/` tree now 404 — the org migrated to the `causljs` multi-repo
+> split). 15 implementation sub-issues, 7 panel-review sub-issues, and
+> 4 current-code defect issues were filed against that frozen plan.
 >
 > Adopters who pin `backend: 'wasm'` today should expect
 > ~0% runtime delta vs `backend: 'js'`. The `backend: 'auto'`
@@ -208,8 +215,14 @@ sub-tasks that originally gated this entry point landed under epic
 - #684 — JS bindings + lazy-load loader + `@causl/core/wasm` entry. **Merged (PR #1031).**
 - #685 / #687 / #689 / #690 — determinism gate, migration envelope, bundle hygiene, host-tier matrix. **Merged.**
 
-EPIC: [#680](https://github.com/iasbuilt/causl/issues/680) — **closed**.
-Post-0.9.0 real Rust engine port: [#1133](https://github.com/iasbuilt/causl/issues/1133) — **deferred**, GO/NO-GO criteria in epic body.
+EPIC: #680 — **closed** (tracked under the org's pre-split issue
+tracker; that `iasbuilt/causl` tracker now 404s after the migration to
+the `causljs` multi-repo split).
+Post-0.9.0 real Rust engine port: it **shipped** out of this repo in
+[`causljs/causl-wasm`](https://github.com/causljs/causl-wasm)
+(`rust-ssot` is the production default there); within *this* frozen
+TS-only repo the WASM backend remains the Phase-1 wrapper described
+above.
 
 ### Current-state divergences
 

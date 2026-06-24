@@ -1,7 +1,23 @@
 # `packages/core/wasm-pkg/` — bridge artefact tree
 
-Per-bridge `.wasm` artefacts produced by `pnpm wasm:build` (issue #683
-driver script at `tools/wasm-build/build.mjs`). Per issue #1103 each
+> **Build driver not present in this TS-only repo.** There is **no**
+> `tools/wasm-build/build.mjs` in this checkout and `pnpm wasm:build`
+> is not wired here — this repo is the pure-TypeScript reference. The
+> committed `.wasm` artefacts described below are the **real built
+> binaries** (~214 KB serde / ~249 KB gc-builtins / ~246 KB gc-classic
+> raw), produced by the Python build/package tooling in
+> [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm)
+> (`scripts/build_wasm.py` runs `wasm-pack` + `wasm-opt`;
+> `scripts/package_wasm.py` places the `.wasm` + glue + typings at a
+> consumer's `--dest`) and vendored here so the size-limit cells and
+> bundler-resolution fixtures gate against real bytes. The
+> `pnpm wasm:build` / `tools/wasm-build` references below are retained
+> as the **historical layout** these artefacts were modelled against;
+> treat them as describing the artefact tree shape, not a command
+> runnable from this repo.
+
+Per-bridge `.wasm` artefacts (in `causljs/causl-wasm`, produced by its
+Python build tooling — see the note above). Per issue #1103 each
 bridge ships TWO subdirectories — one per wasm-pack target:
 
   - `<bridge>-bundler/` — `--target bundler` shim. Consumed by the
@@ -49,47 +65,54 @@ byte-identical `.wasm` regardless of the `--target` flag, so the
 the raw ceilings are the `size-limit` cell budgets activated by
 Sub-E (#1063) closeout.)
 
-## Committed stubs
+## Committed artefacts
 
 The six `engine_rs_bg.wasm` files committed alongside this README
-(one per `<bridge>-<target>/` directory) are 8-byte stubs — the
-canonical WASM preamble `\0asm\x01\x00\x00\x00` (four-byte magic +
-four-byte little-endian version 1). They satisfy:
+(one per `<bridge>-<target>/` directory) are the **real built
+WebAssembly binaries** — valid WASM 1.0 modules carrying the
+`\0asm\x01\x00\x00\x00` preamble followed by the full compiled engine
+body. Their raw sizes are:
+
+  - `serde-{bundler,nodejs}/`       — 219,599 bytes (~214 KB)
+  - `gc-builtins-{bundler,nodejs}/` — 254,604 bytes (~249 KB)
+  - `gc-classic-{bundler,nodejs}/`  — 252,117 bytes (~246 KB)
+
+(wasm-pack emits byte-identical `.wasm` from `--target bundler` and
+`--target nodejs`, so the two subdirectories per bridge hold the same
+bytes.) They satisfy:
 
   1. Bundler resolution: `new URL('./pkg/<segment>/engine_rs_bg.wasm',
      import.meta.url)` resolves to an existing file at build time so
      webpack 5 / Vite 5 / esbuild's static-analysis pass produces a
      valid asset reference. The bundler-interop fixtures under
-     `e2e/bundler-interop/` would otherwise need the stub-creator
-     step (`e2e/bundler-interop/stub-wasm-pkg.mjs`) in every CI run.
+     `e2e/bundler-interop/` resolve against these committed binaries.
 
   2. `size-limit` cell activation: the per-bridge cells in the root
      `package.json#size-limit` array gate against the file at each
-     path. Without committed stubs the `pnpm size` invocation would
-     fail with "file not found" before reaching the budget
-     comparison. With stubs, the cells pass trivially (8 bytes is
-     well under every cap) until the real `pnpm wasm:build` pipeline
-     replaces the stubs with the wasm-pack output. At that point the
-     caps bite for the first time and a future PR that pushes the
-     `serde-json` artefact past 200 KB raw fails the gate.
+     path. Because the committed artefacts are the real bytes, the
+     caps bite today — a PR that pushes the `serde-json` artefact past
+     its raw ceiling fails the gate. (The current serde body sits at
+     ~214 KB raw against the 230 KB cell; see the `//size-limit-wasm`
+     comment in the root `package.json` for the §17.6 divergence note.)
 
-The stubs are NEVER loaded at runtime — `loadWasmBackend()` in
-`packages/core/wasm/index.ts` resolves the URL via `wasmUrlFor()` but
-the current Phase-1 path constructs a `WasmBackend` that wraps a TS
-engine without calling `WebAssembly.instantiate`. The URL resolution
-itself is preserved so a future PR that swaps in real artefacts gets
-a working code path on the first compile.
+The artefacts are NOT loaded at runtime on the current Phase-1 path —
+`loadWasmBackend()` in `packages/core/wasm/index.ts` resolves the URL
+via `wasmUrlFor()` but the Phase-1 path constructs a `WasmBackend`
+that wraps a TS engine without calling `WebAssembly.instantiate`. The
+URL resolution itself is preserved so a future PR that wires the real
+engine in gets a working code path on the first compile.
 
-## Replacing stubs with real artefacts
+## Refreshing the artefacts
 
-```sh
-pnpm wasm:build
-```
-
-The `tools/wasm-build/build.mjs` driver invokes `wasm-pack build` once
-per bridge crate and lands the produced `engine_rs_bg.wasm` plus the
-generated TypeScript bindings into the directories above. The size-
-limit cells then gate against the produced bytes; a PR that pushes a
+The artefacts are **not** built from this repo. They are produced
+in [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm) by its
+Python build tooling — `scripts/build_wasm.py` (needs the Rust
+toolchain; runs `wasm-pack build` per bridge crate + `wasm-opt -Oz`)
+and `scripts/package_wasm.py` (stdlib-only CPython; places the
+`engine_rs_bg.wasm` + generated TypeScript bindings at a consumer's
+`--dest` and emits a version + sha256 manifest). When a refreshed
+build is vendored over the binaries in the directories above, the
+size-limit cells gate against the produced bytes; a PR that pushes a
 bridge past its cap fails the `size` job until the cap is renegotiated
 under the SPEC §14.2.1 written-team-consensus rule.
 

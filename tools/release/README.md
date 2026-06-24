@@ -1,10 +1,13 @@
 # tools/release
 
 Builds the minimum viable per-package npm tree for the TypeScript-only
-path of `@causl/*` at the current `RELEASE_VERSION` (currently
-**0.2.0**). Produces the `release/` directory that gets committed to
-the `release` branch and is what adopters install from when they want
-the smallest possible causl footprint.
+path of `@causl/*` at the current `RELEASE_VERSION` (the last committed
+cut in `release/` is **0.2.0**; the source workspace has since moved to
+`@causl/core` `0.3.1`, so a fresh run will carry a newer version once
+`RELEASE_VERSION` is bumped — see "Cutting a new release version"
+below). Produces the `release/` directory that gets committed to the
+`release` branch and is what adopters install from when they want the
+smallest possible causl footprint.
 
 ## Usage
 

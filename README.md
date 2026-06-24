@@ -307,7 +307,7 @@ The `size-limit` cells in the root `package.json` gate dist-bundle ceilings on e
 - `@causl/core` (full import) ≤ **20 KB**.
 - `@causl/core` (createCausl-only) ≤ **16 KB** — bumped 1 KB in PR [#23](https://github.com/causljs/causl-ts/pull/23) to absorb the post-`invariant` overage.
 - `@causl/core/wasm` ≤ **13 KB** — still over per issue [#22](https://github.com/causljs/causl-ts/issues/22); the gate stays in the hook so the moment the cell goes green new drift starts being caught.
-- WASM artefact ceilings (per-bridge, raw + Brotli) are documented in the root `package.json`'s `//size-limit-wasm` comment block. The real `.wasm` artefacts are produced by the Python build tooling in [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm) (`scripts/build_wasm.py` / `scripts/package_wasm.py`); the artefacts committed in this repo are 8-byte stubs (see `packages/core/wasm-pkg/README.md`).
+- WASM artefact ceilings (per-bridge, raw + Brotli) are documented in the root `package.json`'s `//size-limit-wasm` comment block. The `.wasm` artefacts are produced by the Python build tooling in [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm) (`scripts/build_wasm.py` / `scripts/package_wasm.py`); the artefacts committed in this repo are the real built binaries (~214 KB serde, ~249 KB gc-builtins, ~246 KB gc-classic raw), against which the size-limit cells gate (see `packages/core/wasm-pkg/README.md`).
 
 PR [#21](https://github.com/causljs/causl-ts/pull/21) dropped the dangling bench-fixture size-limit cells (closing issue [#19](https://github.com/causljs/causl-ts/issues/19)); PR [#14](https://github.com/causljs/causl-ts/pull/14) re-enabled the per-PR bundle-budget comment workflow.
 

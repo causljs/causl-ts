@@ -2,8 +2,6 @@
 
 Inspection primitives for [Causl](../../README.md).
 
-> Transactional state for tangled dependency graphs.
-
 ## Status
 
 Shipped as of v0.9.0. Sits on top of `@causl/core`. The animating

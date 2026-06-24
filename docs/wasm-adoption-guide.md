@@ -1,5 +1,29 @@
 # WASM adoption guide (#690, merged)
 
+> **⚠️ This guide documents THIS repo's frozen Phase-1 `js-ssot` state.
+> It is superseded for the production path.**
+>
+> `causljs/causl-ts` is the OSS pure-TypeScript reference engine. In
+> this repo the WASM backend is a TS-engine wrapper and
+> `DEFAULT_WASM_ENGINE_MODE` is `'js-ssot'`, so the §4a
+> `engine: 'rust-ssot'` opt-in narrative below (the "ZERO adopter-visible
+> perf change", "NOT the production default", the `~85×` T1 tripwire, the
+> `CAUSL_RUST_SSOT_DOWNGRADED` sticky-downgrade fail-safe, and the "#1133
+> falsification STANDS" verdict) describes **this fork's frozen state**.
+>
+> Org-wide that state has been superseded: in
+> [`causljs/causl-wasm`](https://github.com/causljs/causl-wasm) the real
+> Rust engine shipped and `rust-ssot` is the **unconditional production
+> default** (no per-flush byte-compare oracle, no sticky-downgrade
+> fail-safe — both removed; perf was ruled UX-immaterial / §14 RAIL, not
+> gated on an `85×→3×` tripwire), reached through the thin TS API in
+> [`causljs/causl-client`](https://github.com/causljs/causl-client).
+> **For current production adoption, follow the wasm-adoption guide in
+> `causljs/causl-client`, not this one.** Treat the §4a section below as
+> a historical record of this fork's design, not as current org guidance.
+> (Issue links of the form `#NNNN` below point at the org's pre-split
+> tracker, which no longer resolves.)
+
 Adopter-facing companion to SPEC §17.6 (commitment 14, host-tier
 substrate compatibility — ratified via PR #1053) and to the
 entry-point reference at `packages/core/wasm/README.md`. This

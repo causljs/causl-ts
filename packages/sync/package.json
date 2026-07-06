@@ -1,6 +1,6 @@
 {
   "name": "@causl/sync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Async resource and conflict bindings for Causl — resource(key, loader), staleness guards, conflict registry.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

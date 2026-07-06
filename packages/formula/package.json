@@ -1,6 +1,6 @@
 {
   "name": "@causl/formula",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

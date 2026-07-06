@@ -1,6 +1,6 @@
 {
   "name": "@causl/persistence",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "UI-preference persistence for Causl — persistedInput() and storage adapters.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

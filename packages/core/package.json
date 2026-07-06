@@ -1,7 +1,7 @@
 {
   "name": "@causl/core",
-  "version": "0.3.1",
-  "description": "Semantic core for Causl — transactional state for tangled dependency graphs.",
+  "version": "0.3.2",
+  "description": "Causl semantic core (causl-ts build): the reference TypeScript engine. Public npmjs distribution.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",
   "type": "module",

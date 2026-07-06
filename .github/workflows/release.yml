@@ -6,13 +6,28 @@ name: release
 # Trigger: push of an annotated tag matching `v*.*.*` (e.g. `v0.3.0`).
 # Manual trigger via workflow_dispatch is also available for re-runs.
 #
-# Required repo settings:
-#  - Secret `NPM_TOKEN` (Settings → Secrets and variables → Actions →
-#    New repository secret). Must be an npmjs.com "Automation" token
-#    (NOT "Read-only") with publish permission on the @causl scope.
-#    Generate at https://www.npmjs.com/settings/<user>/tokens.
-#  - The `@causl` npmjs.com organization must exist and your account
-#    must be a maintainer with publish rights on the scope.
+# Auth: npm OIDC "trusted publishing" — NO npm token.
+#  Each @causl/* package has a trusted publisher on npmjs pointing at
+#  (causljs/causl-ts, release.yml), so the job mints a short-lived
+#  credential from the GitHub OIDC id-token at publish time. There is no
+#  NPM_TOKEN in this workflow, and provenance attestations are produced.
+#
+#  OIDC only engages when NO token is present — that is why there is no
+#  NODE_AUTH_TOKEN below. If a token were set, the tools would use it and
+#  skip OIDC.
+#
+# Requirements (all in place):
+#  - A trusted publisher configured per package on npmjs
+#    (package → Settings/Access → Trusted Publisher → GitHub Actions:
+#     organization `causljs`, repository `causl-ts`, workflow `release.yml`,
+#     allowed action `npm publish`).
+#  - `id-token: write` permission (granted below).
+#  - pnpm >= 10.12 (OIDC support; repo pins 10.33.2 via packageManager) and
+#    npm >= 11.5.1 in the runner (ensured by the upgrade step).
+#
+# Rollback: the org-level `NPM_TOKEN` secret is retained. If an OIDC publish
+# ever fails, re-add `env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }` to
+# the publish step to fall back to token auth.
 
 on:
   push:
@@ -35,10 +50,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # `id-token: write` is needed if/when we enable npm provenance
-      # (publishConfig.provenance: true). Cheap to grant unconditionally
-      # so adopters can flip the package.json switch without revisiting
-      # this workflow. See https://docs.npmjs.com/generating-provenance-statements
+      # Required for npm OIDC trusted publishing: lets the job request the
+      # GitHub OIDC id-token that npm exchanges for a short-lived publish
+      # credential. Also what --provenance signs against.
       id-token: write
 
     steps:
@@ -50,13 +64,18 @@ jobs:
         # to avoid ERR_PNPM_BAD_PM_VERSION when the two diverge.
         uses: pnpm/action-setup@v4
 
-      - name: Setup Node 20 (with npmjs.com registry)
+      - name: Setup Node 22 (with npmjs.com registry)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           scope: '@causl'
           cache: 'pnpm'
+
+      - name: Ensure npm >= 11.5.1 (OIDC trusted publishing)
+        # Node 22 still bundles npm 10.x, which predates OIDC trusted
+        # publishing. Upgrade so the OIDC token exchange is available.
+        run: npm install -g npm@latest && npm --version
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -65,22 +84,17 @@ jobs:
         run: pnpm -r --filter './packages/**' run build
 
       # `pnpm publish -r` walks every workspace package, honours each
-      # package.json's `private: true` (skips them), rewrites
-      # `workspace:*` ranges to literal versions on publish, and posts
-      # to whatever registry-url setup-node wrote into ~/.npmrc.
-      # `--no-git-checks` skips the "working tree clean" gate (the tag
-      # commit IS the clean state, but pnpm sometimes flags the
-      # .npmrc rewrite as dirty). `--access public` is required the
-      # first time a scoped package is published or npm rejects with
-      # 402 "Payment Required" assuming you wanted a private package.
+      # package.json's `private: true` (skips them), and rewrites
+      # `workspace:*` ranges to literal versions on publish (which is why
+      # this stays on pnpm — `npm publish` cannot parse `workspace:*`).
+      # `--provenance` records a build-provenance attestation (needs
+      # id-token: write). `--no-git-checks` skips the "working tree clean"
+      # gate. `--access public` is required the first time a scoped package
+      # is published. No NODE_AUTH_TOKEN: auth is via OIDC trusted publishing.
       - name: Publish (dry-run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
-        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks --dry-run
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks --provenance --dry-run
 
       - name: Publish
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != 'true') }}
-        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm -r --filter './packages/**' publish --access public --no-git-checks --provenance

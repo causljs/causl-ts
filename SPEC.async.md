@@ -59,12 +59,12 @@ So here is the meaning, on one page:
 
 ```text
 Resource<T>      := Behavior (ResourceState<T>)        -- a Behavior over GraphTime
-ResourceState<T> :=
-  | { kind: 'idle' }
-  | { kind: 'loading';  origin: GraphTime; promise: Promise<T> }
-  | { kind: 'loaded';   value: T; loadedAt: GraphTime }
-  | { kind: 'stale';    previous: T; originalLoadedAt: GraphTime; staleAt: GraphTime }
-  | { kind: 'errored';  error: unknown; erroredAt: GraphTime }
+ResourceState<T> :=                                     -- discriminator is `state`, not `kind`
+  | { state: 'idle' }
+  | { state: 'loading';  origin: GraphTime; promise: Promise<T> }
+  | { state: 'loaded';   value: T; origin: GraphTime; loadedAt: GraphTime }
+  | { state: 'stale';    value: T; origin: GraphTime; loadedAt: GraphTime }
+  | { state: 'errored';  error: unknown; origin: GraphTime; erroredAt: GraphTime }
 
 resource(key, loader)        : Resource<T>             where resource(t₀) = { kind: 'idle' }
 external Event source        : [(GraphTime, ResourceState<T>)]
@@ -77,7 +77,7 @@ From the equation, four theorems follow:
 
 - **Theorem 1 — Origin-bound resolution.** A `loading` resource resolves with respect to the GraphTime at which its loader was invoked (`origin`). If `origin === graph.now` at resolution, the transition is `Loading → Loaded`; otherwise `origin !== graph.now` and the transition is `Loading → Stale`. The guard is total over the GraphTime line — there is no third branch — and the comparison is structural, not heuristic. `SPEC.md` §9.1 row 6 is closed by the equality check, not by a timeout.
 
-- **Theorem 2 — Single-pipeline mutation.** Every state transition lands through `graph.commit`. The adapter does not call `tx.set` outside a commit; the adapter does not advance `now` directly; the adapter does not bypass the eight-phase body for any reason, including the loader's resolution callback. Each of `fetch-begin`, `fetch-resolve` (under either guard branch), `fetch-reject`, `dep-changed`, `invalidate`, and `fail` produces exactly one commit and advances `GraphTime` by exactly one tick.
+- **Theorem 2 — Single-pipeline mutation.** Every state transition lands through `graph.commit`. The adapter does not call `tx.set` outside a commit; the adapter does not advance `now` directly; the adapter does not bypass the eight-phase body for any reason, including the loader's resolution callback. Each of `fetch-begin`, `fetch-resolve` (under either guard branch), `fetch-reject`, `invalidate`, and `fail` produces exactly one commit and advances `GraphTime` by exactly one tick. (The `dep-changed` event class was struck by the 2026-07-06 review amendment, H4 — it never shipped as a reducer event; see §5.)
 
 - **Theorem 3 — Promise identity stability.** For a given `(resource, origin)` pair, the in-flight `Promise<T>` is exactly one object reference for the duration of the loading episode. `useCauslSuspense` (`@causl/react` §8.2) sees the same Promise across renders; SuspenseList's coordination and `startTransition`'s deferral both rely on that identity. `SPEC.md` §9.1 row 17 is closed by carrying the Promise on the `loading` arm of the discriminated union itself, not by re-creating it on every render.
 
@@ -150,6 +150,8 @@ The same falsification pattern appears in any draft that lets the host pass an e
 
 **Mechanical anchor.** Property test `packages/sync/test/theorems/theorem-1-origin-pinning.test.ts` (Theorem 1 fast-check property), backed by the §15-tier property file at `packages/sync/test/properties/origin-bound-resolution.property.test.ts`, which generates an arbitrary interleaving of N concurrent loaders against M unrelated commits and asserts the bi-implication on every produced `(pre, post)` pair. The CI gate is the `pnpm -F @causl/sync test:theorems` job, which fails the build on any counterexample fast-check finds. **Current state (as of v0.9.0).** The static IR companion — a `resource:origin-bound` rule that would re-assert the bi-implication from `causl-check` against an exported `CauslModel` — does *not* ship today. The Rust linter lives at `tools/checker/` (not `packages/causl-check/`), and `docs/theorem-1-static-lint-design.md` records the deferral: the resource state machine is an adapter-level construct over `IRInput`, the `origin` field is part of the application payload rather than the IR's structural shape, and the chosen path (closed via EPIC-10 / TASK 10.5, #522) is to keep the runtime property at the 1000-trial floor as the witness while the bounded enumerator's runtime evaluator (EPIC-3) takes over the static role once Schema 3 lands. The runtime witness is sufficient for the theorem today; the IR-level claim is on the shelf.
 
+**Waiver — `stalenessGuard: false` (review 2026-07-06, M5).** Theorem 1's totality ("the guard is total over the resolution event space; no timeout, no backoff, no debounce") holds **for resources constructed with `stalenessGuard` ≠ `false`** — i.e. the default. `ResourceOptions.stalenessGuard` (§12.2) is a per-resource opt-out: set to `false`, late resolutions are treated as **authoritative (last-writer-wins)** — `resource.ts` consults the flag and, when it is off, commits `Loading → Loaded` even for an arbitrarily-stale resolution (`graph.now > loadingAt`). With the guard off, `SPEC.md` §9.1 row 6's closure is **opt-out**: the equality check that Theorem 1 quantifies over is bypassed, so the bi-implication does not hold for that resource. This is a **named, per-resource waiver of §9.1 row 6**, not a hole in the theorem: the theorem is stated over guard-on resources, and the waiver is a deliberate capability for hosts that want the newest fetched value regardless of GraphTime ordering.
+
 #### Theorem 2 — Single-pipeline mutation
 
 **Statement.** Every observable transition between adjacent `ResourceState<T>` values for a registered resource node is induced by exactly one `graph.commit(intent, run)` call, and the new state is the value `run` staged through `tx.set(node, next)` during Phase A of that commit. There is no transition path that bypasses the eight-phase pipeline; there is no `tx.set` invocation outside a commit; there is no parallel mutation API that advances `now` for resource events. This is the resource-side projection of `SPEC.md` §3 Theorem 3 (atomicity) and Theorem 4 (monotonicity): each event-class arrival produces zero commits if the guard refuses, or exactly one commit advancing `GraphTime` by exactly one tick if the guard admits.
@@ -160,9 +162,11 @@ type ResourceEventClass =
   | 'fetch-resolve-loaded'
   | 'fetch-resolve-stale'
   | 'fetch-reject'
-  | 'dep-changed'
   | 'invalidate'
   | 'fail'
+  // 'dep-changed' struck by review amendment 2026-07-06 (H4): it never
+  // shipped as a reducer event class; dependency-driven invalidation is
+  // host-composed via `subscribe` + `invalidate()` (see §5).
 
 declare function singlePipelineMutation(
   graph: Graph,
@@ -202,7 +206,7 @@ function fetchOnce(): Promise<T> {
 
 The symmetric falsification pattern is any draft that reaches into the engine's internal `Entry` map directly (`(graph as { _entries: Map<...> })._entries.set(...)`) to "skip the pipeline for the loading commit because we know it's safe" — the cast is the falsifier; Theorem 2 is the contract the cast violates.
 
-**Mechanical anchor.** Two gates run in series. (1) Type fixture `packages/sync/test-d/no-tx-escape.test-d.ts` (#575) asserts via `tsd` that the adapter's public surface exposes no function whose return type contains `Tx` or any structural equivalent — the seam is sealed at the type level and a PR adding such an escape fails `tsc --noEmit` before any test runs. (2) Runtime guard `packages/sync/test/theorems/theorem-2-single-pipeline-mutation.test.ts` instruments `graph.commit` with a counter and asserts that the cardinality of resource-state transitions observed via `graph.subscribe(node, ...)` over a randomised event sequence equals the cardinality of `graph.commit` calls whose `intent` matches `/^(fetch|invalidate|fail|dep-changed):/`. The Tier-1 CI gate is the `pnpm -F @causl/sync test:theorems` job in `.github/workflows/race-detection.yml` (which also runs `causl-check` over the §9.1 fixtures per `docs/race-detection-tiers.md`). **Current state (as of v0.9.0).** The Rust linter's `resource:single-pipeline` rule (parallel to `resource:origin-bound` from Theorem 1) does *not* ship today for the same reasons recorded in `docs/theorem-1-static-lint-design.md`: the resource statechart is an adapter-level role over `IRInput`, so the IR walker does not see resource-shaped events directly. The two runtime gates (the type fixture and the property-instrumented `theorem-2-*` test) are the load-bearing witness today; the static IR layer is on the shelf pending EPIC-1 / Schema 3.
+**Mechanical anchor.** Two gates run in series. (1) Type fixture `packages/sync/test-d/no-tx-escape.test-d.ts` (#575) asserts via `tsd` that the adapter's public surface exposes no function whose return type contains `Tx` or any structural equivalent — the seam is sealed at the type level and a PR adding such an escape fails `tsc --noEmit` before any test runs. (2) Runtime guard `packages/sync/test/theorems/theorem-2-single-pipeline-mutation.test.ts` instruments `graph.commit` with a counter and asserts that the cardinality of resource-state transitions observed via `graph.subscribe(node, ...)` over a randomised event sequence equals the cardinality of `graph.commit` calls whose `intent` matches `/^(fetch|invalidate|fail):/` (the `dep-changed` intent arm was struck with the phantom event class, H4). The Tier-1 CI gate is the `pnpm -F @causl/sync test:theorems` job in `.github/workflows/race-detection.yml` (which also runs `causl-check` over the §9.1 fixtures per `docs/race-detection-tiers.md`). **Current state (as of v0.9.0).** The Rust linter's `resource:single-pipeline` rule (parallel to `resource:origin-bound` from Theorem 1) does *not* ship today for the same reasons recorded in `docs/theorem-1-static-lint-design.md`: the resource statechart is an adapter-level role over `IRInput`, so the IR walker does not see resource-shaped events directly. The two runtime gates (the type fixture and the property-instrumented `theorem-2-*` test) are the load-bearing witness today; the static IR layer is on the shelf pending EPIC-1 / Schema 3.
 
 #### Theorem 3 — Promise identity stability
 
@@ -343,19 +347,22 @@ Both primitives end up as roles played by `Input` and `Derived` nodes. A `Resour
 
 The previous draft of this adapter — the one before the §3 denotational re-grounding landed — talked about resolution callbacks the way a UI library talks about effects: the loader resolves, the adapter "updates the resource state," the framework eventually re-renders. That framing leaves the commit boundary implicit, which is the same hole `SPEC.md` §5 closes for the engine. I am closing it the same way for the adapter. There is exactly one path from an async event to engine state, and that path is `graph.commit`.
 
-The six event-class names the adapter ships are the closed vocabulary of resource-side commits. Every one of them produces exactly one commit. Every one of them advances `GraphTime` by exactly one tick. Every one of them traverses the eight-phase pipeline `SPEC.md` §5.1 names — A through H, plus the dotted suffixes F.4, F.5, F.6 — without exception, without a parallel API, without a side channel.
+The five event-class names the adapter ships are the closed vocabulary of resource-side commits. Every one of them produces exactly one commit. Every one of them advances `GraphTime` by exactly one tick. Every one of them traverses the eight-phase pipeline `SPEC.md` §5.1 names — A through H, plus the dotted suffixes F.4, F.5, F.6 — without exception, without a parallel API, without a side channel.
 
 | Event class | Trigger | Source state | Target state |
 | --- | --- | --- | --- |
-| `fetch-begin` | `handle.fetch()` invoked | `Idle | Loaded | Stale | Errored` | `Loading` |
+| `fetch-begin` | `handle.fetch()` invoked | `Idle | Loading | Loaded | Stale | Errored` | `Loading` |
 | `fetch-resolve` (Loaded) | loader resolves, `origin === graph.now` at resolution | `Loading` | `Loaded` |
 | `fetch-resolve` (Stale) | loader resolves, `origin !== graph.now` at resolution | `Loading` | `Stale` |
 | `fetch-reject` | loader rejects | `Loading` | `Errored` |
-| `dep-changed` | a dependency advanced past `loadedAt` | `Loaded` | `Stale` |
 | `invalidate` | `handle.invalidate()` invoked | `Loaded` | `Stale` |
 | `fail` | `handle.fail(error)` invoked | `Loading | Loaded` | `Errored` |
 
-Six rows; the chart in `docs/lifecycle.md` §1 has six edges out of the four non-terminal states; every cell on the chart is in this table. The `fetch-resolve` row is split across two guard branches because the staleness guard is what distinguishes the two transitions structurally — the loader's `then` arm runs the same code in both branches up to the GraphTime comparison, and the comparison is the entire content of the `Loading → Stale` versus `Loading → Loaded` edge. There is no third branch.
+**Amendment (review 2026-07-06).** Two corrections landed here. **(H4) The `dep-changed` row is struck.** It never shipped as a reducer event class — the reducer's event union is exactly `fetch-start | fetch-resolve | fetch-reject | invalidate | fail`, and no dependency-watching machinery exists. `dep-changed` survives *only* as a `whyUpdated` lineage-classification label (§11.1), not as a state-transition event. Dependency-driven invalidation is **host-composed**, not automatic: a host that wants a resource to go `Loaded → Stale` when another node advances subscribes to that node (`graph.subscribe`) and calls `handle.invalidate()` from the observer. The adapter promises no automatic `Loaded → Stale` on dependency advance; an adopter who registered a loader that reads another node gets a permanently-fresh value until it composes the invalidation itself. **(M4) `fetch-begin` legalises `Loading` as a source state.** The shipped reducer legalises `* → Loading` via `fetch-start` (`statechart-reducers.ts`), so calling `fetch()` mid-flight is allowed and starts a new, overlapping episode — the source-state column now includes `Loading` (it previously omitted it). The overlapping-episode semantics are specified below.
+
+Five rows; the chart in `docs/lifecycle.md` §1 has one edge per row out of the non-terminal states; every cell on the chart is in this table. The `fetch-resolve` row is split across two guard branches because the staleness guard is what distinguishes the two transitions structurally — the loader's `then` arm runs the same code in both branches up to the GraphTime comparison, and the comparison is the entire content of the `Loading → Stale` versus `Loading → Loaded` edge. There is no third branch.
+
+**Overlapping loading episodes (review 2026-07-06, M4 — normative).** Because `fetch()` is legal from `Loading`, a second `fetch()` issued while a first episode is still in flight starts a **second** episode with a fresh `origin`, a fresh in-flight `Promise`, and a fresh `loadingAt`, and the resource's `state` remains `Loading` (now against the second episode). The adapter is **last-writer-wins** across episodes, and the interleaving is: the *first* loader's later resolution runs the staleness guard against its own `loadingAt`, finds `graph.now > loadingAt` (the second `fetch-begin` commit advanced the clock), and therefore commits as **`stale`** carrying the *first* episode's value — overwriting the second episode's `loading` arm, including the second episode's in-flight `Promise`. An adopter relying on Theorem 3's Promise-identity stability for the second episode must be aware that a straggling first-episode resolution can replace the second episode's `loading` arm before the second loader resolves. Hosts that need strict de-duplication (one in-flight load per key, coalescing concurrent `fetch()` calls onto the same Promise) must compose that above the adapter; the adapter itself does not dedupe.
 
 Walk one event end-to-end to see the eight phases at work. The host calls `handle.fetch()` while the resource is `Idle`. The adapter captures `origin = graph.now` *before* invoking the loader, constructs the loader's `Promise<T>`, wraps it in the Suspense-safe `.then(() => undefined, () => undefined)` shape that carries identity without producing an unhandled rejection, and then calls `graph.commit('fetch:${key}:start', tx => tx.set(node, { state: 'loading', origin, promise }))`. That `commit` call is the entry into the engine pipeline. **Phase A** runs the staged write callback and collects the `loading`-tagged value into the transient writes map. **Phase B** publishes the write onto the resource's Input node. **Phase C** advances `now` by exactly one tick — the same Theorem 4 invariant every commit pays. **Phase C.5** stamps `lastWriteTime` on the resource's Input cell. **Phase D** walks the dependents of the resource node and recomputes any derivation that reads it (a Suspense-bound selector, an open-set compute that watches the resource's tag for a `loading` arm to register a "load-in-progress" conflict). **Phase E** assembles the immutable `Commit` record carrying `intent: 'fetch:${key}:start'`. **Phases F, F.4, F.5, F.6** append history, refresh `commitLog`, recompute commit-metadata deriveds, and retain the per-commit input snapshot. **Phase G** fires the resource node's per-node subscribers; **Phase H** fires the commit-level subscribers. The host's `await handle.fetch()` returns the loader's still-unresolved Promise; control yields back to the event loop.
 
@@ -379,17 +386,17 @@ Conal Elliott's reading of the §3 origin-bound resolution theorem is the load-b
 
 The previous draft of this adapter modelled "resource state" and "conflict status" as two enums hanging off the resource and conflict types, with no transition rules drawn anywhere. The statechart was implicit; the relationships between transitions were left to the implementer's good intentions; the chart was — to borrow David Harel's framing from the engine review — *a wishlist of states, not a system*. The composite chart is the response. `SPEC.md` §6 anchors three orthogonal regions implemented today; this adapter owns two of them, and the third (Engine) is `@causl/core`'s. The chart itself lives in `docs/lifecycle.md`. SPEC.async anchors the chart; SPEC.async does not duplicate the diagram. Duplicating it across two files is exactly the drift `lifecycle.md`'s reason-to-exist closes.
 
-### 6.1 ResourceFleet — five states, six event classes
+### 6.1 ResourceFleet — five states, five event classes
 
-The ResourceFleet orthogonal region carries one sub-statechart definition, instantiated per registered resource. Five states: `Idle`, `Loading`, `Loaded`, `Stale`, `Errored`. The complete edge set is the cross-product of this state-by-event-class matrix:
+The ResourceFleet orthogonal region carries one sub-statechart definition, instantiated per registered resource. Five states: `Idle`, `Loading`, `Loaded`, `Stale`, `Errored`. The complete edge set is the cross-product of this state-by-event-class matrix (the `dep-changed` column was struck by the 2026-07-06 review amendment, H4 — see §5):
 
-| State \ Event | `fetch-begin` | `fetch-resolve(Loaded)` | `fetch-resolve(Stale)` | `fetch-reject` | `dep-changed` | `invalidate` | `fail` |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **Idle** | → Loading | — | — | — | — | — | throw |
-| **Loading** | (re-fetch: → Loading) | → Loaded | → Stale | → Errored | — | — | → Errored |
-| **Loaded** | → Loading | — | — | — | → Stale | → Stale | → Errored |
-| **Stale** | → Loading | — | — | — | — | — | throw |
-| **Errored** | → Loading | — | — | — | — | — | throw |
+| State \ Event | `fetch-begin` | `fetch-resolve(Loaded)` | `fetch-resolve(Stale)` | `fetch-reject` | `invalidate` | `fail` |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Idle** | → Loading | — | — | — | — | throw |
+| **Loading** | (re-fetch: → Loading) | → Loaded | → Stale | → Errored | — | → Errored |
+| **Loaded** | → Loading | — | — | — | → Stale | → Errored |
+| **Stale** | → Loading | — | — | — | — | throw |
+| **Errored** | → Loading | — | — | — | — | throw |
 
 Every dash is a non-edge: the chart has no transition under that event from that state, and the adapter's runtime guard refuses the call rather than ship an off-chart write. Every `throw` is a `ForbiddenResourceTransitionError` with the `from` and `to` populated. The three throw cells (`Idle → Errored`, `Stale → Errored`, `Errored → Errored`) are the §17 commitment 7 fence the type-checked code in `resource.ts` enforces structurally. The `(re-fetch: → Loading)` cell is the same edge as the `Idle → Loading` transition under `fetch-begin`; calling `fetch()` on a resource that is already loading abandons the previous loading episode and starts a new one, with a new `origin`, a new in-flight Promise, and a new identity for Theorem 3 to be quantified over. The previous episode's resolution still routes through the staleness guard against the new `origin`; the guard fires and the previous loader's resolution lands as `stale`, never as `loaded`. The chart promises that a resource has at most one in-flight episode at any GraphTime, and the re-fetch edge is what makes that promise compositional.
 
@@ -643,6 +650,8 @@ The chart-anchored catalogue of transitions the runtime guards refuse. For each 
 | `loaded` | `errored` (host) | `fail(error)` | *Not* refused — the chart-legal `Loaded → Errored` edge, triggered when the host learns of a server-side error for an already-loaded resource through an out-of-band channel (websocket push, devtools intervention). Listed for symmetry with the `loading` row. |
 
 The two non-refused rows are catalogued because the §9.4 promise is a complete enumeration, not just the negative half. A reader who consults this table to ask *"can I call `fail()` from `loaded`?"* should find the answer ("yes, this is the chart-legal `Loaded → Errored` edge") in the same place as the negative answer.
+
+**`invalidate` off-chart sources — a third refusal shape (review 2026-07-06, M4).** The catalogue above enumerates the transitions `ForbiddenResourceTransitionError` refuses by *throwing*. `invalidate()` uses a **different** refusal shape and must be catalogued so the two are not conflated. `handle.invalidate()` is chart-legal only from `Loaded` (→ `Stale`); called from any **non-`Loaded`** state (`Idle`, `Loading`, `Stale`, `Errored`) the shipped adapter is a **silent no-op** — the reducer returns `next === state`, and `applyEvent` skips the commit entirely (`packages/sync/src/resource.ts`). This is a *third, chart-sanctioned* refusal shape alongside the typed throw and the non-edge dash: **no-op-by-reducer-equality**. It is distinct from the §9.4 option (a) "silent no-op on illegal transitions" that the team rejected — that rejection is about *mutators that should surface a chart violation to the caller* (e.g. registry `resolve()` on a terminal conflict). `invalidate` from a non-`Loaded` state is not an off-chart *write* the host needs signalled; it is a request whose precondition ("there is a loaded value to mark stale") is unmet, and the reducer-equality no-op is the honest shape for "nothing to invalidate." A host that needs to distinguish "invalidated" from "no-op" reads the resource `state` before/after or inspects the returned commit's presence. (If a future revision wants `invalidate` to *throw* from non-`Loaded` states instead, that is the alternative the review flagged; the shipped behaviour is the no-op documented here.)
 
 **ConflictRegistry — transitions `ForbiddenConflictTransitionError` refuses:**
 
@@ -1389,7 +1398,7 @@ The §11 inspection surface composes onto adapter primitives without per-primiti
 
 ## 12. Public surface
 
-Anders Hejlsberg's framing for `SPEC.md` §12 — the surface is the contract — lands on this adapter at a smaller scale. `@causl/sync` ships nine public symbols, organised into the canonical surface (§12.1) and the second-tier extensions (§12.2). The package is one of the canonical sibling adapters in `SPEC.md` §12.5; its README is the row at `packages/sync/README.md`. The §12 audit on the engine side (nineteen public Graph methods/getters) does not apply here — adapters change at their own pace, and this section is the per-adapter honesty pass.
+Anders Hejlsberg's framing for `SPEC.md` §12 — the surface is the contract — lands on this adapter at a smaller scale. `@causl/sync` ships nine public symbols, organised into the canonical surface (§12.1) and the second-tier extensions (§12.2). The package is one of the canonical sibling adapters in `SPEC.md` §12.5; its README is the row at `packages/sync/README.md`. The §12 audit on the engine side (twenty-one public `Graph` members — see `SPEC.md` §12) does not apply here — adapters change at their own pace, and this section is the per-adapter honesty pass.
 
 ### 12.1 Canonical surface
 
@@ -1415,7 +1424,7 @@ The four exports below are useful but not load-bearing — a consumer who wanted
 
 | Export | Signature | Why second-tier (and not internal) |
 | --- | --- | --- |
-| `ResourceOptions` | `interface { loader: (origin: GraphTime) => Promise<T>; stalenessGuard?: boolean }` | The options bag for `resource()`. A consumer could re-declare it inline at every call site, but the adapter centralises it so the staleness-guard default and the loader signature have one source of truth. |
+| `ResourceOptions` | `interface { loader: (origin: GraphTime) => Promise<T>; stalenessGuard?: boolean }` | The options bag for `resource()`. A consumer could re-declare it inline at every call site, but the adapter centralises it so the staleness-guard default and the loader signature have one source of truth. `stalenessGuard` defaults to on; setting it to **`false`** is the last-writer-wins opt-out — a **named, per-resource waiver of Theorem 1 / `SPEC.md` §9.1 row 6** (review 2026-07-06, M5): late resolutions commit `Loading → Loaded` as authoritative regardless of GraphTime ordering. |
 | `ConflictRegistryOptions` | `interface { id: NodeId; compute: Compute<readonly ConflictBase<T>[]> }` | Same shape as `ResourceOptions`: the options bag for `createConflictRegistry()`, centralised. |
 | `ConflictBase` | `interface { id; target; value; raisedAt }` | The shared field set every `Conflict<T>` arm intersects with. A consumer who wants to type a value that is "any conflict, regardless of arm" reaches for `ConflictBase<T>`. |
 | `ConflictKind` | `type 'open' \| 'resolved' \| 'ignored' \| 'superseded'` | The discriminator's value space. Useful for adapter UIs that want to switch on the kind without committing to a specific arm's payload. |

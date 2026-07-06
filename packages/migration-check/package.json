@@ -1,6 +1,11 @@
 {
   "name": "@causl/migration-check",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/migration-check"
+  },
   "description": "Migration drift detector — finds unmigrated Jotai/MobX/Redux patterns in a causl-adopting codebase. Rule contract: docs/migration/RULE_CATALOGUE.md.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

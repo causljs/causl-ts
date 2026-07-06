@@ -1,6 +1,11 @@
 {
   "name": "@causl/hypothesis",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/hypothesis"
+  },
   "description": "Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC §16.5).",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@causl/core",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Causl semantic core (causl-ts build): the reference TypeScript engine. Public npmjs distribution.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

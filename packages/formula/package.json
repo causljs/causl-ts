@@ -1,6 +1,11 @@
 {
   "name": "@causl/formula",
   "version": "0.2.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/formula"
+  },
   "description": "Spreadsheet formula primitives for Causl — grammar, parser, formula-to-derived adapter.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

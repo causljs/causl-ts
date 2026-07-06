@@ -1,6 +1,11 @@
 {
   "name": "@causl/persistence",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/persistence"
+  },
   "description": "UI-preference persistence for Causl — persistedInput() and storage adapters.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

@@ -1,6 +1,11 @@
 {
   "name": "@causl/devtools-bridge",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/devtools-bridge"
+  },
   "private": false,
   "description": "Internal: bridges Causl commits to the Redux DevTools Extension protocol. SPEC §13 defers 'devtools as a shippable product'; this package realises §11 inspection primitives end-to-end and is held private until either a downstream UI earns its place or §13 is amended.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",

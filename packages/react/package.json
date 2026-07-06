@@ -1,6 +1,11 @@
 {
   "name": "@causl/react",
   "version": "0.2.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causljs/causl-ts.git",
+    "directory": "packages/react"
+  },
   "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "license": "MIT",

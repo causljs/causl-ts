@@ -1,5 +1,10 @@
 # @causl/core
 
+**Build & distribution:** this is the **causl-ts** build of `@causl/core` — the
+reference TypeScript engine, published to public **npmjs**. The enterprise
+**causl-client** build (the thin API over the Rust→WASM **causl-wasm** engine)
+is a different package, distributed privately via `iasbuilt-npm`.
+
 > The semantic core of [Causl](../../README.md): two primitives, one
 > commit, the canonical seven-method API plus the second-tier extensions
 > justified individually in SPEC §12.2.

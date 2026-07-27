@@ -95,7 +95,7 @@ importers:
 
   packages/core/testing:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:..
     devDependencies:
@@ -108,7 +108,7 @@ importers:
 
   packages/devtools:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -133,7 +133,7 @@ importers:
 
   packages/devtools-bridge:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -167,7 +167,7 @@ importers:
 
   packages/formula:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -247,7 +247,7 @@ importers:
 
   packages/persistence:
     devDependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
       '@causl/core-testing-internal':
@@ -280,10 +280,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
-      '@causl/sync':
+      '@causlts/sync':
         specifier: workspace:*
         version: link:../sync
     devDependencies:
@@ -353,7 +353,7 @@ importers:
 
   packages/sync:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -390,10 +390,10 @@ importers:
 
   packages/sync-testing-internal:
     dependencies:
-      '@causl/core':
+      '@causlts/core':
         specifier: workspace:*
         version: link:../core
-      '@causl/sync':
+      '@causlts/sync':
         specifier: workspace:*
         version: link:../sync
     devDependencies:

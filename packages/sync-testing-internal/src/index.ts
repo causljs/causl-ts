@@ -10,7 +10,7 @@
  *
  * #578 alignment: as of wave-16, the harness factories
  * (propertyResource, propertyConflict, propertyConflictWithMap)
- * wrap a LIVE @causl/core Graph with a real @causl/sync
+ * wrap a LIVE @causlts/core Graph with a real @causlts/sync
  * Resource / ConflictRegistry — replacing the pre-#578 model-
  * state simulation. The applyEvents / applyConflictEvents
  * functions retain their model-state signatures for back-compat
@@ -18,16 +18,16 @@
  * alongside as applyEventsLive / applyConflictEventsLive.
  *
  * Test-only. Do not import from production code. Surfaced as a
- * peer-dep of `@causl/sync`.
+ * peer-dep of `@causlts/sync`.
  */
 
-import { createCausl, type Graph, type InputNode, type NodeId } from '@causl/core'
+import { createCausl, type Graph, type InputNode, type NodeId } from '@causlts/core'
 import {
   createConflictRegistry,
   resource,
   type ConflictRegistry,
   type ResourceHandle,
-} from '@causl/sync'
+} from '@causlts/sync'
 import fc from 'fast-check'
 
 /**
@@ -388,8 +388,8 @@ export function preserveOpenPriming<T>(arb: fc.Arbitrary<T>): fc.Arbitrary<T> {
 }
 
 /**
- * Property-resource harness — wraps a LIVE @causl/core Graph with a
- * real @causl/sync Resource. Per SPEC.async §15.0 API sketch.
+ * Property-resource harness — wraps a LIVE @causlts/core Graph with a
+ * real @causlts/sync Resource. Per SPEC.async §15.0 API sketch.
  *
  * Each property trial constructs a fresh harness via
  * {@link propertyResource}. The harness exposes:

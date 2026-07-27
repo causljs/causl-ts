@@ -28,7 +28,7 @@
  * enforces that floor.
  */
 
-import { createCausl, type Graph } from '@causl/core'
+import { createCausl, type Graph } from '@causlts/core'
 import { propertyTrials } from '@causl/core-testing-internal'
 import fc from 'fast-check'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

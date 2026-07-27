@@ -32,7 +32,7 @@ jobs:
 
       - name: Run commitment audit scripts
         id: audit
-        # `pnpm --filter @causl/core exec` was removed in #565: it
+        # `pnpm --filter @causlts/core exec` was removed in #565: it
         # silently reset cwd to packages/core/, breaking every
         # script's `__dirname`-relative path resolution. Each script
         # now runs from the workspace root via tsx, so relative

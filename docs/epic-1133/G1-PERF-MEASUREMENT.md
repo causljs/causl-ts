@@ -35,7 +35,7 @@ wiring confirm this:
    `'js' | 'auto'`.** The `backend: 'wasm'` value the bench wants to
    pin through `createCausl` is not in the union. Adopters who want
    WASM unconditionally must drive `loadWasmBackend()` from
-   `@causl/core/wasm` directly. The bench harness does not.
+   `@causlts/core/wasm` directly. The bench harness does not.
 
 3. **`packages/core/wasm/index.ts:538-601` — `WasmBackend.commit()`
    SSOT is still the TS engine.** Post-F-marshal.5 (PR #1477),

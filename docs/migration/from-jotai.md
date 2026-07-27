@@ -59,13 +59,13 @@ function Counter() {
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import {
   createUpdate,
   CauslProvider,
   useDispatch,
   useCausl,
-} from '@causl/react'
+} from '@causlts/react'
 
 const graph = createCausl()
 const counter = graph.input('counter', 0)
@@ -164,15 +164,15 @@ it does not rewrite.
 ## Suspense
 
 Jotai's `atom(async (get) => …)` throws a Promise. Causl's
-`@causl/sync` `resource(...)` is a tagged-union; the projection
+`@causlts/sync` `resource(...)` is a tagged-union; the projection
 through `useCauslSuspense(selector)` re-introduces the
 throw-Promise behaviour at the React boundary. Both primitives ship
-today: `resource` from `@causl/sync` and `useCauslSuspense`
-from `@causl/react`.
+today: `resource` from `@causlts/sync` and `useCauslSuspense`
+from `@causlts/react`.
 
 ```ts
-import { resource } from '@causl/sync'
-import { useCauslSuspense } from '@causl/react'
+import { resource } from '@causlts/sync'
+import { useCauslSuspense } from '@causlts/react'
 
 // Before
 const userAtom = atom(async (get) => fetch('/api/me').then(r => r.json()))
@@ -208,14 +208,14 @@ function Greeting() {
 Jotai's `atomWithStorage(key, initial)` reads from `localStorage` (or
 a custom store) on mount and writes through on every set.
 `persistedInput(graph, id, initial, { key, storage, version })` from
-`@causl/persistence` is the Causl equivalent — same identity
+`@causlts/persistence` is the Causl equivalent — same identity
 contract, but the read / write hooks live on the graph rather than
 the React tree, and the on-disk envelope is a versioned
 `{ version, value }` record so schema evolution has a `migrate`
 seam.
 
 ```ts
-import { persistedInput, localStorageAdapter } from '@causl/persistence'
+import { persistedInput, localStorageAdapter } from '@causlts/persistence'
 
 // Before
 const themeAtom = atomWithStorage('theme', 'light')
@@ -228,7 +228,7 @@ const theme = persistedInput(graph, 'theme', 'light', {
 })
 ```
 
-`@causl/persistence` ships `localStorageAdapter()` and
+`@causlts/persistence` ships `localStorageAdapter()` and
 `memoryAdapter()` out of the box; any object satisfying the
 `StorageAdapter` interface (sync `get` / `set` / `remove`) plugs in.
 Schema evolution is handled by passing a `migrate(prev, prevVersion)`
@@ -240,15 +240,15 @@ into the host application.
 
 Jotai uses `getDefaultStore()` per-request. Causl captures
 server state via `graph.snapshot()` and replays it on the client
-through `<Hydrate snapshot={…}>` from `@causl/react`. The
+through `<Hydrate snapshot={…}>` from `@causlts/react`. The
 hydration runs in a `useLayoutEffect`, so render bodies stay pure
 and the server HTML and the first client paint observe identical
 values.
 
 ```ts
 // app/page.tsx (Next.js App Router server component)
-import { createCausl } from '@causl/core'
-import { Hydrate, CauslProvider } from '@causl/react'
+import { createCausl } from '@causlts/core'
+import { Hydrate, CauslProvider } from '@causlts/react'
 
 const serverGraph = createCausl()
 bootGraphFromDb(serverGraph)
@@ -275,7 +275,7 @@ Jotai's `atomFamily(id => atom(…))` returns a memoized atom factory.
 Causl's `useCauslFamily(key, factory)` is a hook with explicit
 mount-driven lifecycle: when the last consumer unmounts, the node is
 disposed. This shipped via PR #209 and is exported from
-`@causl/react`.
+`@causlts/react`.
 
 ```ts
 // Before

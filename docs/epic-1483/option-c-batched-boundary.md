@@ -192,7 +192,7 @@ For existing adopter code (which assumes sync commit-land):
    Adopters who want the batched-mode wire amortisation set it
    explicitly. The `Graph` surface returned is unchanged.
 3. **Per-graph, not global**. Default and override both live on
-   `createCausl(options)` so multi-graph adopters (`@causl/sync`,
+   `createCausl(options)` so multi-graph adopters (`@causlts/sync`,
    embedded use-cases) can opt in per graph without cross-graph
    coupling.
 
@@ -388,7 +388,7 @@ Option (c) is the only candidate that ships in **a single sprint**.
 | --- | --- | --- |
 | Can N=1 be the default? | **Yes**. At N=1 the queue holds one action and flushes immediately. Byte-identical to dev `336ec6bd` behaviour. | §2.3, §3.1 |
 | Do adopters opt in to N>1? | **Yes**, via `createCausl({ batchedFlush: { afterN: N, intervalMs: M } })`. No global opt-in; configuration is per-graph. | §2.3 |
-| Per-graph or global? | **Per-graph**. `@causl/sync` and multi-graph adopters opt in per graph without coupling. | §2.3 |
+| Per-graph or global? | **Per-graph**. `@causlts/sync` and multi-graph adopters opt in per graph without coupling. | §2.3 |
 | Does the existing `auto-adapt` surface need to flip on batched mode? | **No, but it could later**. `shouldMigrate(stats)` (`packages/core/src/auto-adapt.ts`) is the natural seam; v1.x ships explicit opt-in only. A future `AdaptThresholds.batchedFlushAfterN` field could promote workloads automatically. | §1b CONSTRAINTS migratable surface |
 | Does `commit()` change shape? | **No**. Returns `Commit` synchronously. The only thing that batches is the wire crossing, not the commit semantics. | §2.1 Answer C |
 | Does `graph.now` advance per-commit? | **Yes, always**. SPEC §3 Theorem 4 invariant preserved. | §3.1 |

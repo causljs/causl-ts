@@ -1,8 +1,8 @@
 // Post-migration causl counter (from Redux Toolkit). No
 // react-redux / @reduxjs/toolkit imports; no transitional bridge.
 // See docs/migration/from-redux.md.
-import { createCausl } from '@causl/core'
-import { useCausl, useDispatch, createUpdate } from '@causl/react'
+import { createCausl } from '@causlts/core'
+import { useCausl, useDispatch, createUpdate } from '@causlts/react'
 
 type Msg = { kind: 'inc' }
 

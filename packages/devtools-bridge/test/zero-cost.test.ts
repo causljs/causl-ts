@@ -14,7 +14,7 @@
  * absent-extension case.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools, isExtensionAvailable } from '../src/connect.js'
 

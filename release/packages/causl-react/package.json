@@ -1,5 +1,5 @@
 {
-  "name": "@causl/react",
+  "name": "@causlts/react",
   "version": "0.2.0",
   "description": "React bindings for Causl — useCausl, useDispatch, CauslProvider.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
@@ -19,8 +19,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@causl/core": "^0.2.0",
-    "@causl/sync": "^0.2.0"
+    "@causlts/core": "^0.2.0",
+    "@causlts/sync": "^0.2.0"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

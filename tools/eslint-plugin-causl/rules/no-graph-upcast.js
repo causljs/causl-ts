@@ -25,7 +25,7 @@
  * -----
  * The rule fires on `TSAsExpression` whose top-level type annotation
  * is a `TSTypeReference` named `Graph` (the engine handle from
- * `@causl/core`), including the chained `as unknown as Graph` /
+ * `@causlts/core`), including the chained `as unknown as Graph` /
  * `as any as Graph` bypass shapes. Brand-casts to `GraphTime`,
  * `GraphSnapshot`, `GraphParam`, etc. are NOT flagged — those are
  * unrelated TS branding patterns used by the wasm marshaler and test

@@ -19,7 +19,7 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { propertyTrials } from '@causl/core-testing-internal'
-import { createCausl, type Graph } from '@causl/core'
+import { createCausl, type Graph } from '@causlts/core'
 import {
   createConflictRegistry,
   ForbiddenConflictTransitionError,

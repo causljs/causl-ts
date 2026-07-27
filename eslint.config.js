@@ -117,7 +117,7 @@ export default [
   },
   // SPEC §17 commitment 3 / issue #393 — the §7 layering (information
   // model / editor-controller / engine substrate) is enforced at the
-  // package boundary. `@causl/core` is the engine substrate and
+  // package boundary. `@causlts/core` is the engine substrate and
   // must not import from any sibling adapter package — doing so would
   // either invert the layering (engine reaching into controller) or
   // create the kind of two-way coupling that lets controller-shaped
@@ -142,27 +142,27 @@ export default [
           patterns: [
             {
               group: [
-                '@causl/react',
-                '@causl/react/*',
-                '@causl/sync',
-                '@causl/sync/*',
-                '@causl/persistence',
-                '@causl/persistence/*',
-                '@causl/devtools',
-                '@causl/devtools/*',
-                '@causl/devtools-bridge',
-                '@causl/devtools-bridge/*',
-                '@causl/formula',
-                '@causl/formula/*',
+                '@causlts/react',
+                '@causlts/react/*',
+                '@causlts/sync',
+                '@causlts/sync/*',
+                '@causlts/persistence',
+                '@causlts/persistence/*',
+                '@causlts/devtools',
+                '@causlts/devtools/*',
+                '@causlts/devtools-bridge',
+                '@causlts/devtools-bridge/*',
+                '@causlts/formula',
+                '@causlts/formula/*',
                 '@causl/checker',
                 '@causl/checker/*',
                 '@causl/bench',
                 '@causl/bench/*',
-                '@causl/migration-check',
-                '@causl/migration-check/*',
+                '@causlts/migration-check',
+                '@causlts/migration-check/*',
               ],
               message:
-                'SPEC §17.3 / §7: `@causl/core` is the engine substrate and must not import from sibling adapter packages. Move the shared symbol into core or invert the dependency.',
+                'SPEC §17.3 / §7: `@causlts/core` is the engine substrate and must not import from sibling adapter packages. Move the shared symbol into core or invert the dependency.',
             },
           ],
         },
@@ -170,8 +170,8 @@ export default [
     },
   },
   // SPEC §12.3 seam — adapter packages may reach engine internals
-  // ONLY through the documented `@causl/core/internal` entrypoint.
-  // Deeper paths (`@causl/core/dist/...`, `@causl/core/src/...`)
+  // ONLY through the documented `@causlts/core/internal` entrypoint.
+  // Deeper paths (`@causlts/core/dist/...`, `@causlts/core/src/...`)
   // are forbidden: they bypass the package's `exports` map and break
   // the SemVer guarantee that the public + internal surfaces are the
   // only stable contracts.
@@ -200,13 +200,13 @@ export default [
           patterns: [
             {
               group: [
-                '@causl/core/dist',
-                '@causl/core/dist/*',
-                '@causl/core/src',
-                '@causl/core/src/*',
+                '@causlts/core/dist',
+                '@causlts/core/dist/*',
+                '@causlts/core/src',
+                '@causlts/core/src/*',
               ],
               message:
-                'SPEC §12.3: adapters may reach engine internals only through the `@causl/core/internal` seam — never through dist/ or src/ deep paths.',
+                'SPEC §12.3: adapters may reach engine internals only through the `@causlts/core/internal` seam — never through dist/ or src/ deep paths.',
             },
           ],
         },

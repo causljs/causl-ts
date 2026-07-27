@@ -216,7 +216,7 @@ Tier-3 is the safety net for the brutal-critical-review concern about adopters f
           CAUSL_RACE_SEED: ${{ github.run_id }}  # fresh per night, recorded
         run: pnpm causl-check race --k 20 --depth 8 --sarif tmp/sarif/tier-3.sarif
       - name: Tier-3 — soak (15-min sustained property burn)
-        run: pnpm --filter @causl/core run test:soak
+        run: pnpm --filter @causlts/core run test:soak
       - name: Update CI-runtime metrics
         run: node scripts/ci/update-metrics.mjs
       - name: Cost guard (alert if Tier-2 7d > 60 min/day)

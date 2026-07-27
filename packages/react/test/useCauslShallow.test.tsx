@@ -9,7 +9,7 @@
  * utility used by the hook.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import { act, render, screen } from '@testing-library/react'
 import { useRef, type JSX } from 'react'
 import { describe, expect, it } from 'vitest'

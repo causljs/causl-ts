@@ -2,7 +2,7 @@
   "name": "@causl/core-testing-internal",
   "private": true,
   "version": "0.0.0",
-  "description": "Internal: shared test helpers for @causl/* packages. Surfaced as the @causl/core/testing entry point.",
+  "description": "Internal: shared test helpers for @causl/* packages. Surfaced as the @causlts/core/testing entry point.",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "type": "module",
   "main": "./src/index.ts",
@@ -12,7 +12,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@causl/core": "workspace:*"
+    "@causlts/core": "workspace:*"
   },
   "devDependencies": {
     "fast-check": "^3.20.0",

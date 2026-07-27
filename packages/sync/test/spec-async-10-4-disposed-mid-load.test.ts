@@ -11,8 +11,8 @@
  * rather than the stale resolved value.
  */
 
-import { createCausl } from '@causl/core'
-import { dispose } from '@causl/core/internal'
+import { createCausl } from '@causlts/core'
+import { dispose } from '@causlts/core/internal'
 import { describe, expect, it } from 'vitest'
 import { resource } from '../src/index.js'
 

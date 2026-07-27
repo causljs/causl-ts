@@ -1,5 +1,18 @@
 # Causl
 
+## Published package
+
+This repository publishes **`@causl/core-ts`** — the **TypeScript engine**, the value-of-record /
+unconditional floor, plus the cross-backend conformance harness.
+
+Registry: Gitea npm registry — `https://git.opsite.ca/api/packages/causl/npm/`
+
+> **Renamed from `@causl/core`.** This repository and `causl-client-ts` previously published *nine
+> identically-named packages* into one `@causl/*` namespace, distinguished only by version number — so a
+> consumer could not tell which engine they were on from a lockfile.
+> Naming follows the scheme in [`causl-client-ts` / `docs/repo-naming-decision.md`](https://git.opsite.ca/causl/causl-client-ts/src/branch/main/docs/repo-naming-decision.md): **engines are named by substrate** (`causl-core-rs`, `causl-core-ts`), **clients by consumer language** (`causl-client-ts`, future `causl-client-cpp`).
+
+
 > Transactional state for tangled dependency graphs.
 
 > **This is the open-source, pure-TypeScript reference engine — the SPEC §12 conformance floor.**

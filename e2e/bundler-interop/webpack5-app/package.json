@@ -2,7 +2,7 @@
   "name": "@causl-fixture/webpack5-app",
   "private": true,
   "version": "0.0.0",
-  "description": "webpack 5 bundler-interop fixture for @causl/core + @causl/core/wasm (#689).",
+  "description": "webpack 5 bundler-interop fixture for @causlts/core + @causlts/core/wasm (#689).",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "verify": "node verify.mjs"
   },
   "dependencies": {
-    "@causl/core": "file:../../../packages/core"
+    "@causlts/core": "file:../../../packages/core"
   },
   "devDependencies": {
     "webpack": "^5.97.1",

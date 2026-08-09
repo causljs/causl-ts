@@ -1,5 +1,5 @@
 {
-  "name": "@causl/sync",
+  "name": "@causlts/sync",
   "version": "0.2.2",
   "repository": {
     "type": "git",
@@ -45,7 +45,7 @@
     "directory": "test-d"
   },
   "dependencies": {
-    "@causl/core": "workspace:*"
+    "@causlts/core": "workspace:*"
   },
   "devDependencies": {
     "@causl/core-testing-internal": "workspace:*",

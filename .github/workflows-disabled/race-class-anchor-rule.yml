@@ -50,7 +50,7 @@ jobs:
 
       - name: Run race-class-anchor lint
         run: |
-          pnpm --filter @causl/core exec tsx \
+          pnpm --filter @causlts/core exec tsx \
             "${{ github.workspace }}/tools/lint/race-class-anchor-check.ts" \
             --body-file /tmp/pr-body.md \
             --changed-files '${{ steps.changed.outputs.files }}'

@@ -51,8 +51,8 @@ const counterSlice = createSlice({
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causl/core'
-import { createUpdate } from '@causl/react'
+import { createCausl } from '@causlts/core'
+import { createUpdate } from '@causlts/react'
 
 const graph = createCausl()
 const counter = graph.input('counter', 0)
@@ -92,14 +92,14 @@ const update = createUpdate<Msg>({
 
 `createAsyncThunk` orchestrates a fetch-and-store-result lifecycle
 keyed off action types. Causl splits the two concerns: the
-`resource` primitive from `@causl/sync` owns the lifecycle as a
+`resource` primitive from `@causlts/sync` owns the lifecycle as a
 tagged-union node on the graph, and `useCauslSuspense` from
-`@causl/react` projects the same node into Suspense semantics at
+`@causlts/react` projects the same node into Suspense semantics at
 the React boundary. Both ship today.
 
 ```ts
-import { resource } from '@causl/sync'
-import { useCausl, useCauslSuspense } from '@causl/react'
+import { resource } from '@causlts/sync'
+import { useCausl, useCauslSuspense } from '@causlts/react'
 
 // Before
 const fetchUser = createAsyncThunk('user/fetch', async (id: string) => {
@@ -162,7 +162,7 @@ version counter `EngineTelemetry` surfaces. Cross-link:
 naturally to `useCauslFamily(key, factory)` — the family hook gives
 you a stable `Node<T>` per entity id within a provider, with refcount-
 driven disposal when the last consumer unmounts. This shipped in
-PR #209 and is exported from `@causl/react`.
+PR #209 and is exported from `@causlts/react`.
 
 ```ts
 // Before
@@ -187,5 +187,5 @@ function UserRow({ id }: { id: string }) {
   memoize by identity, so the wrapper is usually unnecessary;
   `causl-migration-check` flags occurrences by rule ID — see
   `docs/migration/RULE_CATALOGUE.md` (rule `R-05`).
-- Redux DevTools — replaced wholesale by `@causl/devtools-bridge`
+- Redux DevTools — replaced wholesale by `@causlts/devtools-bridge`
   (#142), which speaks the same protocol.

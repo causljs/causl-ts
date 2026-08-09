@@ -10,7 +10,7 @@ jobs:
     name: TypeScript — typecheck + build + test (react ${{ matrix.react }})
     runs-on: ubuntu-latest
     # React peer-dep matrix (#261). We support React 18.3+ and 19.x on
-    # the `@causl/react` adapter (declared via peerDependencies). The
+    # the `@causlts/react` adapter (declared via peerDependencies). The
     # workspace lockfile pins one concrete React version (18.3.1) for
     # day-to-day dev; CI fans out across both major lines so we catch
     # peer-dep regressions before publish rather than when consumers
@@ -40,7 +40,7 @@ jobs:
 
       # When the matrix leg targets a React version other than the one
       # pinned in the lockfile (18.3.1), re-resolve the React peer in
-      # the `@causl/react` package against the matrix value before
+      # the `@causlts/react` package against the matrix value before
       # running the rest of the pipeline. Using `--no-frozen-lockfile`
       # only on the override step keeps the baseline install honouring
       # the lockfile while still letting the matrix exercise an
@@ -53,7 +53,7 @@ jobs:
       - name: Override React to ${{ matrix.react }} (peer-dep matrix leg)
         if: matrix.react != '18.3.1'
         run: |
-          pnpm --filter @causl/react add -D \
+          pnpm --filter @causlts/react add -D \
             react@${{ matrix.react }} \
             react-dom@${{ matrix.react }} \
             @types/react@${{ matrix.react }} \
@@ -71,7 +71,7 @@ jobs:
       # dozens of unrelated specs and lose the PR-author signal the
       # gate exists for. See #247.
       - name: perf-invariant — SPEC §14 gate
-        run: pnpm --filter @causl/core run test:perf-invariant
+        run: pnpm --filter @causlts/core run test:perf-invariant
 
       # Sibling React-side gate for SPEC §14 bullet 2 ("a component
       # subscribed to one node re-renders only when that node's value
@@ -96,7 +96,7 @@ jobs:
         env:
           CAUSL_HEAP_GATE: '1'
           NODE_OPTIONS: '--expose-gc'
-        run: pnpm --filter @causl/react run test:perf-invariant
+        run: pnpm --filter @causlts/react run test:perf-invariant
 
       - name: Run tests
         run: pnpm -r --filter './packages/*' run test:run
@@ -206,16 +206,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Build everything the harness imports — the e2e fixture loads
-      # `@causl/core`'s built ESM directly via a static file server,
+      # `@causlts/core`'s built ESM directly via a static file server,
       # so `dist/` must exist before the test runs.
       - name: Build packages
         run: pnpm -r --filter './packages/*' run build
 
       - name: Install Chromium (with system deps)
-        run: pnpm --filter @causl/formula exec playwright install --with-deps chromium
+        run: pnpm --filter @causlts/formula exec playwright install --with-deps chromium
 
       - name: Run dropped-frame gate
-        run: pnpm --filter @causl/formula run test:e2e
+        run: pnpm --filter @causlts/formula run test:e2e
 
   checker-gate:
     name: causl-check — required green check on demos

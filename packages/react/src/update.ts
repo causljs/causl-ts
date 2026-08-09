@@ -27,7 +27,7 @@
  *   }
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causlts/core'
 
 /**
  * The MVU runner's call signature: a function that, given a `Msg` and

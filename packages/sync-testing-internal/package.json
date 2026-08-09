@@ -2,7 +2,7 @@
   "name": "@causl/sync-testing-internal",
   "private": true,
   "version": "0.0.0",
-  "description": "Internal: shared test helpers for @causl/sync property suites. Mirrors @causl/core-testing-internal for the adapter surface (SPEC.async §15.0 API sketch).",
+  "description": "Internal: shared test helpers for @causlts/sync property suites. Mirrors @causl/core-testing-internal for the adapter surface (SPEC.async §15.0 API sketch).",
   "author": "Roman Goldmann <roman@iasbuilt.com>",
   "type": "module",
   "main": "./src/index.ts",
@@ -12,8 +12,8 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@causl/core": "workspace:*",
-    "@causl/sync": "workspace:*"
+    "@causlts/core": "workspace:*",
+    "@causlts/sync": "workspace:*"
   },
   "devDependencies": {
     "@causl/core-testing-internal": "workspace:*",

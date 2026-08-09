@@ -76,8 +76,8 @@ jobs:
       # bare `export * from '@causl/core-testing-internal'`, because that
       # specifier does not resolve in any downstream node_modules (the
       # internal workspace package is `private: true` and unpublished).
-      # The script packs @causl/core, installs the tarball into a
+      # The script packs @causlts/core, installs the tarball into a
       # throwaway dir outside the workspace, and runs `tsc --noEmit` on
-      # a tiny consumer file that imports from `@causl/core/testing`.
+      # a tiny consumer file that imports from `@causlts/core/testing`.
       - name: '#31 regression — consumer typecheck against packed tarball'
         run: bash scripts/check-core-testing-types.sh

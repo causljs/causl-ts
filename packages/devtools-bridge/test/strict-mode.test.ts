@@ -18,7 +18,7 @@
  *      a no-op.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectDevtools } from '../src/index.js'
 

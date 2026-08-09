@@ -251,8 +251,8 @@ jobs:
     name: bundler-interop (${{ matrix.fixture }})
     runs-on: ubuntu-latest
     # Issue #689 — three minimal fixture apps under e2e/bundler-interop/
-    # that import `@causl/core` (main barrel) and dynamically import
-    # `@causl/core/wasm` (lazy-load entry). Each fixture's `verify.mjs`
+    # that import `@causlts/core` (main barrel) and dynamically import
+    # `@causlts/core/wasm` (lazy-load entry). Each fixture's `verify.mjs`
     # enforces the bundle-no-wasm-leak invariant: the main chunk must
     # not contain the `loadWasmBackend` / `WasmBackendUnavailableError`
     # sentinels, and some other chunk MUST contain them (proves the
@@ -266,7 +266,7 @@ jobs:
     # Per-fixture install runs with `npm install --no-save` rather than
     # via pnpm: the fixtures live OUTSIDE the workspace by design
     # (#689 — fixtures must mirror how an external adopter consumes
-    # `@causl/core`, not a workspace member that can resolve devDeps
+    # `@causlts/core`, not a workspace member that can resolve devDeps
     # the wild adopter wouldn't have access to). The `file:` specifier
     # in each fixture's package.json resolves into the freshly-built
     # `packages/core/` directory.
@@ -291,11 +291,11 @@ jobs:
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile
 
-      # The fixtures consume `@causl/core` via a `file:` specifier that
+      # The fixtures consume `@causlts/core` via a `file:` specifier that
       # points at `packages/core/`. The bundler reads `packages/core/dist/`
       # via the package's `exports` map, so a build must happen first.
-      - name: Build @causl/core
-        run: pnpm --filter @causl/core run build
+      - name: Build @causlts/core
+        run: pnpm --filter @causlts/core run build
 
       # Stub the wasm-pkg artifact tree so bundlers that statically
       # analyse `new URL('./pkg/...', import.meta.url)` (notably

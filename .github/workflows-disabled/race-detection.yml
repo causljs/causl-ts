@@ -53,8 +53,8 @@ jobs:
         working-directory: tools/checker
         run: cargo test --release
 
-      - name: Run @causl/core property suite (1000-trial floor)
-        run: pnpm --filter @causl/core test:run -- properties/
+      - name: Run @causlts/core property suite (1000-trial floor)
+        run: pnpm --filter @causlts/core test:run -- properties/
 
   tier-2-enumerator:
     name: Tier 2 — bounded enumerator K=10 D=5 (≤15 min)

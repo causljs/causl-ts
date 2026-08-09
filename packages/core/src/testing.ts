@@ -1,19 +1,19 @@
 /**
- * Public sub-path entrypoint: `@causl/core/testing`.
+ * Public sub-path entrypoint: `@causlts/core/testing`.
  *
  * Per SPEC.async §15.0, the shared test seam (recomputeCounter,
  * glitchDetector, assertConsistentGraphTime, assertResultStability,
  * propertyTrials, propertyDag, disposedTombstoneSize) is surfaced from
- * `@causl/core` itself, even though the helpers live in the sibling
+ * `@causlts/core` itself, even though the helpers live in the sibling
  * `@causl/core-testing-internal` workspace package
  * (`packages/core/testing/`).
  *
  * The internal workspace exists because the helpers transitively import
- * type-only declarations from `@causl/core`. Hosting them in a separate
+ * type-only declarations from `@causlts/core`. Hosting them in a separate
  * package avoids a runtime cycle while keeping the type relationship
  * directional. This barrel re-exports those helpers so that downstream
  * consumers — adapter packages, application test suites, the Rust
- * conformance bridge — can write `import { ... } from '@causl/core/testing'`
+ * conformance bridge — can write `import { ... } from '@causlts/core/testing'`
  * without depending on the private workspace name.
  *
  * Build note: the re-export is written as a relative import into the

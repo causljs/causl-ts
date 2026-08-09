@@ -25,7 +25,7 @@
  * P3's universal partition check (every disposed key has refcount 0
  * and is absent from the per-provider registry after unmount).
  *
- * Disposal goes through `@causl/core/internal`'s `dispose`, NOT a
+ * Disposal goes through `@causlts/core/internal`'s `dispose`, NOT a
  * `_dispose` method on the public Graph; the family registry is
  * per-provider (carried on `CauslContext`), NOT module-global.
  * Both follow from the internal-only API discipline: `_dispose` and
@@ -38,9 +38,9 @@
  * state.
  */
 
-import { createCausl, NodeDisposedError, type Graph, type Node } from '@causl/core'
-import { dispose } from '@causl/core/internal'
-import { propertyTrials } from '@causl/core/testing'
+import { createCausl, NodeDisposedError, type Graph, type Node } from '@causlts/core'
+import { dispose } from '@causlts/core/internal'
+import { propertyTrials } from '@causlts/core/testing'
 import { act, render } from '@testing-library/react'
 import fc from 'fast-check'
 import { useEffect } from 'react'

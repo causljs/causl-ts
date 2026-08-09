@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # check-core-testing-types.sh — regression gate for #31.
 #
-# Packs @causl/core, installs the produced tarball into a throwaway
+# Packs @causlts/core, installs the produced tarball into a throwaway
 # directory, writes a tiny consumer that imports from
-# `@causl/core/testing`, and runs `tsc --noEmit` against it.
+# `@causlts/core/testing`, and runs `tsc --noEmit` against it.
 #
 # Why this gate exists: prior to #31 the published `dist/testing.d.ts`
 # was a single line — `export * from '@causl/core-testing-internal'` —
@@ -36,7 +36,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." &> /dev/null && pwd)"
 CORE_DIR="${REPO_ROOT}/packages/core"
 
 if [[ ! -f "${CORE_DIR}/dist/testing.d.ts" ]]; then
-  echo "check-core-testing-types: ${CORE_DIR}/dist/testing.d.ts missing — run 'pnpm --filter @causl/core build' first" >&2
+  echo "check-core-testing-types: ${CORE_DIR}/dist/testing.d.ts missing — run 'pnpm --filter @causlts/core build' first" >&2
   exit 1
 fi
 
@@ -57,10 +57,15 @@ fi
 TMPDIR_ROOT="$(mktemp -d -t causl-core-testing-types-XXXXXX)"
 trap 'rm -rf "${TMPDIR_ROOT}"' EXIT
 
-echo "check-core-testing-types: packing @causl/core into ${TMPDIR_ROOT}"
+echo "check-core-testing-types: packing @causlts/core into ${TMPDIR_ROOT}"
 (cd "${CORE_DIR}" && pnpm pack --pack-destination "${TMPDIR_ROOT}" > /dev/null)
 
-TARBALL="$(ls "${TMPDIR_ROOT}"/causl-core-*.tgz | head -1)"
+# The scope is part of the packed filename: `@causlts/core` packs as
+# `causlts-core-<version>.tgz`. This glob said `causl-core-*` and was the
+# one thing the @causlts rename missed, so the pack succeeded, the glob
+# matched nothing, and `ls` failed the job with a message about a missing
+# file rather than about a rename.
+TARBALL="$(ls "${TMPDIR_ROOT}"/causlts-core-*.tgz | head -1)"
 if [[ ! -f "${TARBALL}" ]]; then
   echo "check-core-testing-types: pnpm pack produced no tarball" >&2
   exit 1
@@ -109,7 +114,7 @@ import {
   disposedTombstoneSize,
   commitLogConsumerCount,
   derivedDeps,
-} from '@causl/core/testing'
+} from '@causlts/core/testing'
 
 // Touch each symbol so unused-import elision doesn't hide a missing type.
 const symbols = {

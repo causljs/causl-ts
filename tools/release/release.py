@@ -552,7 +552,7 @@ Or, if `--tarballs` was passed to the build script, install the `.tgz`
 files directly:
 
 ```sh
-pnpm add ./packages/causl-core/causl-core-{version}.tgz
+pnpm add ./packages/causl-core/causlts-core-{version}.tgz
 ```
 
 ## What's excluded vs the source workspace

@@ -8,8 +8,8 @@
 - Both shipped via PR #459 (engine + race detection) and PR #460 (async adapter), merged in the Phase-7 cycle that produced the EPICs below.
 
 ## What's already shipped (per surveys)
-- `@causl/core` — §3 theorems property-tested; §4 IR schema 2; §5 eight phases A–H + F.4/F.5/F.6 dotted suffixes; §6 three regions implemented (Engine + ResourceFleet + ConflictRegistry); §7 layering enforced via ESLint inversion gate + `narrowCapability`; §8 canonical pair + four extension hooks; §9 five DU examples + 17-row §9.1 catalogue; §10 worked-example required-green; §11 inspection primitives; §12 19 public surface items (7 canonical + 12 second-tier); §14 perf gates + bundle budget; §15 property suite + 1000-trial floor + conformance walker; §16 eight-pass static linter; §17 twelve commitments anchored.
-- `@causl/sync` — `resource()` + `createConflictRegistry()` + `singleConflictWhen` shipped per existing implementation.
+- `@causlts/core` — §3 theorems property-tested; §4 IR schema 2; §5 eight phases A–H + F.4/F.5/F.6 dotted suffixes; §6 three regions implemented (Engine + ResourceFleet + ConflictRegistry); §7 layering enforced via ESLint inversion gate + `narrowCapability`; §8 canonical pair + four extension hooks; §9 five DU examples + 17-row §9.1 catalogue; §10 worked-example required-green; §11 inspection primitives; §12 19 public surface items (7 canonical + 12 second-tier); §14 perf gates + bundle budget; §15 property suite + 1000-trial floor + conformance walker; §16 eight-pass static linter; §17 twelve commitments anchored.
+- `@causlts/sync` — `resource()` + `createConflictRegistry()` + `singleConflictWhen` shipped per existing implementation.
 - `@causl/checker` — Rust binary with eight one-shot passes (`Schema`, `Bounds`, `UnknownDep`, `Cycle`, `Determinism`, `Monotonic`, `GlitchPropagation`, `OrphanDep`); per-platform npm wrappers; release-checker version-lockstep workflow.
 
 ## EPIC status roll-up (all shipped)

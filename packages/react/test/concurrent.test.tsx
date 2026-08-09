@@ -7,7 +7,7 @@
  * a torn observation.
  */
 
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import {
   Suspense,

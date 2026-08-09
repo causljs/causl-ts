@@ -23,8 +23,8 @@
  * reversal / jump-to-bottom regression cases.
  */
 
-import { createCausl, type Compute, type Graph } from '@causl/core'
-import { propertyTrials, recomputeCounter } from '@causl/core/testing'
+import { createCausl, type Compute, type Graph } from '@causlts/core'
+import { propertyTrials, recomputeCounter } from '@causlts/core/testing'
 import { act, render } from '@testing-library/react'
 import fc from 'fast-check'
 import { useState } from 'react'

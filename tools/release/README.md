@@ -3,7 +3,7 @@
 Builds the minimum viable per-package npm tree for the TypeScript-only
 path of `@causl/*` at the current `RELEASE_VERSION` (the last committed
 cut in `release/` is **0.2.0**; the source workspace has since moved to
-`@causl/core` `0.3.1`, so a fresh run will carry a newer version once
+`@causlts/core` `0.3.1`, so a fresh run will carry a newer version once
 `RELEASE_VERSION` is bumped — see "Cutting a new release version"
 below). Produces the `release/` directory that gets committed to the
 `release` branch and is what adopters install from when they want the
@@ -31,18 +31,18 @@ idempotent — `release/packages/` is nuked + rebuilt on every run.
 
 | Package | Slim subpaths | Why |
 |---|---|---|
-| `@causl/core` | `./` only — `./internal`, `./testing`, `./wasm` dropped | TS-only path; `./wasm` is the lazy-loaded WASM backend, `./internal` is reserved for cross-package internals, `./testing` is test-only |
-| `@causl/sync` | `./` only — `./resource`, `./conflict` dropped | Slim default targets the main barrel; the two extra subpath entries (Phase-D resource entries) are opt-in |
-| `@causl/react` | `./` only | React bindings; same shape as source |
-| `@causl/formula` | `./` only | Formula DSL; same shape as source |
+| `@causlts/core` | `./` only — `./internal`, `./testing`, `./wasm` dropped | TS-only path; `./wasm` is the lazy-loaded WASM backend, `./internal` is reserved for cross-package internals, `./testing` is test-only |
+| `@causlts/sync` | `./` only — `./resource`, `./conflict` dropped | Slim default targets the main barrel; the two extra subpath entries (Phase-D resource entries) are opt-in |
+| `@causlts/react` | `./` only | React bindings; same shape as source |
+| `@causlts/formula` | `./` only | Formula DSL; same shape as source |
 
 ## What's excluded
 
-- All WASM artefacts (`@causl/core/wasm` subpath; `packages/core/wasm-pkg/`).
+- All WASM artefacts (`@causlts/core/wasm` subpath; `packages/core/wasm-pkg/`).
 - `@causl/checker` and its platform-specific native binary shards
   (`@causl/checker-{darwin,linux,win32}-{x64,arm64}`).
-- `@causl/devtools`, `@causl/devtools-bridge`, `@causl/hypothesis`,
-  `@causl/migration-check`, `@causl/persistence`, `@causl/sync-testing-internal`.
+- `@causlts/devtools`, `@causlts/devtools-bridge`, `@causlts/hypothesis`,
+  `@causlts/migration-check`, `@causlts/persistence`, `@causl/sync-testing-internal`.
 - Source maps (`*.map`) and the `//# sourceMappingURL=...` trailers
   in `.js` files (stripped in place on the copied artefact).
 - `scripts`, `devDependencies`, and `publishConfig` fields from the
@@ -74,7 +74,7 @@ release/
   "version": "0.2.0",
   "generated_by": "tools/release/release.py",
   "packages": [
-    { "name": "@causl/core", "version": "0.2.0", "slug": "causl-core", "bytes": 316416 },
+    { "name": "@causlts/core", "version": "0.2.0", "slug": "causl-core", "bytes": 316416 },
     ...
   ]
 }
@@ -86,7 +86,7 @@ When `--tarballs` is passed, each entry additionally carries
 ## How sizes are achieved
 
 The single biggest size win is dropping source maps. For
-`@causl/core/dist/` specifically:
+`@causlts/core/dist/` specifically:
 
 - Source: ~1.3 MiB
 - After `*.map` removal + source-map-URL stripping: ~452 KiB
@@ -128,7 +128,7 @@ changeset-driven publishing flow.
 ## Adding a package to the release
 
 1. Confirm the package is required for the TS-only path (it must run
-   without `@causl/core/wasm`, without `@causl/checker`, and without
+   without `@causlts/core/wasm`, without `@causl/checker`, and without
    any other non-bundled package).
 2. Confirm `pnpm -r build` produces a `dist/` for it.
 3. Append a `PackageSpec(...)` entry to `PACKAGES` in `release.py`.

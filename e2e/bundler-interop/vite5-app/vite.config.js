@@ -3,7 +3,7 @@
 // `build.lib` mode emits an ESM library bundle so we can grep the
 // chunk text in verify.mjs without HTML/index-template noise. This
 // mirrors the shape an adopter shipping a library on top of
-// @causl/core would produce (the broader test case — Vite app mode —
+// @causlts/core would produce (the broader test case — Vite app mode —
 // has the same code-split rules underneath, so this is the right
 // proxy).
 //
@@ -23,7 +23,7 @@ export default defineConfig({
       fileName: () => 'main.js',
     },
     rollupOptions: {
-      // No externals — we want @causl/core fully bundled so the
+      // No externals — we want @causlts/core fully bundled so the
       // grep-the-output gate has something to grep.
       //
       // `build.lib` defaults `preserveEntrySignatures` to 'strict',
@@ -34,7 +34,7 @@ export default defineConfig({
       // `false` lets Rollup inline the entry module directly into
       // `main.js` so the gate's "entry not tree-shaken to a no-op"
       // check sees `__causlHandle` in the main chunk. The dynamic
-      // `import('@causl/core/wasm')` is unaffected — dynamic imports
+      // `import('@causlts/core/wasm')` is unaffected — dynamic imports
       // still split into their own chunk regardless of this knob.
       preserveEntrySignatures: false,
       output: {

@@ -47,8 +47,8 @@ class TodoStore {
 **After (Causl):**
 
 ```ts
-import { createCausl } from '@causl/core'
-import { createUpdate, useCausl } from '@causl/react'
+import { createCausl } from '@causlts/core'
+import { createUpdate, useCausl } from '@causlts/react'
 
 const graph = createCausl()
 const todos = graph.input<readonly Todo[]>('todos', [])

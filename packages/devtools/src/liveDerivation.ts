@@ -23,8 +23,8 @@
  * observers fire at most once across the batch.
  */
 
-import { CommitInProgressError } from '@causl/core'
-import type { Compute, DerivedNode, Graph, InputNode, NodeId } from '@causl/core'
+import { CommitInProgressError } from '@causlts/core'
+import type { Compute, DerivedNode, Graph, InputNode, NodeId } from '@causlts/core'
 
 /**
  * Handle for a derivation registered through {@link liveDerived}.

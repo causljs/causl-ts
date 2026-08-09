@@ -1,5 +1,5 @@
 {
-  "name": "@causl/persistence",
+  "name": "@causlts/persistence",
   "version": "0.1.2",
   "repository": {
     "type": "git",
@@ -42,10 +42,10 @@
     }
   },
   "peerDependencies": {
-    "@causl/core": "workspace:*"
+    "@causlts/core": "workspace:*"
   },
   "devDependencies": {
-    "@causl/core": "workspace:*",
+    "@causlts/core": "workspace:*",
     "@causl/core-testing-internal": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",

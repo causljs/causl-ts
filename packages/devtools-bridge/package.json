@@ -1,5 +1,5 @@
 {
-  "name": "@causl/devtools-bridge",
+  "name": "@causlts/devtools-bridge",
   "version": "0.1.2",
   "repository": {
     "type": "git",
@@ -43,7 +43,7 @@
     }
   },
   "dependencies": {
-    "@causl/core": "workspace:*"
+    "@causlts/core": "workspace:*"
   },
   "devDependencies": {
     "@causl/core-testing-internal": "workspace:*",

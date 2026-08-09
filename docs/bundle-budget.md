@@ -22,7 +22,7 @@ adopter writes to opt into the surface; the **Why this ceiling**
 column explains the trade-off the team accepted when the cap was
 set (or last revised).
 
-## `@causl/core`
+## `@causlts/core`
 
 Engine core — transactional state for tangled dependency graphs.
 Default-import target band per SPEC §14.2 is 15–30 KB; 18 KB is the
@@ -30,8 +30,8 @@ working target on the full import.
 
 | Import | Limit | Path | Adopter import |
 |---|---:|---|---|
-| `@causl/core` (full barrel) | **20 KB** | `packages/core/dist/index.js` | `import { createCausl } from '@causl/core'` |
-| `@causl/core` (createCausl-only) | **15 KB** | `packages/core/dist/index.js` (tree-shaken) | `import { createCausl } from '@causl/core'` (no extras) |
+| `@causlts/core` (full barrel) | **20 KB** | `packages/core/dist/index.js` | `import { createCausl } from '@causlts/core'` |
+| `@causlts/core` (createCausl-only) | **15 KB** | `packages/core/dist/index.js` (tree-shaken) | `import { createCausl } from '@causlts/core'` (no extras) |
 
 > The 4.5 KB / 6 KB / 3 KB ceilings the previous spec defended were
 > retired in PR #458 once the team accepted that the small-bundle
@@ -39,7 +39,7 @@ working target on the full import.
 > #395, #420, #383, #455, #390, #454) than it was earning in
 > elegance. The current 15–20 KB band is the negotiated outcome.
 
-## `@causl/core/wasm` (Phase-1 loader)
+## `@causlts/core/wasm` (Phase-1 loader)
 
 Thin loader + `WasmBackend` wrapper. Does NOT include the WASM
 artefact itself — the loader fetches it at runtime from the
@@ -47,7 +47,7 @@ adjacent `wasm-pkg/*-bundler/` directory.
 
 | Import | Limit | Path |
 |---|---:|---|
-| `@causl/core/wasm` | **12 KB** | `packages/core/dist/wasm.js` |
+| `@causlts/core/wasm` | **12 KB** | `packages/core/dist/wasm.js` |
 
 ### WASM artefacts (raw `.wasm`, pre-Brotli)
 
@@ -74,33 +74,33 @@ The Brotli q11 ceiling is enforced post-compress at
 > engine port (epic causljs/causl-wasm#1) lands and wasm-opt is
 > invoked directly per PR #1112's design discussion.
 
-## `@causl/react`
+## `@causlts/react`
 
 React bindings.
 
 | Import | Limit | Path |
 |---|---:|---|
-| `@causl/react` | **8 KB** | `packages/react/dist/index.js` |
+| `@causlts/react` | **8 KB** | `packages/react/dist/index.js` |
 
-## `@causl/devtools-bridge`
+## `@causlts/devtools-bridge`
 
 DevTools bridge — the absent-extension path that ships in production
 builds when no Redux DevTools is installed.
 
 | Import | Limit | Path |
 |---|---:|---|
-| `@causl/devtools-bridge` (connectDevtools-only, absent-extension path) | **5 KB** | `packages/devtools-bridge/dist/index.js` |
+| `@causlts/devtools-bridge` (connectDevtools-only, absent-extension path) | **5 KB** | `packages/devtools-bridge/dist/index.js` |
 
-## `@causl/sync`
+## `@causlts/sync`
 
 Async resource + conflict bindings. Per-primitive sub-imports so
 adopters who only need one surface pay only for it.
 
 | Import | Limit | Path | Adopter import |
 |---|---:|---|---|
-| `@causl/sync` (full barrel) | **12 KB** | `packages/sync/dist/index.js` | `import { resource, createConflictRegistry } from '@causl/sync'` |
-| `@causl/sync/resource` (resource-only) | **8 KB** | `packages/sync/dist/resource-entry.js` | `import { resource } from '@causl/sync/resource'` |
-| `@causl/sync/conflict` (conflict-only) | **8 KB** | `packages/sync/dist/conflict-entry.js` | `import { createConflictRegistry } from '@causl/sync/conflict'` |
+| `@causlts/sync` (full barrel) | **12 KB** | `packages/sync/dist/index.js` | `import { resource, createConflictRegistry } from '@causlts/sync'` |
+| `@causlts/sync/resource` (resource-only) | **8 KB** | `packages/sync/dist/resource-entry.js` | `import { resource } from '@causlts/sync/resource'` |
+| `@causlts/sync/conflict` (conflict-only) | **8 KB** | `packages/sync/dist/conflict-entry.js` | `import { createConflictRegistry } from '@causlts/sync/conflict'` |
 
 The full barrel re-exports both surfaces. The split is per
 **SPEC.async §14.2** — a smaller bundle buys a smaller install
@@ -108,7 +108,7 @@ footprint; the ceiling rules out unilateral growth.
 
 > See **SPEC.async §13.4** for the multi-key-resource-family
 > renegotiation note: a future composite-resource surface may push
-> `@causl/sync/resource` past its current ceiling. That bump
+> `@causlts/sync/resource` past its current ceiling. That bump
 > requires the §14.2 written team consensus.
 
 ## Competitor fixtures (bench-only)
@@ -150,13 +150,13 @@ smaller install footprint; the ceiling rules out unilateral growth.
 
 - **SPEC §14.2** — bundle-budget written-consensus rule (root SPEC,
   applies to the core / wasm / react / devtools-bridge cells)
-- **SPEC.async §14.2** — same rule, scoped to `@causl/sync`
+- **SPEC.async §14.2** — same rule, scoped to `@causlts/sync`
 - **SPEC §17** — commitments table; rows naming a ceiling
   cross-reference this page
 - **SPEC §17.6 commitment 14** — WASM artefact ceiling (200 KB raw
   / 80 KB Brotli per bridge); see the #1150 divergence note above
 - `packages/sync/README.md#bundle-budget-specasync-142` — the
-  adopter-facing summary for `@causl/sync` specifically
+  adopter-facing summary for `@causlts/sync` specifically
 - `packages/core/wasm-pkg/README.md` — Brotli ceilings + the
   per-bridge artefact split rationale (PR #1103)
 

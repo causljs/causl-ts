@@ -1,10 +1,10 @@
-# @causl/devtools
+# @causlts/devtools
 
 Inspection primitives for [Causl](../../README.md).
 
 ## Status
 
-Shipped as of v0.9.0. Sits on top of `@causl/core`. The animating
+Shipped as of v0.9.0. Sits on top of `@causlts/core`. The animating
 principle is that the engine should be inspectable through its own
 primitives, not through a parallel devtools panel sitting next to it.
 So this package surfaces the things a non-programmer would expect of
@@ -14,7 +14,7 @@ every consumer already uses.
 
 All seven primitives listed under Surface are implemented and
 exercised by the package's test suite. The inspector UI that consumes
-them lives in `@causl/devtools-bridge` (read-only host channel using
+them lives in `@causlts/devtools-bridge` (read-only host channel using
 the narrow capability slice
 `Pick<Graph, 'read' | 'subscribeCommits' | 'now' | 'commitLog' | 'snapshotAt' | 'readAt' | 'dependencies' | 'dependents'>`,
 per SPEC §13 — no `commit`, no `hydrate`, JUMP is view-only).
@@ -22,7 +22,7 @@ per SPEC §13 — no `commit`, no `hydrate`, JUMP is view-only).
 ## Surface
 
 Exports mirror `src/index.ts`. Every primitive is a thin wrapper over
-`@causl/core`; nothing here is a parallel state model.
+`@causlts/core`; nothing here is a parallel state model.
 
 - `inspect(graph, node)` / `watchInspect(graph, node, observer)` —
   current value, deps, dependents (each itself a derived node), with
@@ -58,7 +58,7 @@ options)` — structured snapshot of input values at the current
 - `commitLog(graph, options?)` — bounded, most-recent-first
   projection of the engine's commit stream as a
   `DerivedNode<readonly Commit[]>`. **The canonical transaction log
-  lives on `@causl/core` itself as `graph.commitLog:
+  lives on `@causlts/core` itself as `graph.commitLog:
 DerivedNode<readonly Commit[]>` (SPEC §12.2 / EPIC #283).** The
   devtools wrapper is sugar: a capped, reverse-chronological view
   registered through `graph.commitMetadataDerived` so subscribers

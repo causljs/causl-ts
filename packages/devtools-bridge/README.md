@@ -1,4 +1,4 @@
-# @causl/devtools-bridge
+# @causlts/devtools-bridge
 
 Bridges Causl commits to the [Redux DevTools Extension](https://github.com/reduxjs/redux-devtools)
 protocol. Zero-cost when the extension is absent — `connectDevtools` short-circuits before
@@ -6,19 +6,19 @@ allocating any subscription or observer.
 
 > **Internal / not independently published.** Per SPEC §13 this package is held private until a
 > downstream UI earns its place or §13 is amended; it realises the §11 inspection primitives
-> end-to-end. The public inspection surface adopters reach for is [`@causl/devtools`](../devtools/).
+> end-to-end. The public inspection surface adopters reach for is [`@causlts/devtools`](../devtools/).
 
 ## Install
 
 ```sh
-pnpm add @causl/devtools-bridge
+pnpm add @causlts/devtools-bridge
 ```
 
 ## Use
 
 ```ts
-import { createCausl } from '@causl/core'
-import { connectDevtools, isExtensionAvailable } from '@causl/devtools-bridge'
+import { createCausl } from '@causlts/core'
+import { connectDevtools, isExtensionAvailable } from '@causlts/devtools-bridge'
 
 const graph = createCausl()
 

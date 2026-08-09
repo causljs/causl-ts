@@ -6,7 +6,7 @@
  *
  * §17.3 says the §7 layering (information model / editor-controller
  * state / engine substrate) is enforced at the package boundary:
- * `@causl/core` is the engine substrate and must not export
+ * `@causlts/core` is the engine substrate and must not export
  * controller types. The mechanical enforcement is an ESLint
  * `no-restricted-imports` rule scoped to `packages/core/src/**` (and
  * `packages/core/test/**`) that bans imports of every sibling adapter
@@ -14,7 +14,7 @@
  *
  * This test is the negative fixture for that rule. It runs ESLint
  * programmatically against a synthetic file path inside
- * `packages/core/src/` whose content imports `@causl/react`, and
+ * `packages/core/src/` whose content imports `@causlts/react`, and
  * asserts the diagnostic fires with the §17.3 message. A green
  * production lint run plus a red diagnostic on the fixture together
  * pin the contract.
@@ -54,7 +54,7 @@ const SYNTHETIC_CORE_PATH = resolve(
 )
 
 describe('SPEC §17.3 — package-boundary layering enforcement', () => {
-  it('flags `@causl/react` imports from inside `@causl/core`', async () => {
+  it('flags `@causlts/react` imports from inside `@causlts/core`', async () => {
     const eslint = new ESLint({
       cwd: REPO_ROOT,
       // Use the repo's flat config; no overrides — this is exactly
@@ -79,12 +79,12 @@ describe('SPEC §17.3 — package-boundary layering enforcement', () => {
     // future contributors which SPEC clause the gate enforces. If the
     // wording in the root config drifts, this assertion catches it.
     expect(first.message).toMatch(/SPEC §17\.3/)
-    expect(first.message).toMatch(/@causl\/core/)
+    expect(first.message).toMatch(/@causlts\/core/)
   })
 
-  it('does not flag `@causl/core/internal` from inside an adapter', async () => {
+  it('does not flag `@causlts/core/internal` from inside an adapter', async () => {
     // §12.3 seam — adapter packages may reach engine internals only
-    // through `@causl/core/internal`. Pin the positive case so a
+    // through `@causlts/core/internal`. Pin the positive case so a
     // future overzealous addition to the restricted patterns cannot
     // silently break the seam.
     const eslint = new ESLint({
@@ -96,7 +96,7 @@ describe('SPEC §17.3 — package-boundary layering enforcement', () => {
       REPO_ROOT,
       'packages/react/__layering-positive__.ts'
     )
-    const source = `import { assertNever } from '@causl/core/internal'\nexport const _ = assertNever\n`
+    const source = `import { assertNever } from '@causlts/core/internal'\nexport const _ = assertNever\n`
 
     const results = await eslint.lintText(source, { filePath: reactPath })
     const result = results[0]
@@ -108,7 +108,7 @@ describe('SPEC §17.3 — package-boundary layering enforcement', () => {
     expect(restrictedImports).toEqual([])
   })
 
-  it('flags `@causl/core/dist/...` deep imports from an adapter', async () => {
+  it('flags `@causlts/core/dist/...` deep imports from an adapter', async () => {
     // §12.3 seam — deep paths into core's dist/ or src/ bypass the
     // package's `exports` map and break the SemVer guarantee. The
     // adapter-scoped rule block in the root config refuses them.
@@ -121,7 +121,7 @@ describe('SPEC §17.3 — package-boundary layering enforcement', () => {
       REPO_ROOT,
       'packages/react/__layering-deep-path__.ts'
     )
-    const source = `import { x } from '@causl/core/dist/graph.js'\nexport const _ = x\n`
+    const source = `import { x } from '@causlts/core/dist/graph.js'\nexport const _ = x\n`
 
     const results = await eslint.lintText(source, { filePath: reactPath })
     const result = results[0]

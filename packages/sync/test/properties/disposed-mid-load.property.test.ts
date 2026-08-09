@@ -2,7 +2,7 @@
  * @packageDocumentation
  *
  * Disposed-mid-load staleness — adjacent to `SPEC.md` §9.1 engine
- * row 11 (use-after-dispose), lifted to the `@causl/sync` resource
+ * row 11 (use-after-dispose), lifted to the `@causlts/sync` resource
  * state machine.
  *
  * Property: a resource disposed while a fetch is in flight must

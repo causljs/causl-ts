@@ -1,4 +1,4 @@
-# @causl/hypothesis
+# @causlts/hypothesis
 
 Temporal-logic hypothesis combinators for the Causl bounded enumerator (SPEC §16.5).
 
@@ -18,13 +18,13 @@ against the Apalache TLA+ differential corpus.
 ## Install
 
 ```sh
-pnpm add @causl/hypothesis
+pnpm add @causlts/hypothesis
 ```
 
 ## Use
 
 ```ts
-import { hypothesis, always, eventually, implies, evaluate } from '@causl/hypothesis'
+import { hypothesis, always, eventually, implies, evaluate } from '@causlts/hypothesis'
 
 // "Whenever a commit raises a conflict, the conflict is eventually cleared."
 const h = hypothesis(

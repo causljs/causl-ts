@@ -8,25 +8,25 @@
  * under fresh-id churn does not accumulate tombstones without bound.
  * This accessor exists for the property suite that locks the cap;
  * adapter code has no production use for it, which is why it lives in
- * the dedicated `@causl/core/testing` seam rather than the
- * adapter-facing `@causl/core/internal` entrypoint (#376).
+ * the dedicated `@causlts/core/testing` seam rather than the
+ * adapter-facing `@causlts/core/internal` entrypoint (#376).
  *
  * Usage:
  *
- *   import { disposedTombstoneSize } from '@causl/core/testing'
+ *   import { disposedTombstoneSize } from '@causlts/core/testing'
  *
  *   const g = createCausl({ disposedTombstoneCap: 4 })
  *   // ... churn fresh ids and dispose them ...
  *   expect(disposedTombstoneSize(g)).toBeLessThanOrEqual(4)
  *
  * The helper resolves the engine's testing-dispatch registry directly,
- * via a relative import into the `@causl/core` source tree. The
+ * via a relative import into the `@causlts/core` source tree. The
  * package surfaces no other path into engine state — the test seam and
  * the adapter seam are deliberately disjoint registries so §12.3's
  * adapter contract does not have to defend test-only entries.
  */
 
-import type { Graph } from '@causl/core'
+import type { Graph } from '@causlts/core'
 import { lookupTestingDispatch } from '../../src/testing-dispatch.js'
 
 /**

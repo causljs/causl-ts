@@ -12,8 +12,8 @@
  * the engine having to grow a parallel inspection channel.
  */
 
-import { createCausl } from '@causl/core'
-import type { Explanation } from '@causl/core'
+import { createCausl } from '@causlts/core'
+import type { Explanation } from '@causlts/core'
 import { describe, expect, it } from 'vitest'
 import { liveDerived } from '../src/index.js'
 

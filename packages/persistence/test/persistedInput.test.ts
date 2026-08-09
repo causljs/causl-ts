@@ -1,4 +1,4 @@
-import { createCausl } from '@causl/core'
+import { createCausl } from '@causlts/core'
 import { propertyTrials } from '@causl/core-testing-internal'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'

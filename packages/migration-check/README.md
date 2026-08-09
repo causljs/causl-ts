@@ -1,11 +1,11 @@
-# `@causl/migration-check`
+# `@causlts/migration-check`
 
 A static drift detector that scans a codebase for un-migrated
 Jotai / MobX / Redux patterns and reports them by rule ID for CI
 gating and migration dashboards.
 
 ```sh
-npx @causl/migration-check ./src
+npx @causlts/migration-check ./src
 ```
 
 The CLI prints a `DriftReport` JSON document and exits non-zero
@@ -94,7 +94,7 @@ To narrow or widen the walk, pass `extensions` to the
 programmatic API:
 
 ```ts
-import { scanDirectory } from '@causl/migration-check'
+import { scanDirectory } from '@causlts/migration-check'
 
 // Default — scans .ts/.tsx/.js/.jsx/.mjs/.cjs
 const full = await scanDirectory('./src')

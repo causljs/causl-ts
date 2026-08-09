@@ -81,7 +81,7 @@ trail.
 | Target | Required? | Current support | Rationale |
 | --- | --- | --- | --- |
 | Browser (Chrome 95+ / Firefox 102+ / Safari 16+) | **YES** | Full — TS engine ships unconditionally; WASM substrate (Phase-1 wrapper) ships per §17.6 host-tier matrix. `useCauslNode` / `useCausl` / `Hydrate` / React 18+ frame-budget contract assume the browser as a first-class target. | The library's positioning (§1 + §8 MVU + §14 perceptual-perf gates) is built around interactive UIs. Adopter-facing docs at `docs/wasm-adoption-guide.md` enumerate browser-CSP `wasm-unsafe-eval` posture, CDN `wasmBaseUrl`, and SSR `Hydrate`. A re-architecture that drops the browser target is a different product. |
-| Node.js (22.0+, 22.6+ for GC-builtins) | **YES** | Full — Node is the SSR target (`Hydrate` consumes `GraphSnapshot` produced server-side); also the bench / determinism / property-suite host. | SSR plus the e2e bench / property harness. `@causl/sync` server-side uses Node-as-engine-host. |
+| Node.js (22.0+, 22.6+ for GC-builtins) | **YES** | Full — Node is the SSR target (`Hydrate` consumes `GraphSnapshot` produced server-side); also the bench / determinism / property-suite host. | SSR plus the e2e bench / property harness. `@causlts/sync` server-side uses Node-as-engine-host. |
 | Native (macOS arm64 / macOS x64 / Linux arm64 / Linux x64 / Windows x64) | **MAYBE** (currently only `causl-check`, not the engine) | `packages/checker-{darwin-arm64,darwin-x64,linux-arm64,linux-x64,win32-x64}/` already ship per-platform native binaries for `causl-check` (the Rust IR linter) via `optionalDependencies`. The **engine itself** is JS/WASM today; no native engine binary is produced. | The per-platform-binary distribution pattern is **already in the repo** and proven; adopters install `@causl/checker` and the right binary resolves via `optionalDependencies`. Re-architecture (a) (native engine) reuses this distribution pattern verbatim. |
 | Cloudflare Workers / edge | **YES** | Per §17.6 — Workers run the universal `serde-json` bridge today; TS engine is the unconditional fallback. | Adopter-facing contract per `WasmBackendUnavailableError` `code` dispatch. A re-architecture that requires Node-specific APIs (`fs`, `child_process`, `node:worker_threads`) breaks the edge target. |
 | Deno (1.30+) | YES (currently) | Per §17.6 — `--allow-net` for WASM fetch. | Tracked in `packages/core/wasm/README.md`; non-critical but documented. |
@@ -90,7 +90,7 @@ trail.
 **Critical framing for the three feasibility studies**: the browser
 target is **NOT migratable** — re-architecture (a) (native Rust binary)
 must either ship a WASM/JS fallback for the browser path or document a
-deliberate scope reduction that strikes the entire `@causl/react` value
+deliberate scope reduction that strikes the entire `@causlts/react` value
 proposition. The §17.6 commitment-14 contract ("no supported host is
 silently stranded") is the SPEC anchor; any architecture that requires
 adopters to choose between "browser-only TS engine" and "Node-only

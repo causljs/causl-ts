@@ -98,9 +98,9 @@ function makeJsBackend(): JsBackend {
 
 // ---------------------------------------------------------------------------
 // Arbitraries — mirror the shapes the canonical reducers in
-// `@causl/sync/src/statechart-reducers.ts` accept. Reproduced here
-// because the package boundary forbids `@causl/core` from importing
-// from `@causl/sync`; the agreement gate in
+// `@causlts/sync/src/statechart-reducers.ts` accept. Reproduced here
+// because the package boundary forbids `@causlts/core` from importing
+// from `@causlts/sync`; the agreement gate in
 // `packages/sync/test/properties/evaluate-statechart-agreement.property.test.ts`
 // pins the same arbitraries against the canonical reducer, so the
 // shape coverage stays in lockstep.

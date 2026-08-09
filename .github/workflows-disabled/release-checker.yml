@@ -25,7 +25,7 @@ permissions:
 jobs:
   # Step 5 from issue #390: assert Cargo.toml version, the npm wrapper
   # version, and the IR schema version (CAUSL_MODEL_SCHEMA from
-  # @causl/core) move together. Failing here aborts the matrix
+  # @causlts/core) move together. Failing here aborts the matrix
   # before any binaries are produced.
   version-lockstep:
     name: assert version lockstep (Cargo + npm + IR schema)
@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
           if [ -n "${SCHEMA_PINNED:-}" ] && [ "$SCHEMA_FROM_CORE" != "$SCHEMA_PINNED" ]; then
-            echo "::error::CAUSL_MODEL_SCHEMA in @causl/core ($SCHEMA_FROM_CORE) does not match causl_model_schema pin in tools/checker/Cargo.toml ($SCHEMA_PINNED)"
+            echo "::error::CAUSL_MODEL_SCHEMA in @causlts/core ($SCHEMA_FROM_CORE) does not match causl_model_schema pin in tools/checker/Cargo.toml ($SCHEMA_PINNED)"
             exit 1
           fi
           echo "version=$NPM_VERSION" >> "$GITHUB_OUTPUT"

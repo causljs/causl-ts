@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 /**
- * tsup entry config for `@causl/core`.
+ * tsup entry config for `@causlts/core`.
  *
  * The map form lets us route `wasm/index.ts` to `dist/wasm.js`
  * without colliding with `src/index.ts → dist/index.js` (tsup's

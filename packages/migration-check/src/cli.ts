@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * causl-migration-check CLI — `npx @causl/migration-check [path]`
+ * causl-migration-check CLI — `npx @causlts/migration-check [path]`
  *
  * Exit-code contract (RULE_CATALOGUE.md §Severity meanings):
  *

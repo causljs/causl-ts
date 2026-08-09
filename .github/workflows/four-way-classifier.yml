@@ -92,13 +92,13 @@ jobs:
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile
 
-      - name: Build @causl/core (required by the JS-driven legs)
+      - name: Build @causlts/core (required by the JS-driven legs)
         # The four-way-runner.mjs script imports
         # `packages/core/dist/index.js` and `packages/core/dist/wasm.js`
         # by absolute path. Without this build step the JS legs of the
         # classifier surface as `Skipped` and the report carries an
         # empty 4-way section.
-        run: pnpm --filter @causl/core run build
+        run: pnpm --filter @causlts/core run build
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -124,7 +124,7 @@ jobs:
         # is intentionally NOT installed on the CI runner — the 2-way
         # half degrades to `BinaryUnavailable` and contributes
         # `unknown` rows that the strict gate ignores. The 4-way half
-        # is fully exercised because the JS-side @causl/core was
+        # is fully exercised because the JS-side @causlts/core was
         # built in an earlier step.
         working-directory: tools/enumerator/diff
         run: |

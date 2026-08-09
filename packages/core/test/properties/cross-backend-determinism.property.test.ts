@@ -235,7 +235,7 @@ interface CrossBackendWorld extends World {
  * so the call sites are symmetric.
  *
  * The TS-side world's graphId is pinned to the same string the WASM
- * side mints (`@causl/core/wasm:serde-json` by default — see
+ * side mints (`@causlts/core/wasm:serde-json` by default — see
  * {@link loadWasmBackend}'s `graphName` option). Both `Graph`
  * instances must share a graphId because the byte-equal IR oracle
  * compares the `graphId` field directly.
@@ -403,7 +403,7 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
         // engines share a `graphId` field in their IR projections.
         // The byte-equal oracle compares `graphId` directly; without
         // the pin the wasm-side engine would mint
-        // `@causl/core/wasm:serde-json` and the js-side world's
+        // `@causlts/core/wasm:serde-json` and the js-side world's
         // graphId would diverge before the first commit.
         const graphName = `cross-backend-seed:${seed.id}`
         let wasmBackend: BackendEngine
@@ -1546,7 +1546,7 @@ describe('cross-backend determinism (EPIC #680 / #685)', () => {
   // first Phase G fire via the same drain `commitInternal`'s
   // `finally` arm runs for every transient subscription.
   //
-  // Trial budget: `tieredPropertyTrials` from `@causl/core/testing`
+  // Trial budget: `tieredPropertyTrials` from `@causlts/core/testing`
   // (issue #1163 wire-up) so the H3 arm respects `CAUSL_FUZZ_TIER`
   // the same way the rest of the suite does. Default tier is 1000
   // trials per the SPEC §15.2 floor; PR-lane raises to 5k, nightly

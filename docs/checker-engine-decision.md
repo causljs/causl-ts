@@ -82,7 +82,7 @@ shipped surface.
 - `#52` — Define `CauslModel` IR + JSON schema (the data the JS
   side exports; the data the Rust side consumes). **Shipped;**
   IR is at schema 3 today (post-§16A schema bumps).
-- `#53` — Implement `graph.exportModel()` in `@causl/core`.
+- `#53` — Implement `graph.exportModel()` in `@causlts/core`.
   **Shipped.**
 - `#54` — Set up `tools/checker/` Rust crate skeleton. **Shipped.**
 - `#55` — Implement the bounded model checker (the from-scratch

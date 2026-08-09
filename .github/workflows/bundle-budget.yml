@@ -12,17 +12,17 @@ name: bundle-budget
 # The 17 cells gated here are documented in `docs/bundle-budget.md`
 # and declared under `size-limit` in the root `package.json`:
 #
-#   1.  `@causl/core` (full barrel)            — 20 KB
-#   2.  `@causl/core` (createCausl-only)       — 15 KB
-#   3.  `@causl/core/wasm` (Phase-1 loader)    — 12 KB
+#   1.  `@causlts/core` (full barrel)            — 20 KB
+#   2.  `@causlts/core` (createCausl-only)       — 15 KB
+#   3.  `@causlts/core/wasm` (Phase-1 loader)    — 12 KB
 #   4.  serde-json wasm bridge (raw)           — 230 KB
 #   5.  gc-builtins wasm bridge (raw)          — 260 KB
 #   6.  gc-classic wasm bridge (raw)           — 260 KB
-#   7.  `@causl/react`                         —   8 KB
-#   8.  `@causl/devtools-bridge`               —   5 KB
-#   9.  `@causl/sync` (full barrel)            —  12 KB
-#   10. `@causl/sync/resource`                 —   8 KB
-#   11. `@causl/sync/conflict`                 —   8 KB
+#   7.  `@causlts/react`                         —   8 KB
+#   8.  `@causlts/devtools-bridge`               —   5 KB
+#   9.  `@causlts/sync` (full barrel)            —  12 KB
+#   10. `@causlts/sync/resource`                 —   8 KB
+#   11. `@causlts/sync/conflict`                 —   8 KB
 #   12. jotai full / 13. jotai min             —  20 KB / 20 KB
 #   14. redux-toolkit full / 15. min           —  60 KB / 60 KB
 #   16. mobx full / 17. mobx min               —  30 KB / 30 KB

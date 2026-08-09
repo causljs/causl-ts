@@ -80,10 +80,10 @@ size-limit gate (PR #203 review).
 | Jotai (core) | 6.1 KB | 0.2 KB |
 | Redux Toolkit | 13.3 KB | 3.0 KB |
 | MobX | 16.0 KB | 13.8 KB |
-| **Causl** (`@causl/core`) | 7.7 KB | 6.8 KB |
+| **Causl** (`@causlts/core`) | 7.7 KB | 6.8 KB |
 <!-- bundle-table:end -->
 
-[We have committed a per-import `size-limit` budget for `@causl/core` of 4 KB on minimal import (`createCausl`, `input`, `derived`, `commit`) and 6 KB on full import. That is 1 KB above Jotai's core and well below Redux Toolkit and MobX. The budget is enforced as a CI gate, not folklore (Adoption Epic E). We will not publish a bundle number that drifts from the budget without re-baselining the budget in writing.]
+[We have committed a per-import `size-limit` budget for `@causlts/core` of 4 KB on minimal import (`createCausl`, `input`, `derived`, `commit`) and 6 KB on full import. That is 1 KB above Jotai's core and well below Redux Toolkit and MobX. The budget is enforced as a CI gate, not folklore (Adoption Epic E). We will not publish a bundle number that drifts from the budget without re-baselining the budget in writing.]
 
 ## The Memory Wall
 
@@ -126,11 +126,11 @@ We expect MobX to be the closest competitor on workloads 1, 6, and 7 (linear, ba
 
 **Jotai** does small global state with the smallest install footprint. If your app has fifteen pieces of UI state and no dependency graph worth talking about, Jotai is the right answer and we will not pretend otherwise. The migration guide in this repo (`docs/migration/from-jotai.md`, Adoption Epic F) exists precisely for the case where you started with Jotai and grew into the complexity Causl is designed for.
 
-**Redux Toolkit** does explicit auditable mutations with industry-standard DevTools and the largest hiring pool of developers who already know it. Time-travel debugging in Redux DevTools is the single best debugging experience in the React state-management ecosystem, which is exactly why we built `@causl/devtools-bridge` (Adoption Epic D) to plug into the same protocol.
+**Redux Toolkit** does explicit auditable mutations with industry-standard DevTools and the largest hiring pool of developers who already know it. Time-travel debugging in Redux DevTools is the single best debugging experience in the React state-management ecosystem, which is exactly why we built `@causlts/devtools-bridge` (Adoption Epic D) to plug into the same protocol.
 
 **MobX** does ergonomic reactive objects in the smallest amount of user code. `makeAutoObservable(thing)` is one line; the equivalent Causl code defines inputs and derived selectors explicitly. If terse object-oriented mutation is the goal, MobX is the right answer and we will not pretend otherwise.
 
-**TanStack Query** (not on the chart but worth naming) is the gold standard for server-state cache. It is not a general state engine, and Causl's `@causl/sync` adapter is intentionally narrower: it owns the *integration* of async resources with the dependency graph, not the cache, dedupe, refetch, and focus-revalidation story that TanStack Query owns end-to-end. The two compose; one does not replace the other.
+**TanStack Query** (not on the chart but worth naming) is the gold standard for server-state cache. It is not a general state engine, and Causl's `@causlts/sync` adapter is intentionally narrower: it owns the *integration* of async resources with the dependency graph, not the cache, dedupe, refetch, and focus-revalidation story that TanStack Query owns end-to-end. The two compose; one does not replace the other.
 
 ## Methodology Notes
 

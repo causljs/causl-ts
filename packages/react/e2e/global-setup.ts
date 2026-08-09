@@ -1,11 +1,11 @@
 /**
  * @packageDocumentation
  *
- * Playwright globalSetup for the `@causl/react` dropped-frames gate.
+ * Playwright globalSetup for the `@causlts/react` dropped-frames gate.
  *
  * Bundles `e2e/fixtures/viewport-1000.tsx` into
  * `e2e/fixtures/viewport-1000.js` (a single browser ESM module that
- * bakes in React, react-dom/client, `@causl/core`, and `@causl/react`)
+ * bakes in React, react-dom/client, `@causlts/core`, and `@causlts/react`)
  * before the spec runs. We do this in globalSetup rather than as a
  * `package.json` `pretest` so the playwright test is hermetic — `pnpm
  * test:e2e` produces a runnable artifact tree without a separate build
@@ -13,7 +13,7 @@
  * one build per test invocation is enough.
  *
  * Why `tsup` rather than calling `esbuild` directly: `tsup` is already
- * a `devDependency` of `@causl/react` (it builds `dist/`), and the
+ * a `devDependency` of `@causlts/react` (it builds `dist/`), and the
  * monorepo doesn't ship a free-standing esbuild dep at the workspace
  * root. Reusing the same toolchain that builds `dist/` keeps the
  * fixture bundle's TypeScript / JSX transform pipeline aligned with
@@ -37,7 +37,7 @@ export default async function globalSetup(): Promise<void> {
   const config = resolve(here, 'tsup.config.ts')
   const result = spawnSync(tsupBin, ['--config', config], {
     stdio: 'inherit',
-    // Workspace-dep resolution (`@causl/core`, `@causl/react`) needs
+    // Workspace-dep resolution (`@causlts/core`, `@causlts/react`) needs
     // the package root as cwd — that is where the dependency closure
     // is hoisted from.
     cwd: resolve(here, '..'),

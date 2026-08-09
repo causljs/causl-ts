@@ -21,7 +21,7 @@
  * `readAt`. Closes #383.
  */
 
-import type { Commit, DerivedNode, Graph, NodeId } from '@causl/core'
+import type { Commit, DerivedNode, Graph, NodeId } from '@causlts/core'
 
 /**
  * Capability slice handed to {@link commitLog}.

@@ -10,18 +10,47 @@ masking real test results). Re-enabling is a `git mv` from
 `workflows-disabled/` back into `workflows/`.
 
 The wasm-substrate epic (#680) shipped after PR #725 with three of its
-own workflows added directly under `.github/workflows/`. So as of
-today the **only** active CI lanes are those wasm-side workflows; the
-older `ts` / `rust` / `size` / `checker-gate` / `formula-e2e` jobs
-described below live in the disabled tree and do not gate PRs.
+own workflows added directly under `.github/workflows/`, and the split-repo CI
+lanes (`main-fast.yml`, `bundle-budget.yml`) were added on top. The older `ts` /
+`rust` / `size` / `checker-gate` / `formula-e2e` jobs described below still live
+in the disabled tree and do not gate PRs, so the tests they run are not on any
+lane; `.husky/pre-commit` and `.husky/pre-push` remain the local safety net for
+that half.
 
-Active workflows (root of `.github/workflows/`):
+Active workflows (root of `.github/workflows/`), as of the 2026-09-02 CI repair
+(issues #47, #48, #49):
 
 | File | What it does | Trigger |
 | --- | --- | --- |
-| `wasm.yml` | `cargo check --workspace`, `wasm-pack build` matrix over 6 (bridge × target) cells, plus a `bundler-interop` matrix over 3 fixture apps | PR + push to main + workflow_dispatch |
+| `main-fast.yml` | typecheck + build + lint, plus the #31 tarball-consumer regression | PR + push to main |
+| `wasm.yml` | `vendored-wasm` (bytes, raw ceilings and target parity of the committed `.wasm`) plus a `bundler-interop` matrix over 3 fixture apps | PR + push to main/release + workflow_dispatch |
+| `bundle-budget.yml` | `size-limit` gate over the 11 cells in the root `package.json`, plus the per-PR delta comment | PR + push to main/release + workflow_dispatch |
 | `cross-backend-fuzz.yml` | Nightly 100k-trial cross-backend WASM-vs-TS determinism property (#1073 / shipped via PR #1097) | cron `0 4 * * *` + workflow_dispatch |
-| `four-way-classifier.yml` | 4-way differential classifier across TS / WASM-serde / WASM-gc-builtins / Rust enumerator (#1070 / shipped via PR #1101) | PR (paths-filtered) + cron `15 7 * * *` + workflow_dispatch |
+| `vendor-manifest.yml` | vendored-bytes MANIFEST freshness | paths-filtered PR |
+| `release.yml` | npmjs publish via OIDC trusted publishing | `v*` tag |
+
+### Parked 2026-09-02: `four-way-classifier.yml` (#47)
+
+The classifier drives four legs and three of them live in Rust crates that are
+not in this repository: `tools/enumerator/diff`,
+`tools/engine-rs-bridge-serde` and `tools/engine-rs-bridge-gc`. Every scheduled
+run died on the `cargo test` step, which sets `working-directory:
+tools/enumerator/diff`:
+
+```
+##[error]An error occurred trying to start process '/usr/bin/bash' with working
+directory '/home/runner/work/causl-ts/causl-ts/tools/enumerator/diff'.
+No such file or directory
+```
+
+That is not a build that broke. `git log --all -- tools/enumerator` returns
+nothing and there is no `Cargo.toml` anywhere in the tree or in its history, so
+those paths have never existed here. The workflow came across with the rest of
+`.github/` when this public TypeScript repo was split out of the monorepo and
+the crates stayed behind; the Rust engine lives in `causljs/causl-wasm`. It now
+sits in `.github/workflows-disabled/` next to `apalache-diff.yml`, which was
+already parked for the same missing crate. Reviving it means landing the crates
+first.
 
 The rest of this page documents the disabled-but-checked-in CI design
 so the workflows can be re-enabled without re-deriving the rationale.
@@ -86,30 +115,41 @@ JSON cannot be parsed. The most common operational failures are:
   node id that is not registered. Action: this is a bug in
   `@causlts/core`'s commit log; file an issue.
 
-## Active: WASM build pipeline (`wasm.yml`)
+## Active: vendored wasm + bundler interop (`wasm.yml`)
 
-`wasm.yml` is one of the three workflows that survived the PR #725
-disable sweep (it was added afterwards by the wasm-substrate epic
-#680, which closed with 17 sub-issues merged). It runs on every PR
-and push to main and consists of two jobs:
+This repository does not build any wasm. The Rust engine and its build tooling
+live in `causljs/causl-wasm`; what lands here is the built output, vendored
+under `packages/core/wasm-pkg/<bridge>-<target>/`.
 
-1. **`cargo-check`** — workspace-wide `cargo check --workspace
-   --all-targets`. Defensively skips if no root `Cargo.toml` workspace
-   exists. Also enforces the architectural invariant from #682: the
-   `causl-enumerator` dep tree MUST NOT pull `wasm-bindgen`, `js-sys`,
-   or `serde-wasm-bindgen` transitively (`cargo tree` grep gate).
-2. **`wasm-pack`** — matrix over **6 cells** = 3 bridges (`serde`,
-   `gc-builtins`, `gc-classic`) × 2 wasm-pack targets (`bundler`,
-   `nodejs`). Per #1103 the driver `tools/wasm-build/build.mjs` emits
-   both target variants per bridge so the bridge-roundtrip property
-   gate can run under vitest (consumes `nodejs`) while the runtime
-   loader + bundler-interop fixtures consume `bundler`. Each leg
-   installs binaryen 119 for the #1085 size gate (wasm-pack 0.14.0's
-   bundled wasm-opt predates stable WasmGC), runs `pnpm wasm:build`
-   (wasm-pack → wasm-opt -Oz → raw + Brotli q11 budget check), uploads
-   `wasm-pkg-<bridge>-<target>` as an artefact, and runs `pnpm size`
-   as an independent second-layer raw-byte gate.
-3. **`bundler-interop`** — matrix over **3 fixture apps** under
+Until 2026-09-02 this file carried a `cargo check (workspace, defensive)` job
+and a six-leg `wasm-pack build` matrix. Every step in both hung off a presence
+guard for crates that have never existed here, so seven of the workflow's ten
+jobs reported green having run checkout, install and a `::notice::`. The
+`Size-limit cells (raw bytes)` step lived behind the same guard and had never
+run once. The `driver sanity` step was worse: it called
+`pnpm wasm:build:check || echo "::warning::..."` against a
+`tools/wasm-build/build.mjs` that is not in this repo, so it crashed with
+`Cannot find module` on every leg and swallowed it as a warning. See #49.
+
+Two jobs run now:
+
+1. **`vendored-wasm`** — `pnpm wasm:verify:test` then `pnpm wasm:verify`. The
+   verifier opens all six committed artefacts and checks the 8-byte WASM
+   preamble, a 64 KB non-trivial-size floor an 8-byte stub cannot clear, the
+   RAW ceiling each `size-limit` cell declares, and byte-identity between the
+   `-bundler` and `-nodejs` variants of each bridge. That last one matters
+   because the size-limit cells gate the `-bundler` half only, on the stated
+   grounds that wasm-pack emits identical bytes for both targets; if that stops
+   being true the `-nodejs` artefacts are silently ungated.
+
+   Note that the raw check is not what the cell itself does. `size-limit`
+   compresses before comparing, so the cell named `@causlts/core wasm bridge —
+   serde-json (raw)` actually measures ~68 kB against its 230 KB ceiling. The
+   `//size-limit-wasm` comment beside the cells and SPEC §17.6 both talk about
+   raw bytes, so the verifier enforces the documented reading and the cell
+   stays as the compressed second opinion.
+
+2. **`bundler-interop`** — matrix over **3 fixture apps** under
    `e2e/bundler-interop/` (`webpack5-app`, `vite5-app`, `esbuild-app`)
    per #689. Each fixture imports `@causlts/core` (main barrel) and
    dynamically imports `@causlts/core/wasm` (lazy-load entry); the
@@ -117,24 +157,58 @@ and push to main and consists of two jobs:
    — the main chunk must not contain `loadWasmBackend` /
    `WasmBackendUnavailableError` sentinels, and some other chunk MUST
    contain them (proves the dynamic import was preserved as a
-   code-split rather than inlined).
+   code-split rather than inlined). The `vite5` and `webpack5` legs were the
+   red half of run 26002600499 on 2026-05-17; PR #37 fixed both by keeping
+   `loadWasmBackend` out of the main chunk and correcting the vite5 fixture
+   entry, and run 33647334864 on 2026-09-02 confirms all three legs green with
+   real chunk readings.
 
 ### Stub-fallback for the bundler-interop job (#1108)
 
 The `bundler-interop` job runs `node e2e/bundler-interop/stub-wasm-pkg.mjs`
-between the `@causlts/core` build and the per-fixture install. The stubs
-are minimal-valid 8-byte WASM modules committed under both
-`<bridge>-bundler/` and `<bridge>-nodejs/` artefact trees; they let
-webpack 5 (with `experiments.asyncWebAssembly`) statically resolve
-`new URL('./pkg/...', import.meta.url)` asset paths even when the real
-wasm-pack pipeline has not produced artefacts on the runner yet. The
-stubs are never instantiated — `loadWasmBackend()` throws before
-reaching the fetch path. The same stub mechanism gates the
+between the `@causlts/core` build and the per-fixture install. The stubs are
+minimal-valid 8-byte WASM modules and they go to `packages/core/dist/pkg/`, the
+build output the loader resolves `new URL('./pkg/...', import.meta.url)`
+against, so webpack 5 (with `experiments.asyncWebAssembly`) can resolve the
+asset path at build time. They are never instantiated —
+`loadWasmBackend()` throws before reaching the fetch path.
+
+They never touch `packages/core/wasm-pkg/`. That tree holds the real vendored
+artefacts, 214 to 249 KB each, and the `vendored-wasm` job asserts exactly that,
+so a fixture run cannot write an 8-byte file over a real bridge. An earlier
+version of this paragraph said the stubs were "committed under both
+`<bridge>-bundler/` and `<bridge>-nodejs/` artefact trees", which described the
+repo before the real bytes landed and is not true today.
+
+The same stub mechanism gates the
 `op-wasm-boundary-1k` microbench cell on developer machines (see
 [`precommit.md`](./precommit.md) — `isWasmStubArtifactPresent()`
 guards the cell so fresh clones without the Rust toolchain don't
 trip the pre-commit hook). Tracking issues: #1098 (the bench-side
 flake), #1108 (Option B / skip-with-clear-error fix that shipped).
+
+## Active: bundle-budget (`bundle-budget.yml`)
+
+`bundle-budget.yml` used to hand the whole job to
+`andresz1/size-limit-action@v1`, whose `src/main.ts` opens with
+`if (!pr) throw new Error("No PR found. Only pull_request workflows are
+supported.")`. Every `push:` and `workflow_dispatch` run was therefore red
+before a byte got measured, and since `wasm.yml`'s size step never ran either,
+the 11 `size-limit` cells were gated by nothing at all. See #48.
+
+The action is gone. `tools/bundle-budget/report.mjs` does the two halves
+natively and keeps them apart:
+
+- `gate` is blocking and runs on every event. It reads the `passed` flag
+  size-limit computes per cell, and it refuses loudly on an empty or
+  unparseable payload rather than reporting green off a measurement that never
+  happened.
+- `render` builds the delta table and `post` puts it on the pull request,
+  updating its own previous comment in place so one PR carries one table. Only
+  `post` needs a PR.
+
+`pnpm budget:test` is the reporter's own unit cover and runs first in the
+workflow, before the install, since it is `node:test` with no dependencies.
 
 ## Active: nightly cross-backend determinism (`cross-backend-fuzz.yml`)
 
@@ -147,26 +221,13 @@ workflow lands; until then, every PR runs at the default
 honoured via `CAUSL_FUZZ_TIER` and `CAUSL_FUZZ_TRIALS`
 (`resolveCrossBackendFuzzTier()` in seed.ts).
 
-## Active: 4-way differential classifier (`four-way-classifier.yml`)
+## Parked: 4-way differential classifier (`four-way-classifier.yml`)
 
-Shipped via PR #1101 closing #1070. Walks the EPIC-7 corpus and the
-canonical-seed registry across four implementations:
-
-1. TS engine (`commitInternal` from `packages/core/src/graph.ts`,
-   currently starting at line 3507 with Phase markers at 3690 (A),
-   3746 (B), 3834 (C), 3840 (C.5))
-2. WASM serde bridge (`tools/engine-rs-bridge-serde`)
-3. WASM gc-builtins bridge (`tools/engine-rs-bridge-gc` with
-   `js-string-builtins`)
-4. Rust enumerator (`tools/enumerator` bounded BFS — the existing
-   `apalache-diff` half)
-
-Disagreement is classified by which subset of implementations agrees
-(see `tools/enumerator/diff/src/four_way.rs` for the seven arms).
-Rows excused by the `[[exceptions]]` table in
-`tools/apalache-diff/mapping.toml` do not strict-fail. Trigger: PR
-when any of the classifier-input paths change, plus a daily cron at
-`15 7 * * *` UTC (ten minutes after the #574 apalache-diff job).
+Shipped via PR #1101 closing #1070 while this code still lived in the monorepo.
+It walks the EPIC-7 corpus and the canonical-seed registry across four
+implementations, three of which need Rust crates that are not in this
+repository. Parked 2026-09-02 under `.github/workflows-disabled/`; the reasoning
+is in the "Parked" note near the top of this page and in issue #47.
 
 ## Disabled-but-checked-in: release flow (`release-checker.yml`)
 
@@ -229,10 +290,14 @@ cargo build --release --manifest-path tools/checker/Cargo.toml
 pnpm --filter @causl/checker test:run
 ```
 
-For the WASM-side gates (requires Rust toolchain +
-`rustup target add wasm32-unknown-unknown` + `cargo install wasm-pack`):
+The wasm-side gates need no toolchain, because nothing is built here:
 
 ```bash
-pnpm wasm:build       # build + #1085 raw + Brotli budget gate
-pnpm size             # second-layer size-limit cells
+pnpm wasm:verify:test  # unit cover for the verifier, including the stub case
+pnpm wasm:verify       # preamble + size floor + raw ceilings + target parity
+pnpm budget:test       # unit cover for the bundle-budget reporter
+pnpm size              # the 11 size-limit cells
 ```
+
+`.husky/pre-commit` runs all four, so a local commit already carries the
+`bundle-budget` and `vendored-wasm` verdicts.

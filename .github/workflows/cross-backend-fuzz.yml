@@ -72,8 +72,10 @@ jobs:
       # depend on. The cross-backend test itself runs against the
       # src/ tree under tsx/vitest so no separate "build everything"
       # step is required.
+      # `--fail-if-no-match` because pnpm exits 0 on an unmatched filter, so a
+      # rename would otherwise leave this step green having built nothing.
       - name: Build @causlts/core
-        run: pnpm --filter @causlts/core run build
+        run: pnpm --filter @causlts/core --fail-if-no-match run build
 
       - name: Echo selected fuzz tier
         run: |

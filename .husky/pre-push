@@ -20,10 +20,12 @@
 #
 # NOT mirrored locally (require non-pnpm toolchains; CI gate remains
 # authoritative):
-#   - wasm.yml cargo-check + wasm-pack matrix  — needs Rust + wasm-pack
-#                                                 + binaryen 119
-#   - four-way-classifier.yml                  — needs Rust + cargo
 #   - cross-backend-fuzz.yml                   — nightly cron only
+#
+# The `wasm.yml` cargo-check and wasm-pack rows that used to sit here are gone:
+# those jobs were removed in #49 because the crates they detect are not in this
+# repository. `wasm.yml`'s vendored-artefact job runs locally as
+# `pnpm wasm:verify` and `four-way-classifier.yml` is parked (#47).
 #
 # Tests are NOT mirrored here: the active CI lanes (main-fast,
 # bundle-budget, vendor-manifest) do not include `pnpm test:run`.
@@ -40,7 +42,7 @@ set -e
 # bundler-interop — mirrors wasm.yml's bundler-interop matrix
 # (webpack5-app, vite5-app, esbuild-app). The matrix legs each
 # `npm install --no-save` their deps from outside the pnpm
-# workspace (by design — fixtures must consume @causl/core the
+# workspace (by design — fixtures must consume @causlts/core the
 # way an external adopter would), then build, then verify the
 # bundle-no-wasm-leak invariant via `node verify.mjs`.
 #
@@ -48,8 +50,13 @@ set -e
 # warmups thereafter). Use SKIP_PREPUSH=1 if pushing a docs-only
 # or non-bundle-affecting change.
 if [ -d e2e/bundler-interop ]; then
-  echo "pre-push: building @causl/core (required by bundler-interop fixtures)"
-  pnpm --filter @causl/core run build
+  # `@causl/core` was renamed to `@causlts/core` in #46 and this line was not
+  # updated, so pnpm answered `No projects matched the filters` and exited 0 and
+  # the hook built nothing before running the fixtures against a stale
+  # `packages/core/dist`. `--fail-if-no-match` turns the next rename into a
+  # failure instead of a silent skip.
+  echo "pre-push: building @causlts/core (required by bundler-interop fixtures)"
+  pnpm --filter @causlts/core --fail-if-no-match run build
 
   echo "pre-push: stubbing wasm-pkg artefacts (matches wasm.yml step)"
   node e2e/bundler-interop/stub-wasm-pkg.mjs

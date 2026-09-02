@@ -67,27 +67,27 @@ pnpm build
 echo "pre-commit [3/9]: pnpm lint (mirrors main-fast.yml)"
 pnpm lint
 
-# 4. Size — mirrors bundle-budget.yml. Reads the size-limit cells in
-#    root package.json against the dist/ artefacts produced in step 2.
-#    The #22 overage this step used to carry a carve-out for closed in
-#    PR #23 and #39; all 11 cells are inside their ceilings today, so
-#    the gate is live rather than advisory.
+# 4-5. Bundle budget — mirrors bundle-budget.yml. The reporter's own
+#    unit cover runs first, then the 11 size-limit cells in root
+#    package.json against the dist/ artefacts produced in step 2. The
+#    #22 overage this step used to carry a carve-out for closed in PR
+#    #23 and #39, so the gate is live rather than advisory.
 echo "pre-commit [4/9]: pnpm budget:test (bundle-budget reporter unit cover)"
 pnpm budget:test
 
 echo "pre-commit [5/9]: pnpm size (mirrors bundle-budget.yml)"
 pnpm size
 
-# The vendored-wasm half of wasm.yml. Both steps are node:test / plain
-# node with no toolchain, so unlike the wasm-pack matrix they replaced
-# these do run locally.
+# 6-7. Vendored wasm — mirrors wasm.yml's `vendored-wasm` job. Both
+#    steps are node:test / plain node with no toolchain, so unlike the
+#    wasm-pack matrix they replaced these do run locally.
 echo "pre-commit [6/9]: pnpm wasm:verify:test (verifier unit cover)"
 pnpm wasm:verify:test
 
 echo "pre-commit [7/9]: pnpm wasm:verify (committed .wasm bytes + ceilings)"
 pnpm wasm:verify
 
-# 5. @causlts/core/testing tarball-consumer typecheck — mirrors
+# 8. @causlts/core/testing tarball-consumer typecheck — mirrors
 #    main-fast.yml's `#31 regression` step. Fast (pack + npm install
 #    of a single tarball + tsc on one tiny file, ~5-10s). Catches
 #    `dist/testing.d.ts` regressing back to an unresolvable external
@@ -95,7 +95,7 @@ pnpm wasm:verify
 echo "pre-commit [8/9]: #31 regression — pack-and-typecheck @causlts/core/testing (mirrors main-fast.yml)"
 bash scripts/check-core-testing-types.sh
 
-# 6. Vendor-manifest — mirrors vendor-manifest.yml. Paths-filtered
+# 9. Vendor-manifest — mirrors vendor-manifest.yml. Paths-filtered
 #    to match the workflow: only fires when vendored bytes or the
 #    refresh/check scripts are part of the staged set.
 echo "pre-commit [9/9]: vendor-manifest gate (mirrors vendor-manifest.yml)"

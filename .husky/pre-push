@@ -18,8 +18,7 @@
 #                                       build + verify (bundle-no-
 #                                       wasm-leak invariant per #689).
 #
-# NOT mirrored locally (require non-pnpm toolchains; CI gate remains
-# authoritative):
+# NOT mirrored locally:
 #   - cross-backend-fuzz.yml                   — nightly cron only
 #
 # The `wasm.yml` cargo-check and wasm-pack rows that used to sit here are gone:

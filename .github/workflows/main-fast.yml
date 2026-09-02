@@ -23,17 +23,22 @@ name: main-fast
 # What deliberately does NOT run here:
 #   - Unit / integration / property tests   -> release-side
 #   - E2E (Playwright, formula 60fps gate)  -> release-side
-#   - size-limit / bundle-budget            -> release-side
-#     (see bundle-budget.yml — also documents the #19 carve-out)
 #   - vendor MANIFEST.json freshness gate    -> release-side
-#   - wasm-pack matrix + bundler-interop    -> release-side
-#   - four-way classifier + apalache-diff    -> release-side / nightly
 #   - commitment-audit + test-d / tsd gates  -> release-side
 #
-# A new Rust crate landing in this repo (none today — the wasm.yml
-# crates are defensive-future) should add a sibling `cargo-fast` job
-# here that runs `cargo check` only; `cargo test` + `clippy -D warnings`
-# stay on the release lane.
+# AMENDED 2026-09-02 (issues #48 / #49). `bundle-budget.yml` and `wasm.yml` used
+# to sit on the release lane and this header still said so. Both now also run on
+# `main` and on PRs, for one reason: `origin/release` has been pinned at
+# `febe37e` since 2026-05-17, so the release lane fires on nothing and anything
+# parked there is not a gate, it is a file. Neither workflow costs much now that
+# `wasm.yml` no longer installs a Rust toolchain it never used, so the main lane
+# still comes in well under five minutes.
+#
+# A new Rust crate landing in this repo (there is none, and the wasm.yml crates
+# that were described as defensive-future have been removed per #49 because they
+# were never coming) should add a sibling `cargo-fast` job here that runs
+# `cargo check` only; `cargo test` + `clippy -D warnings` stay on the release
+# lane.
 
 on:
   push:

@@ -1,5 +1,32 @@
 name: four-way-classifier
 
+# PARKED 2026-09-02 (issue #47). This workflow cannot run in this repository.
+#
+# It drives four legs, and three of them live in Rust crates that are not here:
+# `tools/enumerator/diff`, `tools/engine-rs-bridge-serde` and
+# `tools/engine-rs-bridge-gc`. The `cargo test` step below sets
+# `working-directory: tools/enumerator/diff`, and every scheduled run died on
+# that line. From run 33627952539 (2026-09-02):
+#
+#   ##[error]An error occurred trying to start process '/usr/bin/bash' with
+#   working directory '/home/runner/work/causl-ts/causl-ts/tools/enumerator/diff'.
+#   No such file or directory
+#
+# This is not a build that broke. `git log --all -- tools/enumerator` returns
+# nothing and there is no `Cargo.toml` anywhere in the tree or in its history,
+# so those paths have never existed on any branch or tag here. The workflow came
+# across with the rest of `.github/` when the public TypeScript repo was split
+# out of the monorepo, and the crates stayed behind. The Rust engine lives in
+# `causljs/causl-wasm`; this repository is the pure-TypeScript reference.
+#
+# Its sibling `apalache-diff.yml` needs the same missing crate and was already
+# parked here, so this follows that convention rather than inventing a new one.
+# `docs/ci.md` carries the same note.
+#
+# To revive it: land the crates, move this file back to `.github/workflows/`,
+# and re-read the paths filter below, which also names directories that do not
+# exist.
+
 # Issue #1070 / SPEC §16.5.1 / EPIC-7 — 4-way differential classifier
 # nightly gate.
 #

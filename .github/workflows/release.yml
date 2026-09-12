@@ -64,10 +64,10 @@ jobs:
         # to avoid ERR_PNPM_BAD_PM_VERSION when the two diverge.
         uses: pnpm/action-setup@v4
 
-      - name: Setup Node 22 (with npmjs.com registry)
+      - name: Setup Node 26 (with npmjs.com registry)
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26'
           registry-url: 'https://registry.npmjs.org'
           scope: '@causl'
           cache: 'pnpm'

@@ -8,9 +8,9 @@ cd causl
 pnpm install      # also installs the husky pre-commit hook
 ```
 
-Node 24.x (matches `.nvmrc` and `.github/workflows/ci.yml`); `pnpm` >= 10.
-Repo's `package.json#engines` pins `node >= 22` as a soft floor; CI and
-local development run on 24. The Rust crate uses the stable toolchain —
+Node 26.x (matches `.nvmrc` and `.github/workflows/ci.yml`); `pnpm` >= 10.
+Repo's `package.json#engines` pins `node >= 24` as a soft floor; CI and
+local development run on 26. The Rust crate uses the stable toolchain —
 install via `rustup`:
 
 ```bash

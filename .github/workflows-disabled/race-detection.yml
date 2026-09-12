@@ -34,10 +34,10 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - name: Use Node.js 24.x
+      - name: Use Node.js 26.x
         uses: actions/setup-node@v4
         with:
-          node-version: 24.x
+          node-version: 26.x
           cache: 'pnpm'
 
       - name: Install Rust toolchain
@@ -68,10 +68,10 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - name: Use Node.js 24.x
+      - name: Use Node.js 26.x
         uses: actions/setup-node@v4
         with:
-          node-version: 24.x
+          node-version: 26.x
           cache: 'pnpm'
 
       - name: Install Rust toolchain
@@ -102,10 +102,10 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - name: Use Node.js 24.x
+      - name: Use Node.js 26.x
         uses: actions/setup-node@v4
         with:
-          node-version: 24.x
+          node-version: 26.x
           cache: 'pnpm'
 
       - name: Install Rust toolchain
